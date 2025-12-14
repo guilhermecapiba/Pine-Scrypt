@@ -1,0 +1,41 @@
+//@version=5
+indicator("Mayer Multiple (365-day)", shorttitle="MM 365", overlay=false)
+
+// Input for the moving average length (defaults to 365 as requested)
+length = input.int(365, minval=1, title="SMA Length")
+
+// Input for the overbought threshold (defaults to 2.4 based on Mayer's analysis)
+mult_threshold = input.float(2.4, title="Overbought Threshold")
+
+// Calculate the Simple Moving Average (SMA)
+smaValue = ta.sma(close, length)
+
+// Calculate the Mayer Multiple (Price / SMA)
+mayerMultiple = close / smaValue
+
+// Plot the Mayer Multiple
+plot(mayerMultiple, title="Mayer Multiple", color=color.blue, linewidth=2)
+
+// Add reference lines
+hline(1.0, "Fair Value", color=color.gray, linestyle=hline.style_dotted)
+
+// Use plot for the threshold because hline requires a constant value, but we are using an input variable.
+p_threshold = plot(mult_threshold, title="Overbought Threshold", color=color.red, style=plot.style_line)
+
+// Fill the area above the threshold (using a dummy upper bound plot for fill)
+// Since we can't easily fill to "infinity", we just fill between the threshold and the multiple plot if it's above?
+// Or we usually want to highlight when the multiple is above the threshold.
+// Let's create a fill between the multiple and the threshold, but only when multiple > threshold.
+// However, the standard way to show a "zone" is to fill between two horizontal lines.
+// Since we can't use hline for the input, we can fill between the threshold plot and a high value?
+// Or just fill between the plot and the threshold when above.
+// A common pattern is `fill(plot1, plot2, color = value > threshold ? color : na)`
+
+// Let's stick to the prompt's simplicity. Just showing the line is good.
+// But if I want to recreate the `fill` intention from before:
+// `fill(p_threshold, plot(100), ...)` is not ideal as 100 is arbitrary.
+// Let's just fill the background when the condition is met or just leave the line.
+// The user didn't explicitly ask for a fill, just the indicator.
+// I'll add a fill between the Mayer Multiple line and the Threshold line, colored only when MM > Threshold.
+
+fill(plot(mayerMultiple, display=display.none), p_threshold, mayerMultiple > mult_threshold ? color.new(color.red, 80) : na, title="Overbought Fill")
