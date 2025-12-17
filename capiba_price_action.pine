@@ -156,22 +156,32 @@ isEngulfing = isBullishEngulfing or isBearishEngulfing
 
 // >>> APLICAÇÃO DAS CORES (Sequência importa: última sobrescreve) >>>
 
-// Base (Opcional, mas não solicitada para todos, apenas padrões)
-
-// Prioridade 1: Inside Bar (Menor prioridade visual, pois Engolfo ou Ignorada são mais fortes/posteriores?)
-// O usuário listou: (1) Ignorada, (2) Inside, (3) Engolfo.
-// Mas Ignorada pinta o PASSADO. Inside e Engolfo pintam o PRESENTE.
-// Uma barra pode ser Inside.
-// Uma barra pode ser Engolfo. (Engolfo não pode ser Inside, pois tem range maior).
-// Então conflito Inside vs Engolfo não existe no mesmo candle (salvo exceções raras de gap, mas 'inside' é High/Low, 'engolfo' é corpo... Engolfo geralmente tem High > prevHigh, logo não Inside).
-// Então Inside Bar e Engolfo são mutuamente exclusivos na prática.
-
 barcolor(isInsideBar ? corInsideBar : na, title="Cor Inside Bar")
 barcolor(isEngulfing ? corEngolfo   : na, title="Cor Engolfo")
 
-// Prioridade: Barra Ignorada (Pinta a barra ANTERIOR)
-// Se detectado RBI hoje, a barra de ontem (Vermelha) vira Vermelha (RBI) ou Verde (GBI)?
-// Pedido: "Barra ignorada de alta é vermelha" -> RBI Pattern paints previous bar Red.
-// Pedido: "Barra ignorada de baixa é verde" -> GBI Pattern paints previous bar Green.
 barcolor(isRBI ? corIgnoredBull : na, offset = -1, title="Cor RBI (Anterior)")
 barcolor(isGBI ? corIgnoredBear : na, offset = -1, title="Cor GBI (Anterior)")
+
+// >>> SINALIZAÇÃO VISUAL (SETAS) >>>
+
+// Seta Verde (Apostar Alta):
+// - Barra Vermelha Ignorada (RBI) -> Seta na barra colorida (Anterior)
+// - Engolfo de Alta -> Seta na barra colorida (Atual)
+// - Inside Bar de Alta -> Seta na barra colorida (Atual) (Trend Bullish)
+
+// Seta Vermelha (Apostar Queda):
+// - Barra Verde Ignorada (GBI) -> Seta na barra colorida (Anterior)
+// - Engolfo de Baixa -> Seta na barra colorida (Atual)
+// - Inside Bar de Baixa -> Seta na barra colorida (Atual) (Trend Bearish)
+
+// 1. Sinais na Barra Anterior (Ignored Bar)
+plotshape(isRBI, title="Sinal RBI (Alta)", style=shape.arrowup, location=location.belowbar, color=color.lime, offset=-1, size=size.normal)
+plotshape(isGBI, title="Sinal GBI (Baixa)", style=shape.arrowdown, location=location.abovebar, color=color.red, offset=-1, size=size.normal)
+
+// 2. Sinais na Barra Atual (Engolfo e Inside)
+plotshape(isBullishEngulfing, title="Sinal Engolfo Alta", style=shape.arrowup, location=location.belowbar, color=color.lime, size=size.normal)
+plotshape(isBearishEngulfing, title="Sinal Engolfo Baixa", style=shape.arrowdown, location=location.abovebar, color=color.red, size=size.normal)
+
+// Inside Bar: Somente se alinhado com a tendência da MA4 (coerência com Ignored Bar)
+plotshape(isInsideBar and trendBullish, title="Sinal Inside Alta", style=shape.arrowup, location=location.belowbar, color=color.lime, size=size.normal)
+plotshape(isInsideBar and trendBearish, title="Sinal Inside Baixa", style=shape.arrowdown, location=location.abovebar, color=color.red, size=size.normal)
