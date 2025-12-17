@@ -10,17 +10,11 @@ color corInsideBar   = input.color(color.yellow, "Cor Inside Bar")
 color corIgnoredBull = input.color(color.lime, "Cor Barra Ignorada (Alta)")
 color corIgnoredBear = input.color(color.red, "Cor Barra Ignorada (Baixa)")
 
-// Cores para MAs
-color corMa1 = input.color(color.green, "Cor MA 1")
-color corMa2 = input.color(color.red, "Cor MA 2")
-color corMa3 = input.color(color.blue, "Cor MA 3")
-color corMa4 = input.color(color.orange, "Cor MA 4")
-
 // Cores para Nuvem
 color corNuvemAlta  = input.color(color.new(color.green, 80), "Cor Nuvem Alta")
 color corNuvemBaixa = input.color(color.new(color.red, 80), "Cor Nuvem Baixa")
 
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PARÂMETROS DAS MÁDIAS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PARÂMETROS DAS MÉDIAS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 string groupMA = "Parâmetros das Médias"
 
@@ -36,23 +30,23 @@ getMA(src, len, tipo) =>
 
 // MA 1
 ma1Src    = input.source(hlc3, title="Fonte MA 1", group=groupMA)
-ma1Type   = input.string("VWMA", title="Tipo MA 1", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
-ma1Length = input.int(9, title="Período MA 1", minval=1, group=groupMA)
+ma1Type   = input.string("SMA", title="Tipo MA 1", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma1Length = input.int(20, title="Período MA 1", minval=1, group=groupMA)
 
 // MA 2
 ma2Src    = input.source(hlc3, title="Fonte MA 2", group=groupMA)
-ma2Type   = input.string("VWMA", title="Tipo MA 2", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
-ma2Length = input.int(21, title="Período MA 2", minval=1, group=groupMA)
+ma2Type   = input.string("SMA", title="Tipo MA 2", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma2Length = input.int(50, title="Período MA 2", minval=1, group=groupMA)
 
 // MA 3
 ma3Src    = input.source(hlc3, title="Fonte MA 3", group=groupMA)
-ma3Type   = input.string("VWMA", title="Tipo MA 3", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
-ma3Length = input.int(55, title="Período MA 3", minval=1, group=groupMA)
+ma3Type   = input.string("SMA", title="Tipo MA 3", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma3Length = input.int(80, title="Período MA 3", minval=1, group=groupMA)
 
 // MA 4
 ma4Src    = input.source(hlc3, title="Fonte MA 4", group=groupMA)
-ma4Type   = input.string("VWMA", title="Tipo MA 4", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
-ma4Length = input.int(233, title="Período MA 4", minval=1, group=groupMA)
+ma4Type   = input.string("SMA", title="Tipo MA 4", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma4Length = input.int(200, title="Período MA 4", minval=1, group=groupMA)
 
 // Configuração da Nuvem
 string groupCloud = "Configuração da Nuvem"
@@ -67,11 +61,17 @@ ma2 = getMA(ma2Src, ma2Length, ma2Type)
 ma3 = getMA(ma3Src, ma3Length, ma3Type)
 ma4 = getMA(ma4Src, ma4Length, ma4Type)
 
+// Lógica de Cor Dinâmica das MAs (Verde se sobe, Vermelha se desce)
+colorCorMa1 = ma1 > ma1[1] ? color.green : color.red
+colorCorMa2 = ma2 > ma2[1] ? color.green : color.red
+colorCorMa3 = ma3 > ma3[1] ? color.green : color.red
+colorCorMa4 = ma4 > ma4[1] ? color.green : color.red
+
 // Plotando MAs
-plot(ma1, title="MA 1", color=corMa1, linewidth=2)
-plot(ma2, title="MA 2", color=corMa2, linewidth=2)
-plot(ma3, title="MA 3", color=corMa3, linewidth=2)
-plot(ma4, title="MA 4", color=corMa4, linewidth=2)
+plot(ma1, title="MA 1", color=colorCorMa1, linewidth=2)
+plot(ma2, title="MA 2", color=colorCorMa2, linewidth=2)
+plot(ma3, title="MA 3", color=colorCorMa3, linewidth=2)
+plot(ma4, title="MA 4", color=colorCorMa4, linewidth=2)
 
 // Lógica da Nuvem Selecionável
 valMaA = switch cloudMaA_Idx
@@ -88,13 +88,7 @@ valMaB = switch cloudMaB_Idx
     "MA 4" => ma4
     => ma4
 
-// Plot para preenchimento (usando display.none para não duplicar linhas se não quiser, mas plot é necessário para fill)
-// Vou usar plot com color=color.new(color.white, 100) para ficar invisível se já plotado acima, mas fill precisa de plot objects.
-// Como as MAs já foram plotadas, não consigo referenciar os objetos 'plot' anteriores dentro de um switch ou array facilmente no Pine v5 para fill dinâmico sem re-plotar?
-// Pine Script `fill` precisa de `plot` IDs ou `hline` IDs.
-// Vou criar plots transparentes específicos para a nuvem ou usar as variáveis se fixas. Como é selecionável, preciso de lógica.
-// Melhor abordagem: Plotar as duas MAs da nuvem (pode sobrepor as outras) ou usar fill com valores condicionais (linefill) é mais complexo.
-// Simples: Plotar as duas selecionadas especificamente para o Fill, transparente.
+// Plot para preenchimento (transparente)
 pCloudA = plot(valMaA, title="Cloud Line A", color=color.new(color.white, 100))
 pCloudB = plot(valMaB, title="Cloud Line B", color=color.new(color.white, 100))
 
@@ -119,13 +113,20 @@ prevLow   = low[1]
 isPrevRed   = prevClose < prevOpen
 isPrevGreen = prevClose > prevOpen
 
+// Filtro de Tendência: MA 4
+// O usuário pediu:
+// - Vermelha ignorada (Bullish RBI) somente ACIMA da MA4.
+// - Verde ignorada (Bearish GBI) somente ABAIXO da MA4.
+trendBullish = close > ma4
+trendBearish = close < ma4
+
 // RBI (Bullish): Barra anterior Vermelha, Barra atual fecha acima da máxima da anterior
-// Contexto opcional: Tendência de alta (ex: barra retrasada verde). O usuário disse "após sequência...".
-// Vamos assumir o padrão simples de 2 barras: Vermelha -> Engolfo/Breakout por Verde/Preço
-isRBI = isPrevRed and close > prevHigh
+// E (NOVO) Preço acima da MA4
+isRBI = isPrevRed and close > prevHigh and trendBullish
 
 // GBI (Bearish): Barra anterior Verde, Barra atual fecha abaixo da mínima da anterior
-isGBI = isPrevGreen and close < prevLow
+// E (NOVO) Preço abaixo da MA4
+isGBI = isPrevGreen and close < prevLow and trendBearish
 
 // >>> APLICAÇÃO DAS CORES >>>
 
@@ -139,13 +140,3 @@ barcolor(isGBI ? corIgnoredBear : na, offset = -1, title="Cor GBI (Anterior)")
 // Prioridade 2: Inside Bar (Colorir a barra atual)
 // Se a barra atual for Inside Bar, pinta de Amarelo
 barcolor(isInsideBar ? corInsideBar : na, title="Cor Inside Bar")
-
-// Nota: Se uma barra for Inside Bar E no dia seguinte for Ignorada?
-// No dia T: Inside Bar -> Amarela.
-// No dia T+1: T foi ignorada (Breakout). O `barcolor(offset=-1)` do T+1 vai pintar T de Verde/Vermelho.
-// Isso sobrescreve o Amarelo? Sim, o último comando de desenho (neste caso, no script executado no T+1, ele pinta o T) tende a prevalecer visualmente ou mistura?
-// Em Pine Script realtime, o histórico é repintado. Quando estamos em T+1, o script roda.
-// O script roda em cada barra.
-// Barra T (ontem): Quando o script rodou em T, pintou de Amarelo.
-// Barra T+1 (hoje): O script roda. Detecta RBI. Pinta T (offset=-1) de Verde.
-// Resultado final para T: Verde. Isso faz sentido (o padrão de "Ignored" é mais forte/posterior que o "Inside").
