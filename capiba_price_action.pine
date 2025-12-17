@@ -7,8 +7,13 @@ indicator("Capiba Price Action + 4 MAs", overlay=true)
 color corCandleAlta  = input.color(color.lime, "Cor Candle Alta")
 color corCandleBaixa = input.color(color.red, "Cor Candle Baixa")
 color corInsideBar   = input.color(color.yellow, "Cor Inside Bar")
-color corIgnoredBull = input.color(color.lime, "Cor Barra Ignorada (Alta)")
-color corIgnoredBear = input.color(color.red, "Cor Barra Ignorada (Baixa)")
+color corEngolfo     = input.color(color.blue, "Cor Engolfo")
+
+// Cores Barra Ignorada: Atualizado conforme pedido
+// "A barra ignorada de alta é vermelha" (RBI Pattern -> Color Red)
+// "A barra ignorada de baixa é verde" (GBI Pattern -> Color Green)
+color corIgnoredBull = input.color(color.red, "Cor Barra Ignorada (Alta/RBI)")
+color corIgnoredBear = input.color(color.green, "Cor Barra Ignorada (Baixa/GBI)")
 
 // Cores para Nuvem
 color corNuvemAlta  = input.color(color.new(color.green, 80), "Cor Nuvem Alta")
@@ -128,15 +133,45 @@ isRBI = isPrevRed and close > prevHigh and trendBullish
 // E (NOVO) Preço abaixo da MA4
 isGBI = isPrevGreen and close < prevLow and trendBearish
 
-// >>> APLICAÇÃO DAS CORES >>>
+// 3. Engolfo (Engulfing)
+// Corpo do candle atual engole o corpo do candle anterior.
+// Cores opostas.
+// Bullish Engulfing: Anterior Vermelho, Atual Verde. Corpo atual cobre anterior.
+// Bearish Engulfing: Anterior Verde, Atual Vermelho. Corpo atual cobre anterior.
 
-// Prioridade 1: Barra Ignorada (Colorir a barra anterior que foi ignorada)
-// Se detectado RBI hoje, a barra de ontem (Vermelha) vira Verde (Ignored Bullish)
-barcolor(isRBI ? corIgnoredBull : na, offset = -1, title="Cor RBI (Anterior)")
+// Definição de Corpo
+bodyTop     = math.max(close, open)
+bodyBottom  = math.min(close, open)
+prevBodyTop = math.max(close[1], open[1])
+prevBodyBot = math.min(close[1], open[1])
 
-// Se detectado GBI hoje, a barra de ontem (Verde) vira Vermelha (Ignored Bearish)
-barcolor(isGBI ? corIgnoredBear : na, offset = -1, title="Cor GBI (Anterior)")
+// Check tamanho
+bodyEngulfs = bodyTop >= prevBodyTop and bodyBottom <= prevBodyBot
 
-// Prioridade 2: Inside Bar (Colorir a barra atual)
-// Se a barra atual for Inside Bar, pinta de Amarelo
+// Check cores opostas
+isBullishEngulfing = isPrevRed and close > open and bodyEngulfs
+isBearishEngulfing = isPrevGreen and close < open and bodyEngulfs
+
+isEngulfing = isBullishEngulfing or isBearishEngulfing
+
+// >>> APLICAÇÃO DAS CORES (Sequência importa: última sobrescreve) >>>
+
+// Base (Opcional, mas não solicitada para todos, apenas padrões)
+
+// Prioridade 1: Inside Bar (Menor prioridade visual, pois Engolfo ou Ignorada são mais fortes/posteriores?)
+// O usuário listou: (1) Ignorada, (2) Inside, (3) Engolfo.
+// Mas Ignorada pinta o PASSADO. Inside e Engolfo pintam o PRESENTE.
+// Uma barra pode ser Inside.
+// Uma barra pode ser Engolfo. (Engolfo não pode ser Inside, pois tem range maior).
+// Então conflito Inside vs Engolfo não existe no mesmo candle (salvo exceções raras de gap, mas 'inside' é High/Low, 'engolfo' é corpo... Engolfo geralmente tem High > prevHigh, logo não Inside).
+// Então Inside Bar e Engolfo são mutuamente exclusivos na prática.
+
 barcolor(isInsideBar ? corInsideBar : na, title="Cor Inside Bar")
+barcolor(isEngulfing ? corEngolfo   : na, title="Cor Engolfo")
+
+// Prioridade: Barra Ignorada (Pinta a barra ANTERIOR)
+// Se detectado RBI hoje, a barra de ontem (Vermelha) vira Vermelha (RBI) ou Verde (GBI)?
+// Pedido: "Barra ignorada de alta é vermelha" -> RBI Pattern paints previous bar Red.
+// Pedido: "Barra ignorada de baixa é verde" -> GBI Pattern paints previous bar Green.
+barcolor(isRBI ? corIgnoredBull : na, offset = -1, title="Cor RBI (Anterior)")
+barcolor(isGBI ? corIgnoredBear : na, offset = -1, title="Cor GBI (Anterior)")
