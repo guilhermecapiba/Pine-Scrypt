@@ -1,0 +1,187 @@
+// @version=5
+indicator("Capiba Price Action + 4 MAs", overlay=true)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> CORES E CONSTANTES >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+// Cores Básicas
+color corCandleAlta  = input.color(color.lime, "Cor Candle Alta")
+color corCandleBaixa = input.color(color.red, "Cor Candle Baixa")
+color corInsideBar   = input.color(color.yellow, "Cor Inside Bar")
+color corEngolfo     = input.color(color.blue, "Cor Engolfo")
+
+// Cores Barra Ignorada: Atualizado conforme pedido
+// "A barra ignorada de alta é vermelha" (RBI Pattern -> Color Red)
+// "A barra ignorada de baixa é verde" (GBI Pattern -> Color Green)
+color corIgnoredBull = input.color(color.red, "Cor Barra Ignorada (Alta/RBI)")
+color corIgnoredBear = input.color(color.green, "Cor Barra Ignorada (Baixa/GBI)")
+
+// Cores para Nuvem
+color corNuvemAlta  = input.color(color.new(color.green, 80), "Cor Nuvem Alta")
+color corNuvemBaixa = input.color(color.new(color.red, 80), "Cor Nuvem Baixa")
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PARÂMETROS DAS MÉDIAS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+string groupMA = "Parâmetros das Médias"
+
+// Função de Média Flexível (Mantida do original)
+getMA(src, len, tipo) =>
+    switch tipo
+        "EMA"  => ta.ema(src, len)
+        "SMA"  => ta.sma(src, len)
+        "RMA"  => ta.rma(src, len)
+        "TMA"  => ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
+        "VWMA" => ta.vwma(src, len)
+        => na
+
+// MA 1
+ma1Src    = input.source(hlc3, title="Fonte MA 1", group=groupMA)
+ma1Type   = input.string("SMA", title="Tipo MA 1", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma1Length = input.int(20, title="Período MA 1", minval=1, group=groupMA)
+
+// MA 2
+ma2Src    = input.source(hlc3, title="Fonte MA 2", group=groupMA)
+ma2Type   = input.string("SMA", title="Tipo MA 2", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma2Length = input.int(50, title="Período MA 2", minval=1, group=groupMA)
+
+// MA 3
+ma3Src    = input.source(hlc3, title="Fonte MA 3", group=groupMA)
+ma3Type   = input.string("SMA", title="Tipo MA 3", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma3Length = input.int(80, title="Período MA 3", minval=1, group=groupMA)
+
+// MA 4
+ma4Src    = input.source(hlc3, title="Fonte MA 4", group=groupMA)
+ma4Type   = input.string("SMA", title="Tipo MA 4", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+ma4Length = input.int(200, title="Período MA 4", minval=1, group=groupMA)
+
+// Configuração da Nuvem
+string groupCloud = "Configuração da Nuvem"
+cloudMaA_Idx = input.string("MA 3", "MA Superior Nuvem", options=["MA 1", "MA 2", "MA 3", "MA 4"], group=groupCloud)
+cloudMaB_Idx = input.string("MA 4", "MA Inferior Nuvem", options=["MA 1", "MA 2", "MA 3", "MA 4"], group=groupCloud)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> CÁLCULO E PLOTAGEM >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+// Calculando MAs
+ma1 = getMA(ma1Src, ma1Length, ma1Type)
+ma2 = getMA(ma2Src, ma2Length, ma2Type)
+ma3 = getMA(ma3Src, ma3Length, ma3Type)
+ma4 = getMA(ma4Src, ma4Length, ma4Type)
+
+// Lógica de Cor Dinâmica das MAs (Verde se sobe, Vermelha se desce)
+colorCorMa1 = ma1 > ma1[1] ? color.green : color.red
+colorCorMa2 = ma2 > ma2[1] ? color.green : color.red
+colorCorMa3 = ma3 > ma3[1] ? color.green : color.red
+colorCorMa4 = ma4 > ma4[1] ? color.green : color.red
+
+// Plotando MAs
+plot(ma1, title="MA 1", color=colorCorMa1, linewidth=2)
+plot(ma2, title="MA 2", color=colorCorMa2, linewidth=2)
+plot(ma3, title="MA 3", color=colorCorMa3, linewidth=2)
+plot(ma4, title="MA 4", color=colorCorMa4, linewidth=2)
+
+// Lógica da Nuvem Selecionável
+valMaA = switch cloudMaA_Idx
+    "MA 1" => ma1
+    "MA 2" => ma2
+    "MA 3" => ma3
+    "MA 4" => ma4
+    => ma3
+
+valMaB = switch cloudMaB_Idx
+    "MA 1" => ma1
+    "MA 2" => ma2
+    "MA 3" => ma3
+    "MA 4" => ma4
+    => ma4
+
+// Plot para preenchimento (transparente)
+pCloudA = plot(valMaA, title="Cloud Line A", color=color.new(color.white, 100))
+pCloudB = plot(valMaB, title="Cloud Line B", color=color.new(color.white, 100))
+
+fill(pCloudA, pCloudB, color = valMaA > valMaB ? corNuvemAlta : corNuvemBaixa, title="Nuvem")
+
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> COLORAÇÃO (PRICE ACTION) >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+// 1. Inside Bar (Barra Interna)
+// Máxima menor que a anterior E Mínima maior que a anterior
+isInsideBar = high < high[1] and low > low[1]
+
+// 2. Barra Ignorada (Ignored Bar)
+// Definição Simplificada de RBI (Red Bar Ignored) e GBI (Green Bar Ignored)
+
+// Identificando a barra anterior
+prevClose = close[1]
+prevOpen  = open[1]
+prevHigh  = high[1]
+prevLow   = low[1]
+
+isPrevRed   = prevClose < prevOpen
+isPrevGreen = prevClose > prevOpen
+
+// Filtro de Tendência: MA 4
+// O usuário pediu:
+// - Vermelha ignorada (Bullish RBI) somente ACIMA da MA4.
+// - Verde ignorada (Bearish GBI) somente ABAIXO da MA4.
+trendBullish = close > ma4
+trendBearish = close < ma4
+
+// RBI (Bullish): Barra anterior Vermelha, Barra atual fecha acima da máxima da anterior
+// E (NOVO) Preço acima da MA4
+isRBI = isPrevRed and close > prevHigh and trendBullish
+
+// GBI (Bearish): Barra anterior Verde, Barra atual fecha abaixo da mínima da anterior
+// E (NOVO) Preço abaixo da MA4
+isGBI = isPrevGreen and close < prevLow and trendBearish
+
+// 3. Engolfo (Engulfing)
+// Corpo do candle atual engole o corpo do candle anterior.
+// Cores opostas.
+// Bullish Engulfing: Anterior Vermelho, Atual Verde. Corpo atual cobre anterior.
+// Bearish Engulfing: Anterior Verde, Atual Vermelho. Corpo atual cobre anterior.
+
+// Definição de Corpo
+bodyTop     = math.max(close, open)
+bodyBottom  = math.min(close, open)
+prevBodyTop = math.max(close[1], open[1])
+prevBodyBot = math.min(close[1], open[1])
+
+// Check tamanho
+bodyEngulfs = bodyTop >= prevBodyTop and bodyBottom <= prevBodyBot
+
+// Check cores opostas
+isBullishEngulfing = isPrevRed and close > open and bodyEngulfs
+isBearishEngulfing = isPrevGreen and close < open and bodyEngulfs
+
+isEngulfing = isBullishEngulfing or isBearishEngulfing
+
+// >>> APLICAÇÃO DAS CORES (Sequência importa: última sobrescreve) >>>
+
+barcolor(isInsideBar ? corInsideBar : na, title="Cor Inside Bar")
+barcolor(isEngulfing ? corEngolfo   : na, title="Cor Engolfo")
+
+barcolor(isRBI ? corIgnoredBull : na, offset = -1, title="Cor RBI (Anterior)")
+barcolor(isGBI ? corIgnoredBear : na, offset = -1, title="Cor GBI (Anterior)")
+
+// >>> SINALIZAÇÃO VISUAL (SETAS) >>>
+
+// Seta Verde (Apostar Alta):
+// - Barra Vermelha Ignorada (RBI) -> Seta na barra colorida (Anterior)
+// - Engolfo de Alta -> Seta na barra colorida (Atual)
+// - Inside Bar de Alta -> Seta na barra colorida (Atual) (Trend Bullish)
+
+// Seta Vermelha (Apostar Queda):
+// - Barra Verde Ignorada (GBI) -> Seta na barra colorida (Anterior)
+// - Engolfo de Baixa -> Seta na barra colorida (Atual)
+// - Inside Bar de Baixa -> Seta na barra colorida (Atual) (Trend Bearish)
+
+// 1. Sinais na Barra Anterior (Ignored Bar)
+plotshape(isRBI, title="Sinal RBI (Alta)", style=shape.arrowup, location=location.belowbar, color=color.lime, offset=-1, size=size.normal)
+plotshape(isGBI, title="Sinal GBI (Baixa)", style=shape.arrowdown, location=location.abovebar, color=color.red, offset=-1, size=size.normal)
+
+// 2. Sinais na Barra Atual (Engolfo e Inside)
+plotshape(isBullishEngulfing, title="Sinal Engolfo Alta", style=shape.arrowup, location=location.belowbar, color=color.lime, size=size.normal)
+plotshape(isBearishEngulfing, title="Sinal Engolfo Baixa", style=shape.arrowdown, location=location.abovebar, color=color.red, size=size.normal)
+
+// Inside Bar: Somente se alinhado com a tendência da MA4 (coerência com Ignored Bar)
+plotshape(isInsideBar and trendBullish, title="Sinal Inside Alta", style=shape.arrowup, location=location.belowbar, color=color.lime, size=size.normal)
+plotshape(isInsideBar and trendBearish, title="Sinal Inside Baixa", style=shape.arrowdown, location=location.abovebar, color=color.red, size=size.normal)
