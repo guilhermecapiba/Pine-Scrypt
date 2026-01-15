@@ -35,16 +35,25 @@ rsiMomentumType = input.string("EMA", title="Tipo de MA do Momentum do RSI", opt
 // === PARÂMETROS DA NUVEM DE MÉDIAS ===
 string groupMA = "2. Parâmetros da Nuvem de Médias"
 // NOVO: Timeframe para a nuvem
-maTimeframe    = input.timeframe("", "Timeframe da Nuvem", group=groupMA)
+maTimeframe    = input.timeframe("60", "Timeframe da Nuvem", group=groupMA)
 
 // ALTERADO: input.source para input.string para permitir MTF correto
 shortMaSrc     = input.string("HLC3", title="Fonte MA Curta", options=["HLC3", "Close", "Open", "High", "Low", "HL2", "OHLC4"], group=groupMA)
-shortMaType    = input.string("VWMA", title="Tipo MA Curta", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
-shortMaLength  = input.int(55, title="Período MA Curta", minval=1, group=groupMA)
+shortMaType    = input.string("SMA", title="Tipo MA Curta", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+shortMaLength  = input.int(72, title="Período MA Curta", minval=1, group=groupMA)
 
 longMaSrc      = input.string("HLC3", title="Fonte MA Longa", options=["HLC3", "Close", "Open", "High", "Low", "HL2", "OHLC4"], group=groupMA)
-longMaType     = input.string("VWMA", title="Tipo MA Longa", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
-longMaLength   = input.int(233, title="Período MA Longa", minval=1, group=groupMA)
+longMaType     = input.string("SMA", title="Tipo MA Longa", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+longMaLength   = input.int(216, title="Período MA Longa", minval=1, group=groupMA)
+
+// === PARÂMETROS DA TERCEIRA MÉDIA ===
+string groupMAExtra = "3. Parâmetros da Média Extra"
+extraMaTimeframe = input.timeframe("60", "Timeframe da Média Extra", group=groupMAExtra)
+extraMaSrc       = input.string("HLC3", title="Fonte Média Extra", options=["HLC3", "Close", "Open", "High", "Low", "HL2", "OHLC4"], group=groupMAExtra)
+extraMaType      = input.string("SMA", title="Tipo Média Extra", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMAExtra)
+extraMaLength    = input.int(480, title="Período Média Extra", minval=1, group=groupMAExtra)
+extraMaColor     = input.color(color.red, title="Cor Média Extra", group=groupMAExtra)
+extraMaWidth     = input.int(3, title="Espessura Média Extra", minval=1, group=groupMAExtra)
 
 // === FUNÇÃO DE MÉDIA FLEXÍVEL ===
 getMA(src, len, tipo) =>
@@ -109,11 +118,21 @@ barcolor(corDoCandle)
 // maCurta = getMA(shortMaSrc, shortMaLength, shortMaType)
 // maLonga = getMA(longMaSrc, longMaLength, longMaType)
 
-[maCurta, maLonga] = request.security(syminfo.tickerid, maTimeframe, [calcMa(shortMaSrc, shortMaLength, shortMaType), calcMa(longMaSrc, longMaLength, longMaType)])
+[maCurta, maLonga, maExtra] = request.security(syminfo.tickerid, maTimeframe, [calcMa(shortMaSrc, shortMaLength, shortMaType), calcMa(longMaSrc, longMaLength, longMaType), calcMa(extraMaSrc, extraMaLength, extraMaType)])
+// Nota: O usuario pediu para a terceira media ser desatrelada.
+// Se "desatrelada" significa ter seu PROPRIO timeframe, então precisamos de um request.security separado.
+// O plano acima colocou inputs separados, mas na hora de calcular eu (no pensamento rapido) agrupei.
+// Vou corrigir isso para usar o `extraMaTimeframe`.
 
-plotCurta = plot(maCurta, title="MA Curta", color=corMaCurta)
-plotLonga = plot(maLonga, title="MA Longa", color=corMaLonga)
-fill(plotCurta, plotLonga, color = maCurta > maLonga ? corNuvemAlta : corNuvemBaixa, title="Nuvem MA Curta/Longa")
+// Recalculando corretamente:
+[maCurtaRecalc, maLongaRecalc] = request.security(syminfo.tickerid, maTimeframe, [calcMa(shortMaSrc, shortMaLength, shortMaType), calcMa(longMaSrc, longMaLength, longMaType)])
+maExtraRecalc = request.security(syminfo.tickerid, extraMaTimeframe, calcMa(extraMaSrc, extraMaLength, extraMaType))
+
+plotCurta = plot(maCurtaRecalc, title="MA Curta", color=corMaCurta, linewidth=2)
+plotLonga = plot(maLongaRecalc, title="MA Longa", color=corMaLonga, linewidth=3)
+fill(plotCurta, plotLonga, color = maCurtaRecalc > maLongaRecalc ? corNuvemAlta : corNuvemBaixa, title="Nuvem MA Curta/Longa")
+
+plot(maExtraRecalc, title="MA Extra", color=extraMaColor, linewidth=extraMaWidth)
 
 // === SINAIS VISUAIS DE CRUZAMENTO RSI COM NÍVEL 50 ===
 cruzamentoAlta  = ta.crossover(rsiUltimate, 50)
