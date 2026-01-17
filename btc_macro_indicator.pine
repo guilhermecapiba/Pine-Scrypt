@@ -1,0 +1,24 @@
+//@version=5
+indicator("BTC Macro Indicator", shorttitle="BTC Macro", overlay=false)
+
+// Symbols
+sym_btc = "BINANCE:BTCUSDT"
+sym_rut = "TVC:RUT"
+sym_spx = "TVC:SPX"
+
+// Fetch data
+btc = request.security(sym_btc, timeframe.period, close)
+rut = request.security(sym_rut, timeframe.period, close)
+spx = request.security(sym_spx, timeframe.period, close)
+
+// Formula: BINANCE:BTCUSDT/(TVC:RUT/TVC:SPX)-BINANCE:BTCUSDT
+// This is equivalent to BTC * (SPX/RUT - 1)
+main_value = btc / (rut / spx) - btc
+
+// EMA 20
+ema_length = input.int(20, title="EMA Length")
+ema_value = ta.ema(main_value, ema_length)
+
+// Plotting
+plot(main_value, title="Main Line", color=color.blue, linewidth=2)
+plot(ema_value, title="EMA 20", color=color.orange, linewidth=2)
