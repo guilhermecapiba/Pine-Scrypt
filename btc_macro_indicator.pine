@@ -7,7 +7,8 @@ sym_rut = "TVC:RUT"
 sym_spx = "TVC:SPX"
 
 // Fetch data
-btc = request.security(sym_btc, timeframe.period, close)
+// We need High and Low of BTC for divergence detection against the price action of BTC itself
+[btc, btc_h, btc_l] = request.security(sym_btc, timeframe.period, [close, high, low])
 rut = request.security(sym_rut, timeframe.period, close)
 spx = request.security(sym_spx, timeframe.period, close)
 
@@ -22,3 +23,52 @@ ema_value = ta.ema(main_value, ema_length)
 // Plotting
 plot(main_value, title="Main Line", color=color.blue, linewidth=2)
 plot(ema_value, title="EMA 20", color=color.orange, linewidth=2)
+
+//===== DIVERGENCE DETECTION =====
+string groupDiv = "Divergence Detection"
+showDivergences = input.bool(true, "Show Divergences?", group = groupDiv)
+pivotLeft = input.int(5, "Pivot Lookback Left", minval = 1, group = groupDiv)
+pivotRight = input.int(5, "Pivot Lookback Right", minval = 1, group = groupDiv)
+bullishDivColor = input.color(color.new(color.green, 0), "Bullish Color", inline="bull", group = groupDiv)
+bullishLineWidth = input.int(2, "Line Width", minval=1, inline="bull", group=groupDiv)
+bearishDivColor = input.color(color.new(color.red, 0), "Bearish Color", inline="bear", group = groupDiv)
+bearishLineWidth = input.int(2, "Line Width", minval=1, inline="bear", group=groupDiv)
+
+if showDivergences
+    // We compare the Indicator (main_value) pivots vs the Price (btc_h / btc_l) pivots
+    // Note: Pivot logic requires detecting pivots on the oscillator (main_value)
+
+    pivotHighInd = ta.pivothigh(main_value, pivotLeft, pivotRight)
+    pivotLowInd = ta.pivotlow(main_value, pivotLeft, pivotRight)
+
+    // --- BEARISH DIVERGENCE ---
+    // Price makes Higher High, Indicator makes Lower High
+    if not na(pivotHighInd)
+        // Find previous pivot high of indicator
+        prevPivotHighInd_val = ta.valuewhen(pivotHighInd, main_value[pivotRight], 1)
+        // Find price at that previous pivot moment
+        prevPivotHigh_price = ta.valuewhen(pivotHighInd, btc_h[pivotRight], 1)
+        // Find bar index
+        prevPivotHigh_bar = ta.valuewhen(pivotHighInd, bar_index[pivotRight], 1)
+
+        // Comparison
+        // Current pivot price (btc_h[pivotRight]) > Previous pivot price
+        // Current pivot indicator (main_value[pivotRight]) < Previous pivot indicator
+        if btc_h[pivotRight] > prevPivotHigh_price and main_value[pivotRight] < prevPivotHighInd_val
+            line.new(prevPivotHigh_bar, prevPivotHighInd_val, bar_index[pivotRight], main_value[pivotRight], color=bearishDivColor, width=bearishLineWidth)
+
+    // --- BULLISH DIVERGENCE ---
+    // Price makes Lower Low, Indicator makes Higher Low
+    if not na(pivotLowInd)
+        // Find previous pivot low of indicator
+        prevPivotLowInd_val = ta.valuewhen(pivotLowInd, main_value[pivotRight], 1)
+        // Find price at that previous pivot moment
+        prevPivotLow_price = ta.valuewhen(pivotLowInd, btc_l[pivotRight], 1)
+        // Find bar index
+        prevPivotLow_bar = ta.valuewhen(pivotLowInd, bar_index[pivotRight], 1)
+
+        // Comparison
+        // Current pivot price (btc_l[pivotRight]) < Previous pivot price
+        // Current pivot indicator (main_value[pivotRight]) > Previous pivot indicator
+        if btc_l[pivotRight] < prevPivotLow_price and main_value[pivotRight] > prevPivotLowInd_val
+            line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index[pivotRight], main_value[pivotRight], color=bullishDivColor, width=bullishLineWidth)
