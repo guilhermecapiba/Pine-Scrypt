@@ -2,7 +2,7 @@
 indicator("BTC Macro Indicator", shorttitle="BTC Macro", overlay=false)
 
 // Symbols
-sym_btc = "BINANCE:BTCUSDT"
+sym_btc = "CME:BTC1!"
 sym_rut = "TVC:RUT"
 sym_spx = "TVC:SPX"
 
