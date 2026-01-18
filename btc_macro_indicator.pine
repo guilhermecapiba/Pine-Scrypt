@@ -11,7 +11,7 @@ btc = request.security(sym_btc, timeframe.period, close)
 rut = request.security(sym_rut, timeframe.period, close)
 spx = request.security(sym_spx, timeframe.period, close)
 
-// Formula: BINANCE:BTCUSDT/(TVC:RUT/TVC:SPX)-BINANCE:BTCUSDT
+// Formula: CME:BTC1!/(TVC:RUT/TVC:SPX)-CME:BTC1!
 // This is equivalent to BTC * (SPX/RUT - 1)
 main_value = btc / (rut / spx) - btc
 
