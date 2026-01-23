@@ -6,13 +6,11 @@ sym_price_default = "CME:BTC1!"
 sym_btc_d_default = "CRYPTOCAP:BTC.D"
 sym_usdt_d_default = "CRYPTOCAP:USDT.D"
 sym_usdc_d_default = "CRYPTOCAP:USDC.D"
-sym_usde_d_default = "CRYPTOCAP:USDE.D"
 
 sym_price = input.symbol(sym_price_default, "BTC Price Symbol (for Divergence)")
 sym_btc_d = input.symbol(sym_btc_d_default, "BTC Dominance Symbol")
 sym_usdt_d = input.symbol(sym_usdt_d_default, "USDT Dominance Symbol")
 sym_usdc_d = input.symbol(sym_usdc_d_default, "USDC Dominance Symbol")
-sym_usde_d = input.symbol(sym_usde_d_default, "USDe Dominance Symbol")
 
 // Fetch data
 // We need High and Low of Price for divergence detection
@@ -21,10 +19,9 @@ sym_usde_d = input.symbol(sym_usde_d_default, "USDe Dominance Symbol")
 btc_d = request.security(sym_btc_d, timeframe.period, close)
 usdt_d = request.security(sym_usdt_d, timeframe.period, close)
 usdc_d = request.security(sym_usdc_d, timeframe.period, close)
-usde_d = request.security(sym_usde_d, timeframe.period, close)
 
-// Formula: BTC.D / (USDT.D + USDC.D + USDE.D)
-stable_sum = usdt_d + usdc_d + usde_d
+// Formula: BTC.D / (USDT.D + USDC.D)
+stable_sum = usdt_d + usdc_d
 main_value = stable_sum != 0 ? (btc_d / stable_sum) : 0
 
 // EMA 20
