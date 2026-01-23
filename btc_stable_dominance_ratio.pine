@@ -1,0 +1,84 @@
+//@version=5
+indicator("BTC Stablecoin Dominance Ratio", shorttitle="BTC Stable Dom Ratio", overlay=false)
+
+// Symbols
+sym_price_default = "CME:BTC1!"
+sym_btc_d_default = "CRYPTOCAP:BTC.D"
+sym_usdt_d_default = "CRYPTOCAP:USDT.D"
+sym_usdc_d_default = "CRYPTOCAP:USDC.D"
+sym_usde_d_default = "CRYPTOCAP:USDE.D"
+
+sym_price = input.symbol(sym_price_default, "BTC Price Symbol (for Divergence)")
+sym_btc_d = input.symbol(sym_btc_d_default, "BTC Dominance Symbol")
+sym_usdt_d = input.symbol(sym_usdt_d_default, "USDT Dominance Symbol")
+sym_usdc_d = input.symbol(sym_usdc_d_default, "USDC Dominance Symbol")
+sym_usde_d = input.symbol(sym_usde_d_default, "USDe Dominance Symbol")
+
+// Fetch data
+// We need High and Low of Price for divergence detection
+[price_c, price_h, price_l] = request.security(sym_price, timeframe.period, [close, high, low])
+
+btc_d = request.security(sym_btc_d, timeframe.period, close)
+usdt_d = request.security(sym_usdt_d, timeframe.period, close)
+usdc_d = request.security(sym_usdc_d, timeframe.period, close)
+usde_d = request.security(sym_usde_d, timeframe.period, close)
+
+// Formula: BTC.D / (USDT.D + USDC.D + USDE.D)
+stable_sum = usdt_d + usdc_d + usde_d
+main_value = stable_sum != 0 ? (btc_d / stable_sum) : 0
+
+// EMA 20
+ema_length = input.int(20, title="EMA Length")
+ema_value = ta.ema(main_value, ema_length)
+
+// Plotting
+plot(main_value, title="Main Line", color=color.blue, linewidth=2)
+plot(ema_value, title="EMA 20", color=color.orange, linewidth=2)
+
+//===== DIVERGENCE DETECTION =====
+string groupDiv = "Divergence Detection"
+showDivergences = input.bool(true, "Show Divergences?", group = groupDiv)
+pivotLeft = input.int(5, "Pivot Lookback Left", minval = 1, group = groupDiv)
+pivotRight = input.int(5, "Pivot Lookback Right", minval = 1, group = groupDiv)
+bullishDivColor = input.color(color.new(color.green, 0), "Bullish Color", inline="bull", group = groupDiv)
+bullishLineWidth = input.int(2, "Line Width", minval=1, inline="bull", group=groupDiv)
+bearishDivColor = input.color(color.new(color.red, 0), "Bearish Color", inline="bear", group = groupDiv)
+bearishLineWidth = input.int(2, "Line Width", minval=1, inline="bear", group=groupDiv)
+
+if showDivergences
+    // We compare the Indicator (main_value) pivots vs the Price (price_h / price_l) pivots
+
+    pivotHighInd = ta.pivothigh(main_value, pivotLeft, pivotRight)
+    pivotLowInd = ta.pivotlow(main_value, pivotLeft, pivotRight)
+
+    // --- BEARISH DIVERGENCE ---
+    // Price makes Higher High, Indicator makes Lower High
+    if not na(pivotHighInd)
+        // Find previous pivot high of indicator
+        prevPivotHighInd_val = ta.valuewhen(not na(pivotHighInd), main_value[pivotRight], 1)
+        // Find price at that previous pivot moment
+        prevPivotHigh_price = ta.valuewhen(not na(pivotHighInd), price_h[pivotRight], 1)
+        // Find bar index
+        prevPivotHigh_bar = ta.valuewhen(not na(pivotHighInd), bar_index[pivotRight], 1)
+
+        // Comparison
+        // Current pivot price (price_h[pivotRight]) > Previous pivot price
+        // Current pivot indicator (main_value[pivotRight]) < Previous pivot indicator
+        if price_h[pivotRight] > prevPivotHigh_price and main_value[pivotRight] < prevPivotHighInd_val
+            line.new(prevPivotHigh_bar, prevPivotHighInd_val, bar_index[pivotRight], main_value[pivotRight], color=bearishDivColor, width=bearishLineWidth)
+
+    // --- BULLISH DIVERGENCE ---
+    // Price makes Lower Low, Indicator makes Higher Low
+    if not na(pivotLowInd)
+        // Find previous pivot low of indicator
+        prevPivotLowInd_val = ta.valuewhen(not na(pivotLowInd), main_value[pivotRight], 1)
+        // Find price at that previous pivot moment
+        prevPivotLow_price = ta.valuewhen(not na(pivotLowInd), price_l[pivotRight], 1)
+        // Find bar index
+        prevPivotLow_bar = ta.valuewhen(not na(pivotLowInd), bar_index[pivotRight], 1)
+
+        // Comparison
+        // Current pivot price (price_l[pivotRight]) < Previous pivot price
+        // Current pivot indicator (main_value[pivotRight]) > Previous pivot indicator
+        if price_l[pivotRight] < prevPivotLow_price and main_value[pivotRight] > prevPivotLowInd_val
+            line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index[pivotRight], main_value[pivotRight], color=bullishDivColor, width=bullishLineWidth)
