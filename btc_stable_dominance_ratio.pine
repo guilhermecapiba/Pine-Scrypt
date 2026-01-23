@@ -2,7 +2,7 @@
 indicator("BTC Stablecoin Dominance Ratio", shorttitle="BTC Stable Dom Ratio", overlay=false)
 
 // Symbols
-sym_price_default = "CME:BTC1!"
+sym_price_default = "BINANCE:BTCUSDT"
 sym_btc_d_default = "CRYPTOCAP:BTC.D"
 sym_usdt_d_default = "CRYPTOCAP:USDT.D"
 sym_usdc_d_default = "CRYPTOCAP:USDC.D"
