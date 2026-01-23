@@ -1,5 +1,5 @@
 //@version=5
-indicator("BTC x USD Dominance Ratio", shorttitle="BTC Dominance Ratio", overlay=false)
+indicator("BTC x USD Dominance Ratio v2", shorttitle="BTC Dom v2", overlay=false)
 
 // Symbols
 sym_price_default = "BINANCE:BTCUSDT"
@@ -58,33 +58,33 @@ if showDivergences
     // Price makes Higher High, Indicator makes Lower High
     if not na(pivotHighInd)
         // Find previous pivot high of indicator
-        prevPivotHighInd_val = ta.valuewhen(not na(pivotHighInd), main_value[pivotRight], 1)
+        prevPivotHighInd_val = ta.valuewhen(not na(pivotHighInd), main_value, 1)
         // Find price at that previous pivot moment
-        prevPivotHigh_price = ta.valuewhen(not na(pivotHighInd), price_h[pivotRight], 1)
+        prevPivotHigh_price = ta.valuewhen(not na(pivotHighInd), price_h, 1)
         // Find bar index
-        prevPivotHigh_bar = ta.valuewhen(not na(pivotHighInd), bar_index[pivotRight], 1)
+        prevPivotHigh_bar = ta.valuewhen(not na(pivotHighInd), bar_index, 1)
 
         // Comparison
-        // Current pivot price (price_h[pivotRight]) > Previous pivot price
-        // Current pivot indicator (main_value[pivotRight]) < Previous pivot indicator
-        if price_h[pivotRight] > prevPivotHigh_price and main_value[pivotRight] < prevPivotHighInd_val
-            line.new(prevPivotHigh_bar, prevPivotHighInd_val, bar_index[pivotRight], main_value[pivotRight], color=bearishDivColor, width=bearishLineWidth)
+        // Current pivot price (price_h) > Previous pivot price
+        // Current pivot indicator (main_value) < Previous pivot indicator
+        if price_h > prevPivotHigh_price and main_value < prevPivotHighInd_val
+            line.new(prevPivotHigh_bar, prevPivotHighInd_val, bar_index, main_value, color=bearishDivColor, width=bearishLineWidth)
 
     // --- BULLISH DIVERGENCE ---
     // Price makes Lower Low, Indicator makes Higher Low
     if not na(pivotLowInd)
         // Find previous pivot low of indicator
-        prevPivotLowInd_val = ta.valuewhen(not na(pivotLowInd), main_value[pivotRight], 1)
+        prevPivotLowInd_val = ta.valuewhen(not na(pivotLowInd), main_value, 1)
         // Find price at that previous pivot moment
-        prevPivotLow_price = ta.valuewhen(not na(pivotLowInd), price_l[pivotRight], 1)
+        prevPivotLow_price = ta.valuewhen(not na(pivotLowInd), price_l, 1)
         // Find bar index
-        prevPivotLow_bar = ta.valuewhen(not na(pivotLowInd), bar_index[pivotRight], 1)
+        prevPivotLow_bar = ta.valuewhen(not na(pivotLowInd), bar_index, 1)
 
         // Comparison
-        // Current pivot price (price_l[pivotRight]) < Previous pivot price
-        // Current pivot indicator (main_value[pivotRight]) > Previous pivot indicator
-        if price_l[pivotRight] < prevPivotLow_price and main_value[pivotRight] > prevPivotLowInd_val
-            line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index[pivotRight], main_value[pivotRight], color=bullishDivColor, width=bullishLineWidth)
+        // Current pivot price (price_l) < Previous pivot price
+        // Current pivot indicator (main_value) > Previous pivot indicator
+        if price_l < prevPivotLow_price and main_value > prevPivotLowInd_val
+            line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index, main_value, color=bullishDivColor, width=bullishLineWidth)
 
 //===== STRUCTURE BREAKS =====
 string groupBreak = "Structure Breaks"
@@ -102,5 +102,5 @@ if not na(pivotLowInd)
 bullishBreak = showBreakouts and not na(lastPivotHigh) and ta.crossover(main_value, lastPivotHigh)
 bearishBreak = showBreakouts and not na(lastPivotLow) and ta.crossunder(main_value, lastPivotLow)
 
-plotshape(bullishBreak, title="Bullish Break", style=shape.triangleup, location=location.absolute, color=color.green, size=size.tiny, text="BOS", textcolor=color.green, offset=0, price=lastPivotHigh)
-plotshape(bearishBreak, title="Bearish Break", style=shape.triangledown, location=location.absolute, color=color.red, size=size.tiny, text="BOS", textcolor=color.red, offset=0, price=lastPivotLow)
+plotchar(bullishBreak ? lastPivotHigh : na, title="Bullish Break", char="▲", location=location.absolute, color=color.green, size=size.tiny, text="BOS", textcolor=color.green, offset=0)
+plotchar(bearishBreak ? lastPivotLow : na, title="Bearish Break", char="▼", location=location.absolute, color=color.red, size=size.tiny, text="BOS", textcolor=color.red, offset=0)
