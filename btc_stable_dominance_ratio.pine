@@ -47,11 +47,12 @@ bullishLineWidth = input.int(2, "Line Width", minval=1, inline="bull", group=gro
 bearishDivColor = input.color(color.new(color.red, 0), "Bearish Color", inline="bear", group = groupDiv)
 bearishLineWidth = input.int(2, "Line Width", minval=1, inline="bear", group=groupDiv)
 
+// Calculate Pivots
+pivotHighInd = ta.pivothigh(main_value, pivotLeft, pivotRight)
+pivotLowInd = ta.pivotlow(main_value, pivotLeft, pivotRight)
+
 if showDivergences
     // We compare the Indicator (main_value) pivots vs the Price (price_h / price_l) pivots
-
-    pivotHighInd = ta.pivothigh(main_value, pivotLeft, pivotRight)
-    pivotLowInd = ta.pivotlow(main_value, pivotLeft, pivotRight)
 
     // --- BEARISH DIVERGENCE ---
     // Price makes Higher High, Indicator makes Lower High
@@ -84,3 +85,22 @@ if showDivergences
         // Current pivot indicator (main_value[pivotRight]) > Previous pivot indicator
         if price_l[pivotRight] < prevPivotLow_price and main_value[pivotRight] > prevPivotLowInd_val
             line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index[pivotRight], main_value[pivotRight], color=bullishDivColor, width=bullishLineWidth)
+
+//===== STRUCTURE BREAKS =====
+string groupBreak = "Structure Breaks"
+showBreakouts = input.bool(true, "Show Structure Breaks?", group = groupBreak)
+
+var float lastPivotHigh = na
+var float lastPivotLow = na
+
+if not na(pivotHighInd)
+    lastPivotHigh := pivotHighInd
+
+if not na(pivotLowInd)
+    lastPivotLow := pivotLowInd
+
+bullishBreak = showBreakouts and not na(lastPivotHigh) and ta.crossover(main_value, lastPivotHigh)
+bearishBreak = showBreakouts and not na(lastPivotLow) and ta.crossunder(main_value, lastPivotLow)
+
+plotshape(bullishBreak, title="Bullish Break", style=shape.triangleup, location=location.absolute, color=color.green, size=size.tiny, text="BOS", textcolor=color.green, offset=0, price=lastPivotHigh)
+plotshape(bearishBreak, title="Bearish Break", style=shape.triangledown, location=location.absolute, color=color.red, size=size.tiny, text="BOS", textcolor=color.red, offset=0, price=lastPivotLow)
