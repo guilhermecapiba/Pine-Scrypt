@@ -1,5 +1,5 @@
 //@version=5
-indicator("BTC Stablecoin Dominance Ratio", shorttitle="BTC Stable Dom Ratio", overlay=false)
+indicator("BTC x USD Dominance Ratio", shorttitle="BTC Dominance Ratio", overlay=false)
 
 // Symbols
 sym_price_default = "BINANCE:BTCUSDT"
@@ -28,9 +28,14 @@ main_value = stable_sum != 0 ? (btc_d / stable_sum) : 0
 ema_length = input.int(20, title="EMA Length")
 ema_value = ta.ema(main_value, ema_length)
 
+// EMA 200
+ema200_length = input.int(200, title="EMA 200 Length")
+ema200_value = ta.ema(main_value, ema200_length)
+
 // Plotting
 plot(main_value, title="Main Line", color=color.blue, linewidth=2)
 plot(ema_value, title="EMA 20", color=color.orange, linewidth=2)
+plot(ema200_value, title="EMA 200", color=color.red, linewidth=2)
 
 //===== DIVERGENCE DETECTION =====
 string groupDiv = "Divergence Detection"
