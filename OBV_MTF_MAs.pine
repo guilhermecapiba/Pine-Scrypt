@@ -1,5 +1,5 @@
 //@version=5
-indicator("OBV MTF com MAs e Divergências", shorttitle="OBV MTF Div", overlay=false)
+indicator("OBV MTF com MAs", shorttitle="OBV MTF", overlay=false)
 
 // --- Inputs ---
 // Timeframe: Default is chart timeframe ("")
@@ -13,109 +13,23 @@ len1 = input.int(21, title="Periodo MA 1", minval=1)
 type2 = input.string("EMA", title="Tipo MA 2", options=["SMA", "EMA"])
 len2 = input.int(90, title="Periodo MA 2", minval=1)
 
-// Bollinger Bands Settings (Requested: Period 14, StdDev 2)
-showBB = input.bool(true, "Show Bollinger Bands", group="Bollinger Bands")
-bbLen = input.int(14, "BB Period", minval=1, group="Bollinger Bands")
-bbStd = input.float(2.0, "BB StdDev", minval=0.1, group="Bollinger Bands")
-
-// Divergence Settings
-string groupDiv = "Divergence Detection"
-showDivergences = input.bool(true, "Show Divergences?", group = groupDiv)
-pivotLeft = input.int(5, "Pivot Lookback Left", minval = 1, group = groupDiv)
-pivotRight = input.int(5, "Pivot Lookback Right", minval = 1, group = groupDiv)
-bullishDivColor = input.color(color.new(color.green, 0), "Bullish Color", inline="bull", group = groupDiv)
-bullishLineWidth = input.int(2, "Line Width", minval=1, inline="bull", group=groupDiv)
-bearishDivColor = input.color(color.new(color.red, 0), "Bearish Color", inline="bear", group = groupDiv)
-bearishLineWidth = input.int(2, "Line Width", minval=1, inline="bear", group=groupDiv)
-
 // --- Calculation ---
 
 // Helper function to select MA type
 get_ma(src, type, len) =>
     type == "SMA" ? ta.sma(src, len) : ta.ema(src, len)
 
-// Function to calculate OBV, MAs, BBs, and Divergences in the requested timeframe context
-calc_full_data() =>
-    // 1. OBV Calculation
+// Function to calculate OBV and MAs in the requested timeframe context
+calc_data() =>
+    // Standard On Balance Volume
     _obv = ta.obv
-    // 2. MAs Calculation
+    // Calculate MAs based on that OBV
     _ma1 = get_ma(_obv, type1, len1)
     _ma2 = get_ma(_obv, type2, len2)
-
-    // 3. Bollinger Bands Calculation
-    _bb_basis = ta.sma(_obv, bbLen)
-    _bb_dev = bbStd * ta.stdev(_obv, bbLen)
-    _bb_upper = _bb_basis + _bb_dev
-    _bb_lower = _bb_basis - _bb_dev
-
-    // 4. Divergence Detection
-    // We need pivots of OBV and Price (High/Low)
-    _ph_obv = ta.pivothigh(_obv, pivotLeft, pivotRight)
-    _pl_obv = ta.pivotlow(_obv, pivotLeft, pivotRight)
-
-    // Initialize return variables for Bullish Div
-    var bool _bull_detected = false
-    var int _bull_t1 = 0
-    var float _bull_y1 = 0.0
-    var int _bull_t2 = 0
-    var float _bull_y2 = 0.0
-
-    // Initialize return variables for Bearish Div
-    var bool _bear_detected = false
-    var int _bear_t1 = 0
-    var float _bear_y1 = 0.0
-    var int _bear_t2 = 0
-    var float _bear_y2 = 0.0
-
-    // Reset flags each bar (we only want True on the confirmation bar)
-    _bull_detected := false
-    _bear_detected := false
-
-    // --- Bearish Divergence (Lower High in OBV, Higher High in Price) ---
-    // Fix: check `not na(_ph_obv)` because _ph_obv is float
-    if not na(_ph_obv)
-        // Previous pivot data. Fix: first arg must be bool
-        prev_ph_obv = ta.valuewhen(not na(_ph_obv), _obv[pivotRight], 1)
-        prev_ph_price = ta.valuewhen(not na(_ph_obv), high[pivotRight], 1)
-        prev_ph_time = ta.valuewhen(not na(_ph_obv), time[pivotRight], 1)
-
-        // Current pivot data
-        curr_ph_obv = _obv[pivotRight]
-        curr_ph_price = high[pivotRight]
-        curr_ph_time = time[pivotRight] // Time of the pivot
-
-        // Condition: Price Higher High AND OBV Lower High
-        if curr_ph_price > prev_ph_price and curr_ph_obv < prev_ph_obv
-            _bear_detected := true
-            _bear_t1 := prev_ph_time
-            _bear_y1 := prev_ph_obv
-            _bear_t2 := curr_ph_time
-            _bear_y2 := curr_ph_obv
-
-    // --- Bullish Divergence (Higher Low in OBV, Lower Low in Price) ---
-    if not na(_pl_obv)
-        // Previous pivot data. Fix: first arg must be bool
-        prev_pl_obv = ta.valuewhen(not na(_pl_obv), _obv[pivotRight], 1)
-        prev_pl_price = ta.valuewhen(not na(_pl_obv), low[pivotRight], 1)
-        prev_pl_time = ta.valuewhen(not na(_pl_obv), time[pivotRight], 1)
-
-        // Current pivot data
-        curr_pl_obv = _obv[pivotRight]
-        curr_pl_price = low[pivotRight]
-        curr_pl_time = time[pivotRight]
-
-        // Condition: Price Lower Low AND OBV Higher Low
-        if curr_pl_price < prev_pl_price and curr_pl_obv > prev_pl_obv
-            _bull_detected := true
-            _bull_t1 := prev_pl_time
-            _bull_y1 := prev_pl_obv
-            _bull_t2 := curr_pl_time
-            _bull_y2 := curr_pl_obv
-
-    [_obv, _ma1, _ma2, _bb_upper, _bb_lower, _bull_detected, _bull_t1, _bull_y1, _bull_t2, _bull_y2, _bear_detected, _bear_t1, _bear_y1, _bear_t2, _bear_y2]
+    [_obv, _ma1, _ma2]
 
 // request.security to get data from the chosen timeframe
-[v_obv, v_ma1, v_ma2, v_bb_upper, v_bb_lower, v_bull_det, v_bull_t1, v_bull_y1, v_bull_t2, v_bull_y2, v_bear_det, v_bear_t1, v_bear_y1, v_bear_t2, v_bear_y2] = request.security(syminfo.tickerid, tf, calc_full_data())
+[v_obv, v_ma1, v_ma2] = request.security(syminfo.tickerid, tf, calc_data())
 
 // --- Plotting ---
 // OBV: Blue, Width 2
@@ -126,18 +40,3 @@ plot(v_ma1, title="MA 1", color=color.yellow, linewidth=2)
 
 // MA 2: Orange (Abóbora), Width 2
 plot(v_ma2, title="MA 2", color=color.orange, linewidth=2)
-
-// Bollinger Bands (Gray, Transp)
-p_bb_upper = plot(showBB ? v_bb_upper : na, title="BB Upper", color=color.gray)
-p_bb_lower = plot(showBB ? v_bb_lower : na, title="BB Lower", color=color.gray)
-fill(p_bb_upper, p_bb_lower, color=showBB ? color.new(color.blue, 90) : na, title="BB Fill")
-
-// --- Divergence Drawing ---
-if showDivergences
-    // Draw Bullish Line if detected and this is a new event (time changed)
-    if v_bull_det and ta.change(v_bull_t2)
-        line.new(v_bull_t1, v_bull_y1, v_bull_t2, v_bull_y2, xloc=xloc.bar_time, color=bullishDivColor, width=bullishLineWidth)
-
-    // Draw Bearish Line
-    if v_bear_det and ta.change(v_bear_t2)
-        line.new(v_bear_t1, v_bear_y1, v_bear_t2, v_bear_y2, xloc=xloc.bar_time, color=bearishDivColor, width=bearishLineWidth)
