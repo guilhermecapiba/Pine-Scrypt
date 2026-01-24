@@ -1,5 +1,5 @@
 //@version=5
-indicator("OBV MTF com MAs", shorttitle="OBV MTF", overlay=false)
+indicator("OBV MTF com MAs", shorttitle="OBV MTF", overlay=false, max_lines_count=500)
 
 // --- Inputs ---
 // Timeframe: Default is chart timeframe ("")
@@ -35,8 +35,10 @@ calc_data() =>
 // OBV: Blue, Width 2
 plot(v_obv, title="OBV", color=color.blue, linewidth=2)
 
-// MA 1: Abóbora (Orange), Width 2 (Requested: "abobora, espessura 2")
+// MA 1: Abóbora (Orange), Width 2
 plot(v_ma1, title="MA 1", color=color.orange, linewidth=2)
 
 // MA 2: White, Width 1, Dashed (Requested: "branca, espessura 1 mas em linha tracejada")
-plot(v_ma2, title="MA 2", color=color.white, linewidth=1, style=plot.style_dashed)
+// Note: plot() does not support dashed style, so we use line.new()
+if not na(v_ma2) and not na(v_ma2[1])
+    line.new(bar_index[1], v_ma2[1], bar_index, v_ma2, style=line.style_dashed, color=color.white, width=1)
