@@ -1,0 +1,113 @@
+// @version=5
+indicator("Capiba RSI + 10 MAs v.24.01.26", overlay=true)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> COLORAÇÃO DAS BARRAS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+// === CONSTANTES DE CORES ===
+// Cores para Coloração de Candles
+color corSobrecompra = color.new(#2962FF, 0)
+color corSobrevenda  = color.new(#FFD600, 0)
+color corCandleAlta  = color.new(color.lime, 0)
+color corCandleBaixa = color.new(color.red, 0)
+
+// Cores para Sinais de Cruzamento
+color corSinalAlta  = color.new(color.green, 0)
+color corSinalBaixa = color.new(color.red, 0)
+
+
+// === PARÂMETROS DO RSI ULTIMATE ===
+string groupRSI = "1. Parâmetros do RSI Ultimate"
+rsiLength      = input.int(14, title="Período RSI", minval=2, group=groupRSI)
+rsiMethod      = input.string("EMA", title="Método de Suavização RSI", options=["EMA", "SMA", "RMA", "TMA"], group=groupRSI)
+rsiSrc         = input.source(hlc3, title="Fonte do RSI", group=groupRSI)
+rsiOversold    = input.float(35, title="Nível Sobrevendido", group=groupRSI)
+rsiOverbought  = input.float(65, title="Nível Sobrecomprado", group=groupRSI)
+momentumLength = input.int(14, title="Período Momentum EMA", minval=1, group=groupRSI)
+// NOVO: tipo de MA para o momentum do RSI
+rsiMomentumType = input.string("EMA", title="Tipo de MA do Momentum do RSI", options=["EMA", "SMA", "RMA", "TMA", "VWMA"], group=groupRSI)
+
+// === FUNÇÃO DE MÉDIA FLEXÍVEL ===
+getMA(src, len, tipo) =>
+    switch tipo
+        "EMA"  => ta.ema(src, len)
+        "SMA"  => ta.sma(src, len)
+        "RMA"  => ta.rma(src, len)
+        "TMA"  => ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
+        "VWMA" => ta.vwma(src, len)
+        => na
+
+// === CÁLCULO DO RSI ULTIMATE ===
+upper = ta.highest(rsiSrc, rsiLength)
+lower = ta.lowest(rsiSrc, rsiLength)
+rangeDelta = upper - lower
+delta = rsiSrc - rsiSrc[1]
+
+diff = upper > upper[1] ? rangeDelta :
+       lower < lower[1] ? -rangeDelta :
+       delta
+
+num = getMA(diff, rsiLength, rsiMethod)
+den = getMA(math.abs(diff), rsiLength, rsiMethod)
+
+rsiUltimate = den == 0 ? 50 : num / den * 50 + 50
+
+// USANDO A FUNÇÃO getMA PARA CALCULAR O MOMENTUM DO RSI (opção selecionável)
+rsiMomentum = getMA(rsiUltimate, momentumLength, rsiMomentumType)
+
+// === LÓGICA DE COLORAÇÃO DOS CANDLES ===
+// Regras: abaixo de 20 -> amarela; abaixo de 50 -> vermelha; >=50 -> verde; acima de 80 -> azul
+corAzul     = rsiUltimate > rsiOverbought
+corAmarela  = rsiUltimate < rsiOversold
+corVerde    = rsiUltimate >= 50
+corVermelha = rsiUltimate < 50 and not corAmarela
+
+// Aplicando precedência correta: azul (acima de 80), verde (>=50), amarela (<20), vermelha (entre 20 e 50)
+corDoCandle = corAzul ? corSobrecompra :
+              corVerde ? corCandleAlta :
+              corAmarela ? corSobrevenda :
+              corCandleBaixa
+
+barcolor(corDoCandle)
+
+// === SINAIS VISUAIS DE CRUZAMENTO RSI COM NÍVEL 50 ===
+cruzamentoAlta  = ta.crossover(rsiUltimate, 50)
+cruzamentoBaixa = ta.crossunder(rsiUltimate, 50)
+
+plotshape(cruzamentoAlta,  title="Cruzamento Alta RSI 50",  location=location.belowbar, color=corSinalAlta, style=shape.triangleup, size=size.normal)
+plotshape(cruzamentoBaixa, title="Cruzamento Baixa RSI 50", location=location.abovebar, color=corSinalBaixa, style=shape.triangledown, size=size.normal)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 10 MÉDIAS MÓVEIS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+string groupMAs = "2. Parâmetros das 10 Médias"
+maTimeframe = input.timeframe("60", "Timeframe das Médias", group=groupMAs)
+
+len1 = input.int(10, title="EMA 1", minval=1, group=groupMAs)
+len2 = input.int(20, title="EMA 2", minval=1, group=groupMAs)
+len3 = input.int(30, title="EMA 3", minval=1, group=groupMAs)
+len4 = input.int(40, title="EMA 4", minval=1, group=groupMAs)
+len5 = input.int(50, title="EMA 5", minval=1, group=groupMAs)
+len6 = input.int(60, title="EMA 6", minval=1, group=groupMAs)
+len7 = input.int(70, title="EMA 7", minval=1, group=groupMAs)
+len8 = input.int(80, title="EMA 8", minval=1, group=groupMAs)
+len9 = input.int(90, title="EMA 9", minval=1, group=groupMAs)
+len10 = input.int(100, title="EMA 10", minval=1, group=groupMAs)
+
+// Function to calculate all 10 EMAs
+calcEMAs() =>
+    [ta.ema(close, len1), ta.ema(close, len2), ta.ema(close, len3), ta.ema(close, len4), ta.ema(close, len5),
+     ta.ema(close, len6), ta.ema(close, len7), ta.ema(close, len8), ta.ema(close, len9), ta.ema(close, len10)]
+
+// Request security
+[e1, e2, e3, e4, e5, e6, e7, e8, e9, e10] = request.security(syminfo.tickerid, maTimeframe, calcEMAs())
+
+// Plotting
+plot(e1, color = e1 > e1[1] ? color.green : color.red, linewidth=1, title="EMA 1")
+plot(e2, color = e2 > e2[1] ? color.green : color.red, linewidth=1, title="EMA 2")
+plot(e3, color = e3 > e3[1] ? color.green : color.red, linewidth=1, title="EMA 3")
+plot(e4, color = e4 > e4[1] ? color.green : color.red, linewidth=1, title="EMA 4")
+plot(e5, color = e5 > e5[1] ? color.green : color.red, linewidth=1, title="EMA 5")
+plot(e6, color = e6 > e6[1] ? color.green : color.red, linewidth=1, title="EMA 6")
+plot(e7, color = e7 > e7[1] ? color.green : color.red, linewidth=1, title="EMA 7")
+plot(e8, color = e8 > e8[1] ? color.green : color.red, linewidth=1, title="EMA 8")
+plot(e9, color = e9 > e9[1] ? color.green : color.red, linewidth=1, title="EMA 9")
+plot(e10, color = e10 > e10[1] ? color.green : color.red, linewidth=1, title="EMA 10")
