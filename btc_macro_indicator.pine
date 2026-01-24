@@ -1,5 +1,5 @@
 //@version=5
-indicator("BTC Macro Indicator", shorttitle="BTC Macro", overlay=false)
+indicator("BTC Macro Indicator v24.01.26", shorttitle="BTC Macro", overlay=false)
 
 // Symbols
 sym_btc = input.symbol("BINANCE:BTCUSDT", "BTC Symbol")
@@ -22,14 +22,12 @@ ema_value = ta.ema(main_value, ema_length)
 
 // EMA 2 (Default 200)
 ema2_length = input.int(200, title="EMA 2 Length", group="Moving Averages")
-ema2_color = input.color(color.white, title="EMA 2 Color", group="Moving Averages")
-ema2_width = input.int(1, title="EMA 2 Width", minval=1, group="Moving Averages")
 ema2_value = ta.ema(main_value, ema2_length)
 
 // Plotting
 plot(main_value, title="Main Line", color=color.blue, linewidth=2)
 plot(ema_value, title="EMA 1", color=color.orange, linewidth=2)
-plot(ema2_value, title="EMA 2", color=ema2_color, linewidth=ema2_width)
+plot(ema2_value, title="EMA 2", color=color.white, linewidth=1)
 
 //===== DIVERGENCE DETECTION =====
 string groupDiv = "Divergence Detection"
