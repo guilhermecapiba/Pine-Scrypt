@@ -1,5 +1,5 @@
 // @version=5
-indicator("Capiba RSI + 10 MAs v.24.01.26", overlay=true)
+indicator("Capiba RSI + 5 MAs v.24.01.26", overlay=true)
 
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> COLORAÇÃO DAS BARRAS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
@@ -31,6 +31,7 @@ getMA(src, len, tipo) =>
     switch tipo
         "EMA"  => ta.ema(src, len)
         "SMA"  => ta.sma(src, len)
+        "HMA"  => ta.hma(src, len)
         "RMA"  => ta.rma(src, len)
         "TMA"  => ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
         "VWMA" => ta.vwma(src, len)
@@ -76,38 +77,52 @@ cruzamentoBaixa = ta.crossunder(rsiUltimate, 50)
 plotshape(cruzamentoAlta,  title="Cruzamento Alta RSI 50",  location=location.belowbar, color=corSinalAlta, style=shape.triangleup, size=size.normal)
 plotshape(cruzamentoBaixa, title="Cruzamento Baixa RSI 50", location=location.abovebar, color=corSinalBaixa, style=shape.triangledown, size=size.normal)
 
-// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 10 MÉDIAS MÓVEIS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 5 MÉDIAS MÓVEIS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
-string groupMAs = "2. Parâmetros das 10 Médias"
-maTimeframe = input.timeframe("60", "Timeframe das Médias", group=groupMAs)
+string groupMAs = "2. Parâmetros das 5 Médias"
 
-len1 = input.int(10, title="EMA 1", minval=1, group=groupMAs)
-len2 = input.int(20, title="EMA 2", minval=1, group=groupMAs)
-len3 = input.int(30, title="EMA 3", minval=1, group=groupMAs)
-len4 = input.int(40, title="EMA 4", minval=1, group=groupMAs)
-len5 = input.int(50, title="EMA 5", minval=1, group=groupMAs)
-len6 = input.int(60, title="EMA 6", minval=1, group=groupMAs)
-len7 = input.int(70, title="EMA 7", minval=1, group=groupMAs)
-len8 = input.int(80, title="EMA 8", minval=1, group=groupMAs)
-len9 = input.int(90, title="EMA 9", minval=1, group=groupMAs)
-len10 = input.int(100, title="EMA 10", minval=1, group=groupMAs)
+// MA 1 (Default: EMA, 7, 1D)
+len1  = input.int(7, title="Período MA 1", minval=1, group=groupMAs, inline="MA1")
+type1 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA1")
+tf1   = input.timeframe("D", title="Timeframe", group=groupMAs, inline="MA1")
 
-// Function to calculate all 10 EMAs
-calcEMAs() =>
-    [ta.ema(close, len1), ta.ema(close, len2), ta.ema(close, len3), ta.ema(close, len4), ta.ema(close, len5),
-     ta.ema(close, len6), ta.ema(close, len7), ta.ema(close, len8), ta.ema(close, len9), ta.ema(close, len10)]
+// MA 2 (Default: EMA, 21, 1D)
+len2  = input.int(21, title="Período MA 2", minval=1, group=groupMAs, inline="MA2")
+type2 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA2")
+tf2   = input.timeframe("D", title="Timeframe", group=groupMAs, inline="MA2")
 
-// Request security
-[e1, e2, e3, e4, e5, e6, e7, e8, e9, e10] = request.security(syminfo.tickerid, maTimeframe, calcEMAs())
+// MA 3 (Default: EMA, 30, 1D)
+len3  = input.int(30, title="Período MA 3", minval=1, group=groupMAs, inline="MA3")
+type3 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA3")
+tf3   = input.timeframe("D", title="Timeframe", group=groupMAs, inline="MA3")
 
-// Plotting
-plot(e1, color = e1 > e1[1] ? color.green : color.red, linewidth=1, title="EMA 1")
-plot(e2, color = e2 > e2[1] ? color.green : color.red, linewidth=1, title="EMA 2")
-plot(e3, color = e3 > e3[1] ? color.green : color.red, linewidth=1, title="EMA 3")
-plot(e4, color = e4 > e4[1] ? color.green : color.red, linewidth=1, title="EMA 4")
-plot(e5, color = e5 > e5[1] ? color.green : color.red, linewidth=1, title="EMA 5")
-plot(e6, color = e6 > e6[1] ? color.green : color.red, linewidth=1, title="EMA 6")
-plot(e7, color = e7 > e7[1] ? color.green : color.red, linewidth=1, title="EMA 7")
-plot(e8, color = e8 > e8[1] ? color.green : color.red, linewidth=1, title="EMA 8")
-plot(e9, color = e9 > e9[1] ? color.green : color.red, linewidth=1, title="EMA 9")
-plot(e10, color = e10 > e10[1] ? color.green : color.red, linewidth=1, title="EMA 10")
+// MA 4 (Default: EMA, 180, 1D)
+len4  = input.int(180, title="Período MA 4", minval=1, group=groupMAs, inline="MA4")
+type4 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA4")
+tf4   = input.timeframe("D", title="Timeframe", group=groupMAs, inline="MA4")
+
+// MA 5 (Default: EMA, 365, 1D)
+len5  = input.int(365, title="Período MA 5", minval=1, group=groupMAs, inline="MA5")
+type5 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA5")
+tf5   = input.timeframe("D", title="Timeframe", group=groupMAs, inline="MA5")
+
+// Helper function to calculate MA and Slope (inside the requested timeframe)
+// Returns [maValue, isRising]
+calcMaAndSlope(len, type) =>
+    val = getMA(close, len, type)
+    rising = val > val[1]
+    [val, rising]
+
+// Request Security for both Value and Slope
+[ma1, r1] = request.security(syminfo.tickerid, tf1, calcMaAndSlope(len1, type1))
+[ma2, r2] = request.security(syminfo.tickerid, tf2, calcMaAndSlope(len2, type2))
+[ma3, r3] = request.security(syminfo.tickerid, tf3, calcMaAndSlope(len3, type3))
+[ma4, r4] = request.security(syminfo.tickerid, tf4, calcMaAndSlope(len4, type4))
+[ma5, r5] = request.security(syminfo.tickerid, tf5, calcMaAndSlope(len5, type5))
+
+// Plotting using the slope determined in the source timeframe
+plot(ma1, color = r1 ? color.green : color.red, linewidth=1, title="MA 1")
+plot(ma2, color = r2 ? color.green : color.red, linewidth=1, title="MA 2")
+plot(ma3, color = r3 ? color.green : color.red, linewidth=1, title="MA 3")
+plot(ma4, color = r4 ? color.green : color.red, linewidth=1, title="MA 4")
+plot(ma5, color = r5 ? color.green : color.red, linewidth=1, title="MA 5")
