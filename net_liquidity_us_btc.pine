@@ -1,0 +1,28 @@
+//@version=5
+indicator("Liquidez Líquida EUA vs BTC", overlay=false)
+
+// Puxando os dados do FRED (Dados semanais mapeados para o gráfico diário)
+walcl = request.security("FRED:WALCL", "W", close)
+tga = request.security("FRED:WTREGEN", "W", close)
+rrp = request.security("FRED:RRPONTSYD", "W", close)
+
+net_liquidity = walcl - (tga + rrp)
+
+// Plotando a linha de liquidez
+plot(net_liquidity, title="Net Liquidity (Weekly Data)", color=color.aqua, linewidth=2)
+
+// Alerta de Tendência
+liq_moving_avg = ta.sma(net_liquidity, 4) // Média de 4 semanas
+plot(liq_moving_avg, color=color.gray, style=plot.style_linebr)
+
+// Média Exponencial de 13 períodos (Abóbora, espessura 2)
+ema13 = ta.ema(net_liquidity, 13)
+plot(ema13, title="EMA 13", color=color.orange, linewidth=2)
+
+// Média Exponencial de 48 períodos (Branca, espessura 1)
+ema48 = ta.ema(net_liquidity, 48)
+plot(ema48, title="EMA 48", color=color.white, linewidth=1)
+
+// Colorir o fundo se a liquidez estiver caindo (Sinal de Alerta)
+bg_color = net_liquidity < net_liquidity[1] ? color.new(color.red, 90) : color.new(color.green, 90)
+bgcolor(bg_color)
