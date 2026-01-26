@@ -11,10 +11,6 @@ net_liquidity = walcl - (tga + rrp)
 // Plotando a linha de liquidez
 plot(net_liquidity, title="Net Liquidity (Weekly Data)", color=color.aqua, linewidth=2)
 
-// Alerta de Tendência
-liq_moving_avg = ta.sma(net_liquidity, 4) // Média de 4 semanas
-plot(liq_moving_avg, color=color.gray, style=plot.style_linebr)
-
 // Média Exponencial de 13 períodos (Abóbora, espessura 2)
 ema13 = ta.ema(net_liquidity, 13)
 plot(ema13, title="EMA 13", color=color.orange, linewidth=2)
