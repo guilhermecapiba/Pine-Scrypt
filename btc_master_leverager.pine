@@ -1,0 +1,76 @@
+//@version=5
+indicator("BTC Master Leverager: AAVE & Macro", overlay=true, max_labels_count=500)
+
+// --- 1. PARÂMETROS MACRO (AUTOMÁTICOS) ---
+// Fix: Fetching data individually for robustness
+walcl = request.security("FRED:WALCL", "W", close)
+tga = request.security("FRED:WTREGEN", "W", close)
+rrp = request.security("FRED:RRPONTSYD", "W", close)
+
+liq_total = walcl - (tga + rrp)
+liq_ma = ta.sma(liq_total, 4)
+liq_roc = ta.roc(liq_total, 1) // Velocidade da liquidez
+liq_bullish = liq_total > liq_ma and liq_roc > 0
+
+// --- 2. PARÂMETROS TÉCNICOS ---
+ma20 = ta.sma(close, 20)
+ema200 = ta.ema(close, 200)
+vwap_val = ta.vwap(close)
+atr = ta.atr(14)
+[upper, middle, lower] = ta.bb(close, 20, 2)
+
+// Setups
+fffd_buy = close[1] < lower[1] and close > lower
+fffd_sell = close[1] > upper[1] and close < upper
+elephant_bar = math.abs(close - open) > atr * 2
+
+// --- 3. CÁLCULO DA ALAVANCAGEM SUGERIDA ---
+float leverage = 1.0
+string signal_msg = "Hold / Cash"
+color signal_color = color.gray
+
+// Lógica de Alavancagem (Long)
+if close > vwap_val
+    leverage := 1.1
+    if close > ma20 and liq_total > liq_ma
+        leverage := 1.2
+        if liq_bullish
+            leverage := 1.3
+            if elephant_bar or close > upper
+                leverage := 1.4
+                if close > ema200
+                    leverage := 1.5
+
+// Lógica de Desalavancagem (Short/De-risk)
+bool de_risk = false
+if close < vwap_val or liq_roc < -0.5
+    de_risk := true
+    if close < lower
+        leverage := 1.0 // Zera alavancagem, mantém spot
+
+// --- 4. SINALIZAÇÃO VISUAL ---
+// Alavancar
+long_condition = ta.crossover(leverage, 1.05)
+if long_condition
+    label.new(bar_index, low, "🚀 ALAVANCAR\nTarget: " + str.tostring(leverage) + "x", color=color.new(color.green, 0), textcolor=color.white, style=label.style_label_up)
+    // Fix: Using alert() for dynamic messages
+    alert("Nova Alavancagem Disponível. Subir para " + str.tostring(leverage) + "x na AAVE", alert.freq_once_per_bar_close)
+
+// Update de Escala (Se a alavancagem subir ou descer)
+if leverage != leverage[1] and leverage > 1.0
+    label.new(bar_index, high * 1.02, "AJUSTE: " + str.tostring(leverage) + "x", color=color.new(color.blue, 20), textcolor=color.white, style=label.style_label_down, size=size.small)
+
+// Desalavancar (Emergência)
+if de_risk and leverage[1] > 1.0
+    label.new(bar_index, high, "⚠️ REDUZIR\nPara: 1.0x", color=color.new(color.red, 0), textcolor=color.white, style=label.style_label_down)
+    // Fix: Using alert() for dynamic messages
+    alert("Risco de Liquidação. Liquidez caindo! Reduzir alavancagem para 1.0x", alert.freq_once_per_bar_close)
+
+// --- 5. ALERTAS ---
+// Fix: alertcondition messages must be constant strings
+alertcondition(long_condition, "Nova Alavancagem Disponível", "Subir alavancagem na AAVE (Verificar gráfico para target)")
+alertcondition(de_risk, "Risco de Liquidação", "Liquidez caindo! Reduzir alavancagem para 1.0x")
+
+// Plotagem de suporte
+plot(vwap_val, "VWAP Ancora", color=color.orange, linewidth=2)
+plot(ma20, "MA20", color=color.blue)
