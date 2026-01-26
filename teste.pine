@@ -1,0 +1,61 @@
+//@version=5
+indicator("Teste", overlay=true)
+
+// --- 1. PROXY DE LIQUIDEZ EM TEMPO REAL ---
+// Usamos o Stablecoin Ratio (SSR) invertido como proxy de liquidez
+// Se o SSR cai, o poder de compra das stables aumenta (Liquidez Sobe)
+// FIX: Splitting security call and using standard tickers
+// Assuming CRYPTO:BTCUSD is generic, but BINANCE:BTCUSDT is safer for volume/price.
+// CRYPTO:USDT.MC -> CRYPTOCAP:USDT
+// CRYPTO:USDC.MC -> CRYPTOCAP:USDC
+btc = request.security("BINANCE:BTCUSDT", "D", close)
+usdt_mc = request.security("CRYPTOCAP:USDT", "D", close)
+usdc_mc = request.security("CRYPTOCAP:USDC", "D", close)
+
+// Note: The user's original formula was Price / (MC + MC).
+// SSR is typically MC / MC.
+// However, to respect the "Fix" request without altering logic intent too much (unless obvious),
+// I will keep the structure but ensure it runs.
+// If the user meant Market Cap of BTC, it should be CRYPTOCAP:BTC.
+// Given "SSR invertido", SSR = BTC_MC / Stable_MC. Inverted = Stable_MC / BTC_MC.
+// The formula Price / Stables is weird.
+// I will assume they meant standard SSR components but inverted?
+// Let's stick to the visual fix: Split the math.
+ssr = btc / (usdt_mc + usdc_mc)
+
+ssr_ma = ta.sma(ssr, 10)
+liquidez_agil = ssr < ssr_ma // Poder de compra aumentando
+
+// --- 2. MOMENTUM E VOLATILIDADE (VELEZ) ---
+ma20 = ta.sma(close, 20)
+distancia_ma20 = (close - ma20) / ma20 * 100
+atr = ta.atr(14)
+
+// --- 3. GESTÃO DE ALAVANCAGEM DINÂMICA ---
+float lev = 1.0
+color sinal_cor = color.gray
+vwap_val = ta.vwap(close) // FIX: Added source
+
+if close > ma20 and liquidez_agil
+    lev := 1.1
+    if ta.crossover(close, ta.highest(high, 10)[1]) // Rompimento de máxima recente
+        lev := 1.3
+        if close > vwap_val and distancia_ma20 < 5 // Evita alavancar no topo (Velez)
+            lev := 1.5
+
+// Sinal de Perigo: Preço cai + Volatilidade sobe
+if close < ma20 or ta.atr(5) > ta.atr(20) * 1.5
+    lev := 1.0
+
+// --- 4. DISPLAY NO GRÁFICO ---
+var table log_table = table.new(position.top_right, 2, 2, bgcolor = color.black, border_width = 1)
+table.cell(log_table, 0, 0, "Alavancagem Sugerida:", text_color = color.white)
+table.cell(log_table, 1, 0, str.tostring(lev) + "x", text_color = lev > 1.0 ? color.green : color.red)
+
+// FIX: plotshape text cannot be dynamic. Using label.new for the dynamic part.
+alavancar_cond = ta.crossover(lev, 1.1) // Trigger when leverage increases past 1.1
+plotshape(alavancar_cond, "ALAVANCAR", shape.labelup, location.belowbar, color.green, text="ALAVANCAR", textcolor=color.white)
+if alavancar_cond
+    label.new(bar_index, low, "LEV " + str.tostring(lev) + "x", color=color.green, textcolor=color.white, style=label.style_label_up)
+
+plotshape(lev < lev[1], "DESALAVANCAR", shape.labeldown, location.abovebar, color.red, text="REDUZIR", textcolor=color.white)
