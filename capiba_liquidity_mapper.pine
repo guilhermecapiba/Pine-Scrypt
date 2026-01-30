@@ -1,0 +1,110 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Capiba
+
+//@version=5
+indicator("Capiba Liquidity Mapper", shorttitle="Capiba Liquidity", overlay=true, max_boxes_count=500)
+
+// --- Inputs ---
+grp_sett = "Settings"
+grp_vis = "Visuals"
+
+lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
+lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
+zoneType  = input.string("ATR", "Zone Height Calculation", options=["ATR", "Percent"], group=grp_sett, tooltip="Method to determine the vertical size of the liquidity zone.")
+atrLen    = input.int(14, "ATR Length", minval=1, group=grp_sett)
+atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
+pctSize   = input.float(0.5, "Zone % Size", minval=0.01, step=0.1, group=grp_sett, tooltip="Height as % of price (if Type is Percent).")
+
+colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
+colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
+
+// --- Arrays to track ACTIVE zones ---
+var box[] activeBearBoxes = array.new_box()
+var box[] activeBullBoxes = array.new_box()
+
+// --- Calculations ---
+// Detect Pivots
+ph = ta.pivothigh(high, lenLeft, lenRight)
+pl = ta.pivotlow(low, lenLeft, lenRight)
+
+// Calculate Zone Height (at the moment of detection)
+atrVal = ta.atr(atrLen)
+// We need the value from 'lenRight' bars ago because that's when the pivot occurred
+currentZoneHeight = zoneType == "ATR" ? atrVal : close * (pctSize / 100)
+// Note: We will access this with [lenRight] index when creating the box
+
+// --- Logic: Create Zones ---
+
+// 1. New Pivot High (Liquidity above Highs -> Shorts' Stops)
+if not na(ph)
+    // The pivot point was 'lenRight' bars ago
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = ph
+
+    // Determine Box Coordinates
+    // Box starts at Pivot High and extends UPWARDS (covering the stop loss area)
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+
+    top = pivotPrice + zh
+    bottom = pivotPrice
+
+    // Create Box
+    // Initial 'right' is set to current bar + offset to project it
+    b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
+                 border_color=na, bgcolor=colBear)
+
+    array.push(activeBearBoxes, b)
+
+// 2. New Pivot Low (Liquidity below Lows -> Longs' Stops)
+if not na(pl)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = pl
+
+    // Box starts at Pivot Low and extends DOWNWARDS
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+
+    top = pivotPrice
+    bottom = pivotPrice - zh
+
+    b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
+                 border_color=na, bgcolor=colBull)
+
+    array.push(activeBullBoxes, b)
+
+// --- Logic: Manage Zones (Extend & Mitigate) ---
+
+// Process Bear Zones (Highs)
+if array.size(activeBearBoxes) > 0
+    // Loop backwards to allow removal
+    for i = array.size(activeBearBoxes) - 1 to 0
+        b = array.get(activeBearBoxes, i)
+
+        // Check if price has mitigated this zone
+        // Mitigation condition: High price touches the bottom of the zone (the pivot level)
+        // Since it's a resistance zone/buy stops, if price goes ABOVE the pivot level, stops are triggered.
+        bBottom = box.get_bottom(b)
+
+        if high > bBottom
+            // Mitigated!
+            box.set_bgcolor(b, colMitigated)
+            // Stop extending (remove from active array)
+            array.remove(activeBearBoxes, i)
+        else
+            // Not mitigated yet, extend the zone to the right
+            box.set_right(b, bar_index + 5)
+
+// Process Bull Zones (Lows)
+if array.size(activeBullBoxes) > 0
+    for i = array.size(activeBullBoxes) - 1 to 0
+        b = array.get(activeBullBoxes, i)
+
+        // Mitigation condition: Low price touches the top of the zone (the pivot level)
+        bTop = box.get_top(b)
+
+        if low < bTop
+            // Mitigated!
+            box.set_bgcolor(b, colMitigated)
+            array.remove(activeBullBoxes, i)
+        else
+            box.set_right(b, bar_index + 5)
