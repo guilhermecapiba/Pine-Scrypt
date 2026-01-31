@@ -26,7 +26,8 @@ colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)",
 mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Zone breaks only on candle close. Wick: Zone breaks on any touch.")
 mergeThresh    = input.float(0.1, "Cluster Merge Threshold (%)", step=0.05, group=grp_logic, tooltip="If a new pivot is within X% of an active zone, merge it instead of creating a new one.")
 absorbVolMult  = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption (wick rejection).")
-vwapAnchor     = input.string("Session", "VWAP Anchor Period", options=["Session", "Week", "Month"], group=grp_logic)
+vwapLookback   = input.int(300, "VWAP Anchor Lookback", minval=10, group=grp_logic, tooltip="Lookback period to find the Highest/Lowest price to anchor the VWAP.")
+emaTrendLen    = input.int(200, "VWAP Trend EMA", minval=1, group=grp_logic, tooltip="EMA length to define the macro trend for anchoring (Price > EMA = Bull Anchor at Low).")
 showVwapPlot   = input.bool(false, "Plot VWAP on Chart", group=grp_logic)
 
 // v4 Specific Inputs
@@ -38,16 +39,36 @@ showDash     = input.bool(true, "Show Dashboard", group=grp_dash)
 dashPos      = input.string(position.top_right, "Position", options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group=grp_dash)
 probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
 
-// --- VWAP Calculation ---
-var float vwapVal = na
-if vwapAnchor == "Session"
-    vwapVal := ta.vwap(close)
-else if vwapAnchor == "Week"
-    isNewWeek = ta.change(time("W"))
-    if isNewWeek
-        vwapVal := close
-    else
-        vwapVal := ta.vwap(close)
+// --- VWAP Calculation (Auto-Anchored via Trend) ---
+// 1. Identify Trend Direction using EMA 200 (or user input)
+trendEMA = ta.ema(close, emaTrendLen)
+isBullTrend = close > trendEMA
+
+// 2. Identify Anchor Point based on Trend
+// Bull Trend -> Anchor at Lowest Low of the lookback (Start of leg)
+// Bear Trend -> Anchor at Highest High of the lookback (Start of leg)
+hiOffset = ta.highestbars(high, vwapLookback)
+loOffset = ta.lowestbars(low, vwapLookback)
+
+// Determine Anchor Length (distance to anchor)
+anchorLen = 0
+
+if isBullTrend
+    // In Uptrend, we anchor at the bottom (Lowest Low)
+    anchorLen := math.abs(loOffset)
+else
+    // In Downtrend, we anchor at the top (Highest High)
+    anchorLen := math.abs(hiOffset)
+
+// Protect against 0 length
+if anchorLen == 0
+    anchorLen := 1
+
+// Calculate Cumulative VWAP from Anchor
+// VWAP = sum(price * volume) / sum(volume) over anchorLen bars
+sumSrcVol = math.sum(hlc3 * volume, anchorLen)
+sumVol    = math.sum(volume, anchorLen)
+vwapVal   = sumSrcVol / sumVol
 
 plot(showVwapPlot ? vwapVal : na, "Anchored VWAP", color=color.white, linewidth=1)
 
