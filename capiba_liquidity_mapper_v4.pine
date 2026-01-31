@@ -41,6 +41,8 @@ probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tool
 
 // --- VWAP Calculation (Auto-Anchored via Trend) ---
 var float vwapVal = na
+// Variable to track the single last sweep label to avoid clutter
+var label lastSweepLabel = na
 
 // 1. Identify Trend Direction using EMA 200 (or user input)
 trendEMA = ta.ema(close, emaTrendLen)
@@ -343,7 +345,8 @@ if array.size(activeBearBoxes) > 0
             // In Wick Mode, mitigated is TRUE if High > Bottom.
             if mitigateMethod == "Wick" and close < bBottom
                 // Wick Mode Sweep!
-                label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                label.delete(lastSweepLabel) // Remove previous
+                lastSweepLabel := label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
 
             box.set_bgcolor(b, colMitigated)
             box.set_border_color(b, na)
@@ -357,12 +360,8 @@ if array.size(activeBearBoxes) > 0
                 // It touched but didn't close above. Effectively a sweep.
                 // Label it if volume is high (strong rejection)
                 if volume > (volMA * absorbVolMult)
-                    // Avoid spamming labels every bar if it keeps testing
-                    // Simple check: Only label if not labeled recently? (Hard to track without var)
-                    // Just label high volume ones.
-                    // label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
-                    // Actually user asked for "SWEEP" label. Let's add it for Absorption events too.
-                    label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                    label.delete(lastSweepLabel) // Remove previous
+                    lastSweepLabel := label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
 
             if absorbed
                 currentScore = array.get(activeBearScores, i)
@@ -408,7 +407,8 @@ if array.size(activeBullBoxes) > 0
 
         if mitigated
             if mitigateMethod == "Wick" and close > bTop
-                label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                label.delete(lastSweepLabel)
+                lastSweepLabel := label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
 
             box.set_bgcolor(b, colMitigated)
             box.set_border_color(b, na)
@@ -419,7 +419,8 @@ if array.size(activeBullBoxes) > 0
 
             if isSweep and mitigateMethod == "Close"
                 if volume > (volMA * absorbVolMult)
-                    label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
 
             if absorbed
                 currentScore = array.get(activeBullScores, i)
