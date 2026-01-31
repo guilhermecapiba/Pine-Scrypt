@@ -25,12 +25,12 @@ dashPos      = input.string(position.top_right, "Position", options=[position.to
 probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
 
 // --- Arrays to track ACTIVE zones ---
-// We use a custom type or parallel arrays to track strength factors if needed,
-// but for simplicity we will recalculate dynamic factors (Age) in the loop
-// and store static factors (Volume) in the box text or ID if possible.
-// Pine boxes allow a text string. We can store the "Score" there hidden or visible.
 var box[] activeBearBoxes = array.new_box()
 var box[] activeBullBoxes = array.new_box()
+
+// Parallel arrays to track Volume Scores (since we can't reliably get_text from boxes)
+var float[] activeBearScores = array.new_float()
+var float[] activeBullScores = array.new_float()
 
 // Helper: Calculate Volume Score (0-50)
 // High Relative Volume at pivot creation = High Score
@@ -157,13 +157,11 @@ if not na(ph)
     vScore = volScore[lenRight]
 
     // Create Box
-    // We store the Volume Score in the box text (hidden or visible) to persist it
-    // Format: "V:50" (just the number)
     b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
-                 border_color=na, bgcolor=colBear,
-                 text=str.tostring(vScore), text_color=color.new(color.white, 100)) // Text hidden
+                 border_color=na, bgcolor=colBear)
 
     array.push(activeBearBoxes, b)
+    array.push(activeBearScores, vScore)
 
 // 2. New Pivot Low (Liquidity below Lows -> Longs' Stops)
 if not na(pl)
@@ -180,10 +178,10 @@ if not na(pl)
     vScore = volScore[lenRight]
 
     b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
-                 border_color=na, bgcolor=colBull,
-                 text=str.tostring(vScore), text_color=color.new(color.white, 100))
+                 border_color=na, bgcolor=colBull)
 
     array.push(activeBullBoxes, b)
+    array.push(activeBullScores, vScore)
 
 // --- Logic: Manage Zones (Extend & Mitigate) ---
 
@@ -203,6 +201,7 @@ if array.size(activeBearBoxes) > 0
             box.set_bgcolor(b, colMitigated)
             // Stop extending (remove from active array)
             array.remove(activeBearBoxes, i)
+            array.remove(activeBearScores, i)
         else
             // Not mitigated yet, extend the zone to the right
             box.set_right(b, bar_index + 5)
@@ -213,11 +212,8 @@ if array.size(activeBearBoxes) > 0
             age = bar_index - boxLeft
             ageScore = math.min(age, 200) / 200.0 * 50
 
-            // 2. Retrieve Volume Score from Box Text
-            vScoreStr = box.get_text(b)
-            vScore = str.tonumber(vScoreStr)
-            if na(vScore)
-                vScore := 0.0 // Fallback
+            // 2. Retrieve Volume Score from Parallel Array
+            vScore = array.get(activeBearScores, i)
 
             // 3. Total Attractiveness (0-100)
             totalScore = ageScore + vScore
@@ -246,6 +242,7 @@ if array.size(activeBullBoxes) > 0
             // Mitigated!
             box.set_bgcolor(b, colMitigated)
             array.remove(activeBullBoxes, i)
+            array.remove(activeBullScores, i)
         else
             box.set_right(b, bar_index + 5)
 
@@ -254,11 +251,10 @@ if array.size(activeBullBoxes) > 0
             age = bar_index - boxLeft
             ageScore = math.min(age, 200) / 200.0 * 50
 
-            vScoreStr = box.get_text(b)
-            vScore = str.tonumber(vScoreStr)
-            if na(vScore)
-                vScore := 0.0
+            // 2. Retrieve Volume Score from Parallel Array
+            vScore = array.get(activeBullScores, i)
 
+            // 3. Total Attractiveness (0-100)
             totalScore = ageScore + vScore
 
             transp = 80 - (totalScore / 100 * 50)
