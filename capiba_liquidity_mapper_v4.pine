@@ -27,6 +27,7 @@ mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close",
 mergeThresh    = input.float(0.1, "Cluster Merge Threshold (%)", step=0.05, group=grp_logic, tooltip="If a new pivot is within X% of an active zone, merge it instead of creating a new one.")
 absorbVolMult  = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption (wick rejection).")
 vwapAnchor     = input.string("Session", "VWAP Anchor Period", options=["Session", "Week", "Month"], group=grp_logic)
+showVwapPlot   = input.bool(false, "Plot VWAP on Chart", group=grp_logic)
 
 // v4 Specific Inputs
 mtfBias      = input.timeframe("240", "Bias Timeframe", group=grp_dash, tooltip="Higher Timeframe to fetch RSI/MFI for Market Bias.")
@@ -47,6 +48,8 @@ else if vwapAnchor == "Week"
         vwapVal := close
     else
         vwapVal := ta.vwap(close)
+
+plot(showVwapPlot ? vwapVal : na, "Anchored VWAP", color=color.white, linewidth=1)
 
 // --- Arrays to track ACTIVE zones ---
 var box[] activeBearBoxes = array.new_box()
@@ -164,8 +167,9 @@ if barstate.islast and showDash
     txtDown = not na(nearestBullPrice) ? str.tostring(nearestBullPrice, format.mintick) + " (-" + str.tostring(distBull, "#.00") + "%)" : "None"
     table.cell(tbl, 1, 2, txtDown, text_color=color.white, text_size=size.small)
 
-    table.cell(tbl, 0, 3, "VWAP Dist", text_color=color.yellow, text_size=size.small, text_halign=text.align_left)
-    txtVWAP = not na(distVWAP) ? str.tostring(distVWAP, "#.00") + "%" : "N/A"
+    // VWAP Info (Price + Dist)
+    table.cell(tbl, 0, 3, "VWAP", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    txtVWAP = not na(vwapVal) ? str.tostring(vwapVal, format.mintick) + " (" + str.tostring(distVWAP, "#.00") + "%)" : "N/A"
     table.cell(tbl, 1, 3, txtVWAP, text_color=color.white, text_size=size.small)
 
     // Flow Status / Magnetic Alert
