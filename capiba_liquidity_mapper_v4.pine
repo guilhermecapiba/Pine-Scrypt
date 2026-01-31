@@ -40,6 +40,8 @@ dashPos      = input.string(position.top_right, "Position", options=[position.to
 probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
 
 // --- VWAP Calculation (Auto-Anchored via Trend) ---
+var float vwapVal = na
+
 // 1. Identify Trend Direction using EMA 200 (or user input)
 trendEMA = ta.ema(close, emaTrendLen)
 isBullTrend = close > trendEMA
