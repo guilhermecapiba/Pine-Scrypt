@@ -1,0 +1,128 @@
+// @version=5
+indicator("Capiba RSI + 5 MAs - 31.01.26", overlay=true)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> COLORAÇÃO DAS BARRAS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+// === CONSTANTES DE CORES ===
+// Cores para Coloração de Candles
+color corSobrecompra = color.new(#2962FF, 0)
+color corSobrevenda  = color.new(#FFD600, 0)
+color corCandleAlta  = color.new(color.lime, 0)
+color corCandleBaixa = color.new(color.red, 0)
+
+// Cores para Sinais de Cruzamento
+color corSinalAlta  = color.new(color.green, 0)
+color corSinalBaixa = color.new(color.red, 0)
+
+
+// === PARÂMETROS DO RSI ULTIMATE ===
+string groupRSI = "1. Parâmetros do RSI Ultimate"
+rsiLength      = input.int(24, title="Período RSI", minval=2, group=groupRSI)
+rsiMethod      = input.string("EMA", title="Método de Suavização RSI", options=["EMA", "SMA", "RMA", "TMA"], group=groupRSI)
+rsiSrc         = input.source(hlc3, title="Fonte do RSI", group=groupRSI)
+rsiOversold    = input.float(35, title="Nível Sobrevendido", group=groupRSI)
+rsiOverbought  = input.float(65, title="Nível Sobrecomprado", group=groupRSI)
+momentumLength = input.int(24, title="Período Momentum EMA", minval=1, group=groupRSI)
+// NOVO: tipo de MA para o momentum do RSI
+rsiMomentumType = input.string("EMA", title="Tipo de MA do Momentum do RSI", options=["EMA", "SMA", "RMA", "TMA", "VWMA"], group=groupRSI)
+
+// === FUNÇÃO DE MÉDIA FLEXÍVEL ===
+getMA(src, len, tipo) =>
+    switch tipo
+        "EMA"  => ta.ema(src, len)
+        "SMA"  => ta.sma(src, len)
+        "HMA"  => ta.hma(src, len)
+        "RMA"  => ta.rma(src, len)
+        "TMA"  => ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
+        "VWMA" => ta.vwma(src, len)
+        => na
+
+// === CÁLCULO DO RSI ULTIMATE ===
+upper = ta.highest(rsiSrc, rsiLength)
+lower = ta.lowest(rsiSrc, rsiLength)
+rangeDelta = upper - lower
+delta = rsiSrc - rsiSrc[1]
+
+diff = upper > upper[1] ? rangeDelta :
+       lower < lower[1] ? -rangeDelta :
+       delta
+
+num = getMA(diff, rsiLength, rsiMethod)
+den = getMA(math.abs(diff), rsiLength, rsiMethod)
+
+rsiUltimate = den == 0 ? 50 : num / den * 50 + 50
+
+// USANDO A FUNÇÃO getMA PARA CALCULAR O MOMENTUM DO RSI (opção selecionável)
+rsiMomentum = getMA(rsiUltimate, momentumLength, rsiMomentumType)
+
+// === LÓGICA DE COLORAÇÃO DOS CANDLES ===
+// Regras: abaixo de 20 -> amarela; abaixo de 50 -> vermelha; >=50 -> verde; acima de 80 -> azul
+corAzul     = rsiUltimate > rsiOverbought
+corAmarela  = rsiUltimate < rsiOversold
+corVerde    = rsiUltimate >= 50
+corVermelha = rsiUltimate < 50 and not corAmarela
+
+// Aplicando precedência correta: azul (acima de 80), verde (>=50), amarela (<20), vermelha (entre 20 e 50)
+corDoCandle = corAzul ? corSobrecompra :
+              corVerde ? corCandleAlta :
+              corAmarela ? corSobrevenda :
+              corCandleBaixa
+
+barcolor(corDoCandle)
+
+// === SINAIS VISUAIS DE CRUZAMENTO RSI COM NÍVEL 50 ===
+cruzamentoAlta  = ta.crossover(rsiUltimate, rsiMomentum)
+cruzamentoBaixa = ta.crossunder(rsiUltimate, rsiMomentum)
+
+plotshape(cruzamentoAlta,  title="Cruzamento Alta RSI 50",  location=location.belowbar, color=corSinalAlta, style=shape.triangleup, size=size.normal)
+plotshape(cruzamentoBaixa, title="Cruzamento Baixa RSI 50", location=location.abovebar, color=corSinalBaixa, style=shape.triangledown, size=size.normal)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> 5 MÉDIAS MÓVEIS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+string groupMAs = "2. Parâmetros das 5 Médias"
+
+// MA 1 (Default: EMA, 72, 1H)
+len1  = input.int(72, title="Período MA 1", minval=1, group=groupMAs, inline="MA1")
+type1 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA1")
+tf1   = input.timeframe("60", title="Timeframe", group=groupMAs, inline="MA1")
+
+// MA 2 (Default: EMA, 216, 1H)
+len2  = input.int(216, title="Período MA 2", minval=1, group=groupMAs, inline="MA2")
+type2 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA2")
+tf2   = input.timeframe("60", title="Timeframe", group=groupMAs, inline="MA2")
+
+// MA 3 (Default: EMA, 480, 1H)
+len3  = input.int(480, title="Período MA 3", minval=1, group=groupMAs, inline="MA3")
+type3 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA3")
+tf3   = input.timeframe("60", title="Timeframe", group=groupMAs, inline="MA3")
+
+// MA 4 (Default: EMA, 1344, 1H)
+len4  = input.int(1344, title="Período MA 4", minval=1, group=groupMAs, inline="MA4")
+type4 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA4")
+tf4   = input.timeframe("60", title="Timeframe", group=groupMAs, inline="MA4")
+
+// MA 5 (Default: EMA, 2160, 1H)
+len5  = input.int(2160, title="Período MA 5", minval=1, group=groupMAs, inline="MA5")
+type5 = input.string("EMA", title="Tipo", options=["EMA", "SMA", "HMA", "VWMA", "RMA", "TMA"], group=groupMAs, inline="MA5")
+tf5   = input.timeframe("60", title="Timeframe", group=groupMAs, inline="MA5")
+
+// Helper function to calculate MA and Slope (inside the requested timeframe)
+// Returns [maValue, isRising]
+calcMaAndSlope(len, type) =>
+    val = getMA(close, len, type)
+    rising = val > val[1]
+    [val, rising]
+
+// Request Security for both Value and Slope
+[ma1, r1] = request.security(syminfo.tickerid, tf1, calcMaAndSlope(len1, type1))
+[ma2, r2] = request.security(syminfo.tickerid, tf2, calcMaAndSlope(len2, type2))
+[ma3, r3] = request.security(syminfo.tickerid, tf3, calcMaAndSlope(len3, type3))
+[ma4, r4] = request.security(syminfo.tickerid, tf4, calcMaAndSlope(len4, type4))
+[ma5, r5] = request.security(syminfo.tickerid, tf5, calcMaAndSlope(len5, type5))
+
+// Plotting using the slope determined in the source timeframe
+plot(ma1, color = r1 ? color.green : color.red, linewidth=2, title="MA 1")
+plot(ma2, color = r2 ? color.green : color.red, linewidth=3, title="MA 2")
+plot(ma3, color = r3 ? color.green : color.red, linewidth=4, title="MA 3")
+plot(ma4, color = r4 ? color.green : color.red, linewidth=6, title="MA 4")
+plot(ma5, color = r5 ? color.green : color.red, linewidth=8, title="MA 5")
