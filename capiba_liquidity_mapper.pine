@@ -7,6 +7,7 @@ indicator("Capiba Liquidity Mapper", shorttitle="Capiba Liquidity", overlay=true
 // --- Inputs ---
 grp_sett = "Settings"
 grp_vis = "Visuals"
+grp_dash = "Probability Dashboard"
 
 lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
 lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
@@ -19,9 +20,90 @@ colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)"
 colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
 colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
 
+showDash     = input.bool(true, "Show Dashboard", group=grp_dash)
+dashPos      = input.string(position.top_right, "Position", options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group=grp_dash)
+probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
+
 // --- Arrays to track ACTIVE zones ---
 var box[] activeBearBoxes = array.new_box()
 var box[] activeBullBoxes = array.new_box()
+
+// --- Probability & Targets Logic ---
+// We use MFI (Money Flow Index) to incorporate Volume and RSI for Momentum
+mfiVal = ta.mfi(close, probLen)
+rsiVal = ta.rsi(close, probLen)
+
+// Heuristic Probability:
+// Higher MFI+RSI = Bullish Bias (Likely to go UP to Buy-side Liquidity)
+// Lower MFI+RSI = Bearish Bias (Likely to go DOWN to Sell-side Liquidity)
+// We normalize to 0-100 scale.
+bullScore = (mfiVal + rsiVal) / 2
+bearScore = 100 - bullScore
+
+// --- Find Nearest Targets ---
+// We iterate active boxes to find the closest ones to current price
+var float nearestBearPrice = na
+var float nearestBullPrice = na
+var float distBear = na
+var float distBull = na
+
+if barstate.islast and showDash
+    // Reset
+    nearestBearPrice := na
+    nearestBullPrice := na
+    float minDistUp = 1000000.0
+    float minDistDown = 1000000.0
+
+    // Check Bear Boxes (Targets Above)
+    if array.size(activeBearBoxes) > 0
+        for i = 0 to array.size(activeBearBoxes) - 1
+            b = array.get(activeBearBoxes, i)
+            // Bear boxes are Resistance/Liquidity Above. We care about the BOTTOM of the box (entry point)
+            bLevel = box.get_bottom(b)
+            if bLevel > close
+                d = bLevel - close
+                if d < minDistUp
+                    minDistUp := d
+                    nearestBearPrice := bLevel
+
+    // Check Bull Boxes (Targets Below)
+    if array.size(activeBullBoxes) > 0
+        for i = 0 to array.size(activeBullBoxes) - 1
+            b = array.get(activeBullBoxes, i)
+            // Bull boxes are Support/Liquidity Below. We care about the TOP of the box (entry point)
+            bLevel = box.get_top(b)
+            if bLevel < close
+                d = close - bLevel
+                if d < minDistDown
+                    minDistDown := d
+                    nearestBullPrice := bLevel
+
+    // Calculate % Distances
+    distBear := not na(nearestBearPrice) ? ((nearestBearPrice - close) / close) * 100 : na
+    distBull := not na(nearestBullPrice) ? ((close - nearestBullPrice) / close) * 100 : na
+
+    // --- Draw Dashboard ---
+    var tbl = table.new(dashPos, 2, 4, bgcolor=color.new(color.black, 50), border_width=1)
+
+    // Header
+    table.cell(tbl, 0, 0, "Liquidity Bias", text_color=color.white, bgcolor=color.new(color.blue, 60), text_size=size.small, width=12)
+    table.cell(tbl, 1, 0, str.tostring(bullScore, "#.0") + "% Bull", text_color=bullScore >= 50 ? color.green : color.red, bgcolor=color.new(color.black, 30), text_size=size.small, width=10)
+
+    // Upper Target
+    table.cell(tbl, 0, 1, "Next Bear Liq", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+    txtUp = not na(nearestBearPrice) ? str.tostring(nearestBearPrice, format.mintick) + " (+" + str.tostring(distBear, "#.00") + "%)" : "None"
+    table.cell(tbl, 1, 1, txtUp, text_color=color.white, text_size=size.small)
+
+    // Lower Target
+    table.cell(tbl, 0, 2, "Next Bull Liq", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+    txtDown = not na(nearestBullPrice) ? str.tostring(nearestBullPrice, format.mintick) + " (-" + str.tostring(distBull, "#.00") + "%)" : "None"
+    table.cell(tbl, 1, 2, txtDown, text_color=color.white, text_size=size.small)
+
+    // Momentum Status
+    biasTxt = bullScore > 60 ? "Strong Bull Flow" : bullScore < 40 ? "Strong Bear Flow" : "Neutral / Ranging"
+    biasCol = bullScore > 60 ? color.green : bullScore < 40 ? color.red : color.gray
+    table.cell(tbl, 0, 3, "Flow Status", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(tbl, 1, 3, biasTxt, text_color=biasCol, text_size=size.small)
 
 // --- Calculations ---
 // Detect Pivots
