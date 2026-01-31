@@ -25,8 +25,19 @@ dashPos      = input.string(position.top_right, "Position", options=[position.to
 probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
 
 // --- Arrays to track ACTIVE zones ---
+// We use a custom type or parallel arrays to track strength factors if needed,
+// but for simplicity we will recalculate dynamic factors (Age) in the loop
+// and store static factors (Volume) in the box text or ID if possible.
+// Pine boxes allow a text string. We can store the "Score" there hidden or visible.
 var box[] activeBearBoxes = array.new_box()
 var box[] activeBullBoxes = array.new_box()
+
+// Helper: Calculate Volume Score (0-50)
+// High Relative Volume at pivot creation = High Score
+volMA = ta.sma(volume, 50)
+relVol = volume / volMA
+// Cap relVol at 3.0 for normalization (3x average volume is huge)
+volScore = math.min(relVol, 3.0) / 3.0 * 50
 
 // --- Probability & Targets Logic ---
 // We use MFI (Money Flow Index) to incorporate Volume and RSI for Momentum
@@ -141,10 +152,16 @@ if not na(ph)
     top = pivotPrice + zh
     bottom = pivotPrice
 
+    // Calculate Static Strength (Volume at Pivot)
+    // We access volume from 'lenRight' bars ago
+    vScore = volScore[lenRight]
+
     // Create Box
-    // Initial 'right' is set to current bar + offset to project it
+    // We store the Volume Score in the box text (hidden or visible) to persist it
+    // Format: "V:50" (just the number)
     b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
-                 border_color=na, bgcolor=colBear)
+                 border_color=na, bgcolor=colBear,
+                 text=str.tostring(vScore), text_color=color.new(color.white, 100)) // Text hidden
 
     array.push(activeBearBoxes, b)
 
@@ -159,8 +176,12 @@ if not na(pl)
     top = pivotPrice
     bottom = pivotPrice - zh
 
+    // Calculate Static Strength
+    vScore = volScore[lenRight]
+
     b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
-                 border_color=na, bgcolor=colBull)
+                 border_color=na, bgcolor=colBull,
+                 text=str.tostring(vScore), text_color=color.new(color.white, 100))
 
     array.push(activeBullBoxes, b)
 
@@ -186,6 +207,33 @@ if array.size(activeBearBoxes) > 0
             // Not mitigated yet, extend the zone to the right
             box.set_right(b, bar_index + 5)
 
+            // --- Update Strength Visualization ---
+            // 1. Age Score (0-50): Older = Stronger. Max strength at 200 bars.
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+
+            // 2. Retrieve Volume Score from Box Text
+            vScoreStr = box.get_text(b)
+            vScore = str.tonumber(vScoreStr)
+            if na(vScore)
+                vScore := 0.0 // Fallback
+
+            // 3. Total Attractiveness (0-100)
+            totalScore = ageScore + vScore
+
+            // 4. Update Opacity: Stronger = More Opaque (Lower transp)
+            // Base transp 80 (Weak) -> Target transp 30 (Strong)
+            // Map 0-100 score to 80-30 transp
+            transp = 80 - (totalScore / 100 * 50)
+            box.set_bgcolor(b, color.new(color.red, transp))
+
+            // 5. Border for "Golden Zones" (>75 Score)
+            if totalScore > 75
+                box.set_border_color(b, color.red)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
 // Process Bull Zones (Lows)
 if array.size(activeBullBoxes) > 0
     for i = array.size(activeBullBoxes) - 1 to 0
@@ -200,3 +248,23 @@ if array.size(activeBullBoxes) > 0
             array.remove(activeBullBoxes, i)
         else
             box.set_right(b, bar_index + 5)
+
+            // --- Update Strength Visualization ---
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+
+            vScoreStr = box.get_text(b)
+            vScore = str.tonumber(vScoreStr)
+            if na(vScore)
+                vScore := 0.0
+
+            totalScore = ageScore + vScore
+
+            transp = 80 - (totalScore / 100 * 50)
+            box.set_bgcolor(b, color.new(color.green, transp))
+
+            if totalScore > 75
+                box.set_border_color(b, color.green)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
