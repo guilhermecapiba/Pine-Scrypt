@@ -86,8 +86,18 @@ if barstate.islast and showDash
     var tbl = table.new(dashPos, 2, 4, bgcolor=color.new(color.black, 50), border_width=1)
 
     // Header
+    string biasLabel = "NEUTRAL"
+    color biasColor = color.white
+
+    if bullScore > 60
+        biasLabel := "BULL"
+        biasColor := color.green
+    else if bullScore < 40
+        biasLabel := "BEAR"
+        biasColor := color.red
+
     table.cell(tbl, 0, 0, "Liquidity Bias", text_color=color.white, bgcolor=color.new(color.blue, 60), text_size=size.small, width=12)
-    table.cell(tbl, 1, 0, str.tostring(bullScore, "#.0") + "% Bull", text_color=bullScore >= 50 ? color.green : color.red, bgcolor=color.new(color.black, 30), text_size=size.small, width=10)
+    table.cell(tbl, 1, 0, str.tostring(bullScore, "#.0") + "% " + biasLabel, text_color=biasColor, bgcolor=color.new(color.black, 30), text_size=size.small, width=10)
 
     // Upper Target
     table.cell(tbl, 0, 1, "Next Bear Liq", text_color=color.red, text_size=size.small, text_halign=text.align_left)
