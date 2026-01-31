@@ -53,22 +53,38 @@ loOffset = ta.lowestbars(low, vwapLookback)
 // Determine Anchor Length (distance to anchor)
 anchorLen = 0
 
+// Safety check for NA offsets (start of chart)
+safeHiOffset = nz(hiOffset, 0)
+safeLoOffset = nz(loOffset, 0)
+
 if isBullTrend
     // In Uptrend, we anchor at the bottom (Lowest Low)
-    anchorLen := math.abs(loOffset)
+    anchorLen := math.abs(safeLoOffset)
 else
     // In Downtrend, we anchor at the top (Highest High)
-    anchorLen := math.abs(hiOffset)
+    anchorLen := math.abs(safeHiOffset)
 
-// Protect against 0 length
+// Protect against 0 length and exceeding available history
 if anchorLen == 0
     anchorLen := 1
 
+// Cap anchorLen to available bars to prevent Runtime Error
+if anchorLen > bar_index
+    anchorLen := bar_index + 1
+
 // Calculate Cumulative VWAP from Anchor
 // VWAP = sum(price * volume) / sum(volume) over anchorLen bars
-sumSrcVol = math.sum(hlc3 * volume, anchorLen)
-sumVol    = math.sum(volume, anchorLen)
-vwapVal   = sumSrcVol / sumVol
+// Note: math.sum throws error if length is too large or < 0
+sumSrcVol = 0.0
+sumVol    = 0.0
+
+// Only calculate if we have enough bars
+if bar_index >= anchorLen - 1
+    sumSrcVol := math.sum(hlc3 * volume, anchorLen)
+    sumVol    := math.sum(volume, anchorLen)
+    vwapVal   := sumSrcVol / sumVol
+else
+    vwapVal := hlc3 // Fallback for very first bars
 
 plot(showVwapPlot ? vwapVal : na, "Anchored VWAP", color=color.white, linewidth=1)
 
