@@ -198,7 +198,9 @@ if array.size(activeBearBoxes) > 0
 
         if high > bBottom
             // Mitigated!
+            // Apply final visual state (Gray, 10% opacity, no border)
             box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
             // Stop extending (remove from active array)
             array.remove(activeBearBoxes, i)
             array.remove(activeBearScores, i)
@@ -240,7 +242,9 @@ if array.size(activeBullBoxes) > 0
 
         if low < bTop
             // Mitigated!
+            // Apply final visual state (Gray, 10% opacity, no border)
             box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
             array.remove(activeBullBoxes, i)
             array.remove(activeBullScores, i)
         else
