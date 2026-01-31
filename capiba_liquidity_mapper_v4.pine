@@ -1,0 +1,399 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Capiba
+
+//@version=5
+indicator("Capiba Liquidity Mapper v4", shorttitle="Capiba Liquidity v4", overlay=true, max_boxes_count=500, max_labels_count=500)
+
+// --- Inputs ---
+grp_sett = "Settings"
+grp_vis = "Visuals"
+grp_dash = "Probability Dashboard"
+grp_logic = "Order Flow Logic"
+
+lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
+lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
+zoneType  = input.string("ATR", "Zone Height Calculation", options=["ATR", "Percent"], group=grp_sett, tooltip="Method to determine the vertical size of the liquidity zone.")
+atrLen    = input.int(14, "ATR Length", minval=1, group=grp_sett)
+atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
+pctSize   = input.float(0.5, "Zone % Size", minval=0.01, step=0.1, group=grp_sett, tooltip="Height as % of price (if Type is Percent).")
+
+colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
+colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
+colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
+
+// v3/v4 Logic Inputs
+mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Zone breaks only on candle close. Wick: Zone breaks on any touch.")
+mergeThresh    = input.float(0.1, "Cluster Merge Threshold (%)", step=0.05, group=grp_logic, tooltip="If a new pivot is within X% of an active zone, merge it instead of creating a new one.")
+absorbVolMult  = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption (wick rejection).")
+vwapAnchor     = input.string("Session", "VWAP Anchor Period", options=["Session", "Week", "Month"], group=grp_logic)
+
+// v4 Specific Inputs
+mtfBias      = input.timeframe("240", "Bias Timeframe", group=grp_dash, tooltip="Higher Timeframe to fetch RSI/MFI for Market Bias.")
+magneticDist = input.float(0.5, "Magnetic Zone Distance (%)", step=0.1, group=grp_dash, tooltip="Distance to trigger 'MAGNETIC ZONE' alert.")
+magneticScore= input.int(80, "Magnetic Zone Score (Min)", minval=0, maxval=100, group=grp_dash, tooltip="Minimum Strength Score required to be considered 'Magnetic'.")
+
+showDash     = input.bool(true, "Show Dashboard", group=grp_dash)
+dashPos      = input.string(position.top_right, "Position", options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group=grp_dash)
+probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
+
+// --- VWAP Calculation ---
+var float vwapVal = na
+if vwapAnchor == "Session"
+    vwapVal := ta.vwap(close)
+else if vwapAnchor == "Week"
+    isNewWeek = ta.change(time("W"))
+    if isNewWeek
+        vwapVal := close
+    else
+        vwapVal := ta.vwap(close)
+
+// --- Arrays to track ACTIVE zones ---
+var box[] activeBearBoxes = array.new_box()
+var box[] activeBullBoxes = array.new_box()
+
+// Parallel arrays to track Volume Scores
+var float[] activeBearScores = array.new_float()
+var float[] activeBullScores = array.new_float()
+
+// Helper: Calculate Volume Score (0-50)
+volMA = ta.sma(volume, 50)
+relVol = volume / volMA
+volScore = math.min(relVol, 3.0) / 3.0 * 50
+
+// --- Probability & Targets Logic (MTF Bias) ---
+// Function to calculate Bias metrics
+calcBias() =>
+    m = ta.mfi(close, probLen)
+    r = ta.rsi(close, probLen)
+    [m, r]
+
+// Request MTF Data (RSI, MFI)
+[mfiVal, rsiVal] = request.security(syminfo.tickerid, mtfBias, calcBias())
+
+// Heuristic Probability:
+bullScore = (mfiVal + rsiVal) / 2
+bearScore = 100 - bullScore
+
+// --- Find Nearest Targets & Magnetic Status ---
+var float nearestBearPrice = na
+var float nearestBullPrice = na
+var float distBear = na
+var float distBull = na
+var float distVWAP = na
+var bool isMagneticBear = false
+var bool isMagneticBull = false
+
+if barstate.islast and showDash
+    nearestBearPrice := na
+    nearestBullPrice := na
+    float minDistUp = 1000000.0
+    float minDistDown = 1000000.0
+    isMagneticBear := false
+    isMagneticBull := false
+
+    // Check Bear Boxes
+    if array.size(activeBearBoxes) > 0
+        for i = 0 to array.size(activeBearBoxes) - 1
+            b = array.get(activeBearBoxes, i)
+            bLevel = box.get_bottom(b)
+
+            // Calculate Current Strength Score (Age + Vol) for Magnetic Check
+            bLeft = box.get_left(b)
+            age = bar_index - bLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBearScores, i)
+            totalScore = ageScore + vScore
+
+            if bLevel > close
+                d = bLevel - close
+                if d < minDistUp
+                    minDistUp := d
+                    nearestBearPrice := bLevel
+                    // Check Magnetic Condition
+                    distPct = (d / close) * 100
+                    if distPct <= magneticDist and totalScore >= magneticScore
+                        isMagneticBear := true
+
+    // Check Bull Boxes
+    if array.size(activeBullBoxes) > 0
+        for i = 0 to array.size(activeBullBoxes) - 1
+            b = array.get(activeBullBoxes, i)
+            bLevel = box.get_top(b)
+
+            bLeft = box.get_left(b)
+            age = bar_index - bLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBullScores, i)
+            totalScore = ageScore + vScore
+
+            if bLevel < close
+                d = close - bLevel
+                if d < minDistDown
+                    minDistDown := d
+                    nearestBullPrice := bLevel
+                    distPct = (d / close) * 100
+                    if distPct <= magneticDist and totalScore >= magneticScore
+                        isMagneticBull := true
+
+    distBear := not na(nearestBearPrice) ? ((nearestBearPrice - close) / close) * 100 : na
+    distBull := not na(nearestBullPrice) ? ((close - nearestBullPrice) / close) * 100 : na
+    distVWAP := not na(vwapVal) ? ((close - vwapVal) / close) * 100 : na
+
+    // --- Draw Dashboard ---
+    var tbl = table.new(dashPos, 2, 5, bgcolor=color.new(color.black, 50), border_width=1)
+
+    string biasLabel = "NEUTRAL"
+    color biasColor = color.white
+
+    if bullScore > 60
+        biasLabel := "BULL"
+        biasColor := color.green
+    else if bullScore < 40
+        biasLabel := "BEAR"
+        biasColor := color.red
+
+    table.cell(tbl, 0, 0, "Liquidity Bias (" + mtfBias + ")", text_color=color.white, bgcolor=color.new(color.blue, 60), text_size=size.small, width=12)
+    table.cell(tbl, 1, 0, str.tostring(bullScore, "#.0") + "% " + biasLabel, text_color=biasColor, bgcolor=color.new(color.black, 30), text_size=size.small, width=10)
+
+    table.cell(tbl, 0, 1, "Next Bear Liq", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+    txtUp = not na(nearestBearPrice) ? str.tostring(nearestBearPrice, format.mintick) + " (+" + str.tostring(distBear, "#.00") + "%)" : "None"
+    table.cell(tbl, 1, 1, txtUp, text_color=color.white, text_size=size.small)
+
+    table.cell(tbl, 0, 2, "Next Bull Liq", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+    txtDown = not na(nearestBullPrice) ? str.tostring(nearestBullPrice, format.mintick) + " (-" + str.tostring(distBull, "#.00") + "%)" : "None"
+    table.cell(tbl, 1, 2, txtDown, text_color=color.white, text_size=size.small)
+
+    table.cell(tbl, 0, 3, "VWAP Dist", text_color=color.yellow, text_size=size.small, text_halign=text.align_left)
+    txtVWAP = not na(distVWAP) ? str.tostring(distVWAP, "#.00") + "%" : "N/A"
+    table.cell(tbl, 1, 3, txtVWAP, text_color=color.white, text_size=size.small)
+
+    // Flow Status / Magnetic Alert
+    string statusTxt = "Neutral / Ranging"
+    color statusCol = color.gray
+
+    if isMagneticBear or isMagneticBull
+        statusTxt := "MAGNETIC ZONE!"
+        statusCol := color.new(color.purple, 0) // Solid Purple Alert
+    else
+        if bullScore > 60
+            statusTxt := "Strong Bull Flow"
+            statusCol := color.green
+        else if bullScore < 40
+            statusTxt := "Strong Bear Flow"
+            statusCol := color.red
+
+    table.cell(tbl, 0, 4, "Status", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(tbl, 1, 4, statusTxt, text_color=statusCol, text_size=size.small, bgcolor=isMagneticBear or isMagneticBull ? color.new(color.yellow, 80) : na)
+
+// --- Calculations ---
+ph = ta.pivothigh(high, lenLeft, lenRight)
+pl = ta.pivotlow(low, lenLeft, lenRight)
+
+atrVal = ta.atr(atrLen)
+currentZoneHeight = zoneType == "ATR" ? atrVal : close * (pctSize / 100)
+
+// --- Logic: Create Zones ---
+
+if not na(ph)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = ph
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+    top = pivotPrice + zh
+    bottom = pivotPrice
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBearBoxes) > 0
+        for i = 0 to array.size(activeBearBoxes) - 1
+            existingBox = array.get(activeBearBoxes, i)
+            eBottom = box.get_bottom(existingBox)
+            eTop    = box.get_top(existingBox)
+            distPct = math.abs(pivotPrice - eBottom) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(existingBox, newTop)
+                box.set_bottom(existingBox, newBottom)
+                currentScore = array.get(activeBearScores, i)
+                newScore = currentScore + (vScore * 0.5)
+                array.set(activeBearScores, i, math.min(newScore, 100))
+                break
+
+    if not merged
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBear)
+        array.push(activeBearBoxes, b)
+        array.push(activeBearScores, vScore)
+
+if not na(pl)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = pl
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+    top = pivotPrice
+    bottom = pivotPrice - zh
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBullBoxes) > 0
+        for i = 0 to array.size(activeBullBoxes) - 1
+            existingBox = array.get(activeBullBoxes, i)
+            eTop    = box.get_top(existingBox)
+            eBottom = box.get_bottom(existingBox)
+            distPct = math.abs(pivotPrice - eTop) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(existingBox, newTop)
+                box.set_bottom(existingBox, newBottom)
+                currentScore = array.get(activeBullScores, i)
+                newScore = currentScore + (vScore * 0.5)
+                array.set(activeBullScores, i, math.min(newScore, 100))
+                break
+
+    if not merged
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBull)
+        array.push(activeBullBoxes, b)
+        array.push(activeBullScores, vScore)
+
+// --- Logic: Manage Zones (Extend, Mitigate, Absorb, Sweep) ---
+
+if array.size(activeBearBoxes) > 0
+    for i = array.size(activeBearBoxes) - 1 to 0
+        b = array.get(activeBearBoxes, i)
+        bBottom = box.get_bottom(b)
+
+        // Mitigation
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close > bBottom
+        else
+            mitigated := high > bBottom
+
+        // Sweep Logic (Single-Bar Reclaim)
+        // If High broke box (mitigated), but Close < Box (reclaimed) -> Pinbar/Sweep
+        bool isSweep = false
+        // Only detect sweep if mitigation just happened (or is happening)
+        // Logic: Mitigated (touched) AND NOT Closed Above
+        if not (close > bBottom) and (high > bBottom)
+            isSweep := true
+            // In Close Mode, this is naturally handled as "Absorbed" or active.
+            // BUT if mitigatedMethod="Wick", the zone breaks on touch.
+            // If Wick mode is used, we need to label the sweep before removal.
+            // If Close mode is used, the zone stays active (Absorbed).
+
+        // Absorption Logic (Close Mode Only mostly)
+        bool absorbed = false
+        if mitigateMethod == "Close" and not mitigated and high > bBottom
+            if volume > (volMA * absorbVolMult)
+                absorbed := true
+
+        if mitigated
+            // If mitigated (broken), check for SFP Label before removal
+            // For Bear: Mitigated means Price > Bottom.
+            // Sweep means Price > Bottom (Touched) BUT Close < Bottom (Reclaimed).
+            // Wait, if Close < Bottom, mitigated is FALSE in Close Mode. So this block only runs if Close > Bottom.
+            // Thus, in Close Mode, a mitigated zone is a Breakout, not a Sweep.
+            // In Wick Mode, mitigated is TRUE if High > Bottom.
+            if mitigateMethod == "Wick" and close < bBottom
+                // Wick Mode Sweep!
+                label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBearBoxes, i)
+            array.remove(activeBearScores, i)
+        else
+            box.set_right(b, bar_index + 5)
+
+            // Sweep in Close Mode = Absorption/Rejection
+            if isSweep and mitigateMethod == "Close"
+                // It touched but didn't close above. Effectively a sweep.
+                // Label it if volume is high (strong rejection)
+                if volume > (volMA * absorbVolMult)
+                    // Avoid spamming labels every bar if it keeps testing
+                    // Simple check: Only label if not labeled recently? (Hard to track without var)
+                    // Just label high volume ones.
+                    // label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                    // Actually user asked for "SWEEP" label. Let's add it for Absorption events too.
+                    label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+
+            if absorbed
+                currentScore = array.get(activeBearScores, i)
+                newScore = math.min(currentScore + 10, 100)
+                array.set(activeBearScores, i, newScore)
+                box.set_border_color(b, colAbsorb)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 2)
+
+            // Visuals
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBearScores, i)
+            totalScore = ageScore + vScore
+            transp = 80 - (totalScore / 100 * 50)
+            box.set_bgcolor(b, color.new(color.red, transp))
+            if not absorbed and totalScore > 75
+                box.set_border_color(b, color.red)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
+if array.size(activeBullBoxes) > 0
+    for i = array.size(activeBullBoxes) - 1 to 0
+        b = array.get(activeBullBoxes, i)
+        bTop = box.get_top(b)
+
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close < bTop
+        else
+            mitigated := low < bTop
+
+        bool isSweep = false
+        // Touched (Low < Top) but Reclaimed (Close > Top)
+        if not (close < bTop) and (low < bTop)
+            isSweep := true
+
+        bool absorbed = false
+        if mitigateMethod == "Close" and not mitigated and low < bTop
+            if volume > (volMA * absorbVolMult)
+                absorbed := true
+
+        if mitigated
+            if mitigateMethod == "Wick" and close > bTop
+                label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBullBoxes, i)
+            array.remove(activeBullScores, i)
+        else
+            box.set_right(b, bar_index + 5)
+
+            if isSweep and mitigateMethod == "Close"
+                if volume > (volMA * absorbVolMult)
+                    label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+
+            if absorbed
+                currentScore = array.get(activeBullScores, i)
+                newScore = math.min(currentScore + 10, 100)
+                array.set(activeBullScores, i, newScore)
+                box.set_border_color(b, colAbsorb)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 2)
+
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBullScores, i)
+            totalScore = ageScore + vScore
+            transp = 80 - (totalScore / 100 * 50)
+            box.set_bgcolor(b, color.new(color.green, transp))
+            if not absorbed and totalScore > 75
+                box.set_border_color(b, color.green)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
