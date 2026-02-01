@@ -21,6 +21,7 @@ colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)"
 colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
 colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
 colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
+showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_vis, tooltip="Visualizes the exact wick area that captured liquidity.")
 
 // Entry Signals
 grp_sig = "Entry Signals"
@@ -105,6 +106,8 @@ var box[] activeBullBoxes = array.new_box()
 // Parallel arrays to track Volume Scores
 var float[] activeBearScores = array.new_float()
 var float[] activeBullScores = array.new_float()
+var int[]   activeBearTouches = array.new_int()
+var int[]   activeBullTouches = array.new_int()
 
 // Helper: Calculate Volume Score (0-50)
 volMA = ta.sma(volume, 50)
@@ -277,6 +280,7 @@ if not na(ph)
         b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBear)
         array.push(activeBearBoxes, b)
         array.push(activeBearScores, vScore)
+        array.push(activeBearTouches, 0)
 
 if not na(pl)
     pivotIndex = bar_index[lenRight]
@@ -309,6 +313,7 @@ if not na(pl)
         b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBull)
         array.push(activeBullBoxes, b)
         array.push(activeBullScores, vScore)
+        array.push(activeBullTouches, 0)
 
 // --- Logic: Manage Zones (Extend, Mitigate, Absorb, Sweep) ---
 
@@ -336,11 +341,19 @@ if array.size(activeBearBoxes) > 0
             // If Wick mode is used, we need to label the sweep before removal.
             // If Close mode is used, the zone stays active (Absorbed).
 
+            // Sweep Area Visualization
+            if showSweepArea
+                box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50))
+
         // Absorption Logic (Close Mode Only mostly)
         bool absorbed = false
         if mitigateMethod == "Close" and not mitigated and high > bBottom
             if volume > (volMA * absorbVolMult)
                 absorbed := true
+
+            // Track Touches
+            tCount = array.get(activeBearTouches, i)
+            array.set(activeBearTouches, i, tCount + 1)
 
         if mitigated
             // If mitigated (broken), check for SFP Label before removal
@@ -372,6 +385,7 @@ if array.size(activeBearBoxes) > 0
             box.set_border_color(b, na)
             array.remove(activeBearBoxes, i)
             array.remove(activeBearScores, i)
+            array.remove(activeBearTouches, i)
         else
             box.set_right(b, bar_index + 5)
 
@@ -408,8 +422,11 @@ if array.size(activeBearBoxes) > 0
             age = bar_index - boxLeft
             ageScore = math.min(age, 200) / 200.0 * 50
             vScore = array.get(activeBearScores, i)
-            totalScore = ageScore + vScore
-            transp = 80 - (totalScore / 100 * 50)
+            tCount = array.get(activeBearTouches, i)
+            tScore = math.min(tCount * 10, 30) // Max 30 points from touches
+
+            totalScore = ageScore + vScore + tScore
+            transp = 80 - (totalScore / 130 * 50)
             box.set_bgcolor(b, color.new(color.red, transp))
             if not absorbed and totalScore > 75
                 box.set_border_color(b, color.red)
@@ -432,10 +449,18 @@ if array.size(activeBullBoxes) > 0
         if not (close < bTop) and (low < bTop)
             isSweep := true
 
+            // Sweep Area Visualization
+            if showSweepArea
+                box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+
         bool absorbed = false
         if mitigateMethod == "Close" and not mitigated and low < bTop
             if volume > (volMA * absorbVolMult)
                 absorbed := true
+
+            // Track Touches
+            tCount = array.get(activeBullTouches, i)
+            array.set(activeBullTouches, i, tCount + 1)
 
         if mitigated
             if mitigateMethod == "Wick" and close > bTop
@@ -458,6 +483,7 @@ if array.size(activeBullBoxes) > 0
             box.set_border_color(b, na)
             array.remove(activeBullBoxes, i)
             array.remove(activeBullScores, i)
+            array.remove(activeBullTouches, i)
         else
             box.set_right(b, bar_index + 5)
 
@@ -490,8 +516,11 @@ if array.size(activeBullBoxes) > 0
             age = bar_index - boxLeft
             ageScore = math.min(age, 200) / 200.0 * 50
             vScore = array.get(activeBullScores, i)
-            totalScore = ageScore + vScore
-            transp = 80 - (totalScore / 100 * 50)
+            tCount = array.get(activeBullTouches, i)
+            tScore = math.min(tCount * 10, 30) // Max 30 points
+
+            totalScore = ageScore + vScore + tScore
+            transp = 80 - (totalScore / 130 * 50)
             box.set_bgcolor(b, color.new(color.green, transp))
             if not absorbed and totalScore > 75
                 box.set_border_color(b, color.green)
