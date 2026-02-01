@@ -46,13 +46,11 @@ SWING_GROUP                     = 'Real Time Swing Structure'
 BLOCKS_GROUP                    = 'Order Blocks'
 EQUAL_GROUP                     = 'EQH/EQL'
 GAPS_GROUP                      = 'Fair Value Gaps'
-LEVELS_GROUP                    = 'Highs & Lows MTF'
-ZONES_GROUP                     = 'Premium & Discount Zones'
 UNICORN_GROUP                   = 'Unicorn Model'
 
 modeInput                       = input.string( HISTORICAL, 'Mode',                     group = SMART_GROUP,    tooltip = 'Allows to display historical Structure or only the recent ones', options = [HISTORICAL, PRESENT])
 styleInput                      = input.string( COLORED,    'Style',                    group = SMART_GROUP,    tooltip = 'Indicator color theme',options = [COLORED, MONOCHROME])
-showTrendInput                  = input(        false,      'Color Candles',            group = SMART_GROUP,    tooltip = 'Display additional candles with a color reflecting the current trend detected by structure')
+showTrendInput                  = input(        true,       'Color Candles',            group = SMART_GROUP,    tooltip = 'Display additional candles with a color reflecting the current trend detected by structure')
 
 showInternalsInput              = input(        true,       'Show Internal Structure',  group = INTERNAL_GROUP, tooltip = 'Display internal market structure')
 showInternalBullInput           = input.string( ALL,        'Bullish Structure',        group = INTERNAL_GROUP, inline = 'ibull', options = [ALL,BOS,CHOCH])
@@ -94,21 +92,6 @@ fairValueGapsTimeframeInput     = input.timeframe('',       'Timeframe',        
 fairValueGapsBullColorInput     = input.color(color.new(#00ff68, 70), 'Bullish FVG' , group = GAPS_GROUP)
 fairValueGapsBearColorInput     = input.color(color.new(#ff0008, 70), 'Bearish FVG' , group = GAPS_GROUP)
 fairValueGapsExtendInput        = input.int(    1,          'Extend FVG',               group = GAPS_GROUP,     tooltip = 'Determine how many bars to extend the Fair Value Gap boxes on chart',       minval = 0)
-
-showDailyLevelsInput            = input(        false,      'Daily',    group = LEVELS_GROUP,   inline = 'daily')
-dailyLevelsStyleInput           = input.string( SOLID,      '',         group = LEVELS_GROUP,   inline = 'daily',   options = [SOLID,DASHED,DOTTED])
-dailyLevelsColorInput           = input(        BLUE,       '',         group = LEVELS_GROUP,   inline = 'daily')
-showWeeklyLevelsInput           = input(        false,      'Weekly',   group = LEVELS_GROUP,   inline = 'weekly')
-weeklyLevelsStyleInput          = input.string( SOLID,      '',         group = LEVELS_GROUP,   inline = 'weekly',  options = [SOLID,DASHED,DOTTED])
-weeklyLevelsColorInput          = input(        BLUE,       '',         group = LEVELS_GROUP,   inline = 'weekly')
-showMonthlyLevelsInput          = input(        false,      'Monthly',   group = LEVELS_GROUP,   inline = 'monthly')
-monthlyLevelsStyleInput         = input.string( SOLID,      '',         group = LEVELS_GROUP,   inline = 'monthly', options = [SOLID,DASHED,DOTTED])
-monthlyLevelsColorInput         = input(        BLUE,       '',         group = LEVELS_GROUP,   inline = 'monthly')
-
-showPremiumDiscountZonesInput   = input(        false,      'Premium/Discount Zones',   group = ZONES_GROUP , tooltip = 'Display premium, discount, and equilibrium zones on chart')
-premiumZoneColorInput           = input.color(  RED,        'Premium Zone',             group = ZONES_GROUP)
-equilibriumZoneColorInput       = input.color(  GRAY,       'Equilibrium Zone',         group = ZONES_GROUP)
-discountZoneColorInput          = input.color(  GREEN,      'Discount Zone',            group = ZONES_GROUP)
 
 showUnicornInput                = input.bool(   true,       'Show Unicorn Model',       group = UNICORN_GROUP)
 unicornColorInput               = input.color(color.new(#9c27b0, 40), 'Unicorn Color',  group = UNICORN_GROUP)
@@ -196,8 +179,6 @@ var swingBullishColor               = styleInput == MONOCHROME ? MONO_BULLISH : 
 var swingBearishColor               = styleInput == MONOCHROME ? MONO_BEARISH : swingBearColorInput
 var fairValueGapBullishColor        = styleInput == MONOCHROME ? color.new(MONO_BULLISH,70) : fairValueGapsBullColorInput
 var fairValueGapBearishColor        = styleInput == MONOCHROME ? color.new(MONO_BEARISH,70) : fairValueGapsBearColorInput
-var premiumZoneColor                = styleInput == MONOCHROME ? MONO_BEARISH : premiumZoneColorInput
-var discountZoneColor               = styleInput == MONOCHROME ? MONO_BULLISH : discountZoneColorInput
 varip int currentBarIndex           = bar_index
 varip int lastBarIndex              = bar_index
 alerts currentAlerts                = alerts.new()
@@ -318,7 +299,6 @@ drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, 
 deleteOrderBlocks(bool internal = false) =>
     array<orderBlock> orderBlocks = internal ? internalOrderBlocks : swingOrderBlocks
 
-    // SAFE LOOP
     if orderBlocks.size() > 0
         for index = orderBlocks.size() - 1 to 0
             orderBlock eachOrderBlock = orderBlocks.get(index)
@@ -338,7 +318,6 @@ deleteOrderBlocks(bool internal = false) =>
                     currentAlerts.swingBullishOrderBlock    := true
 
             if crossedOderBlock
-                // UNICORN LOGIC
                 if showUnicornInput and fairValueGaps.size() > 0
                     for fvg in fairValueGaps
                         float brk_high = eachOrderBlock.barHigh
@@ -375,7 +354,7 @@ storeOrdeBlock(pivot p_ivot,bool internal = false,int bias) =>
             parsedIndex := p_ivot.barIndex + a_rray.indexof(a_rray.min())
         orderBlock o_rderBlock          = orderBlock.new(parsedHighs.get(parsedIndex), parsedLows.get(parsedIndex), times.get(parsedIndex),bias)
         array<orderBlock> orderBlocks   = internal ? internalOrderBlocks : swingOrderBlocks
-        if orderBlocks.size() >= 50 // Limit size to prevent runtime errors
+        if orderBlocks.size() >= 50
             orderBlocks.pop()
         orderBlocks.unshift(o_rderBlock)
 
@@ -464,7 +443,6 @@ drawFairValueGaps() =>
     if bearishFairValueGap
         currentAlerts.bearishFairValueGap := true
         fairValueGaps.unshift(fairValueGap.new(currentHigh,last2Low,BEARISH,fairValueGapBox(lastTime,currentTime,currentHigh,math.avg(currentHigh,last2Low),fairValueGapBearishColor),fairValueGapBox(lastTime,currentTime,math.avg(currentHigh,last2Low),last2Low,fairValueGapBearishColor)))
-    // Limit array size to prevent runtime error
     if fairValueGaps.size() > 100
         oldest = fairValueGaps.pop()
         oldest.topBox.delete()
@@ -475,35 +453,6 @@ getStyle(string style) =>
         SOLID => line.style_solid
         DASHED => line.style_dashed
         DOTTED => line.style_dotted
-
-drawLevels(string timeframe, bool sameTimeframe, string style, color levelColor) =>
-    [topLevel, bottomLevel, leftTime, rightTime] = request.security(syminfo.tickerid, timeframe, [high[1], low[1], time[1], time],lookahead = barmerge.lookahead_on)
-    float parsedTop         = sameTimeframe ? high : topLevel
-    float parsedBottom      = sameTimeframe ? low : bottomLevel
-    int parsedLeftTime      = sameTimeframe ? time : leftTime
-    int parsedRightTime     = sameTimeframe ? time : rightTime
-    int parsedTopTime       = time
-    int parsedBottomTime    = time
-    if not sameTimeframe
-        int leftIndex               = times.binary_search_rightmost(parsedLeftTime)
-        int rightIndex              = times.binary_search_rightmost(parsedRightTime)
-        array<int> timeArray        = times.slice(leftIndex,rightIndex)
-        array<float> topArray       = highs.slice(leftIndex,rightIndex)
-        array<float> bottomArray    = lows.slice(leftIndex,rightIndex)
-        parsedTopTime               := timeArray.size() > 0 ? timeArray.get(topArray.indexof(topArray.max())) : initialTime
-        parsedBottomTime            := timeArray.size() > 0 ? timeArray.get(bottomArray.indexof(bottomArray.min())) : initialTime
-    var line topLine        = line.new(na, na, na, na, xloc = xloc.bar_time, color = levelColor, style = getStyle(style))
-    var line bottomLine     = line.new(na, na, na, na, xloc = xloc.bar_time, color = levelColor, style = getStyle(style))
-    var label topLabel      = label.new(na, na, xloc = xloc.bar_time, text = str.format('P{0}H',timeframe), color=color(na), textcolor = levelColor, size = size.small, style = label.style_label_left)
-    var label bottomLabel   = label.new(na, na, xloc = xloc.bar_time, text = str.format('P{0}L',timeframe), color=color(na), textcolor = levelColor, size = size.small, style = label.style_label_left)
-    topLine.set_first_point(    chart.point.new(parsedTopTime,na,parsedTop))
-    topLine.set_second_point(   chart.point.new(last_bar_time + 20 * (time-time[1]),na,parsedTop))
-    topLabel.set_point(         chart.point.new(last_bar_time + 20 * (time-time[1]),na,parsedTop))
-    bottomLine.set_first_point( chart.point.new(parsedBottomTime,na,parsedBottom))
-    bottomLine.set_second_point(chart.point.new(last_bar_time + 20 * (time-time[1]),na,parsedBottom))
-    bottomLabel.set_point(      chart.point.new(last_bar_time + 20 * (time-time[1]),na,parsedBottom))
-
-higherTimeframe(string timeframe) => timeframe.in_seconds() > timeframe.in_seconds(timeframe)
 
 updateTrailingExtremes() =>
     trailing.top            := math.max(high,trailing.top)
@@ -526,19 +475,6 @@ drawHighLowSwings() =>
     bottomLabel.set_point(      chart.point.new(rightTimeBar, na, trailing.bottom))
     bottomLabel.set_text(       swingTrend.bias == BULLISH ? 'Strong Low' : 'Weak Low')
 
-drawZone(float labelLevel, int labelIndex, float top, float bottom, string tag, color zoneColor, string style) =>
-    var label l_abel    = label.new(na,na,text = tag, color=color(na),textcolor = zoneColor, style = style, size = size.small)
-    var box b_ox        = box.new(na,na,na,na,bgcolor = color.new(zoneColor,80),border_color = color(na), xloc = xloc.bar_time)
-    b_ox.set_top_left_point(    chart.point.new(trailing.barTime,na,top))
-    b_ox.set_bottom_right_point(chart.point.new(last_bar_time,na,bottom))
-    l_abel.set_point(           chart.point.new(na,labelIndex,labelLevel))
-
-drawPremiumDiscountZones() =>
-    drawZone(trailing.top, math.round(0.5*(trailing.barIndex + last_bar_index)), trailing.top, 0.95*trailing.top + 0.05*trailing.bottom, 'Premium', premiumZoneColor, label.style_label_down)
-    equilibriumLevel = math.avg(trailing.top, trailing.bottom)
-    drawZone(equilibriumLevel, last_bar_index, 0.525*trailing.top + 0.475*trailing.bottom, 0.525*trailing.bottom + 0.475*trailing.top, 'Equilibrium', equilibriumZoneColorInput, label.style_label_left)
-    drawZone(trailing.bottom, math.round(0.5*(trailing.barIndex + last_bar_index)), 0.95*trailing.bottom + 0.05*trailing.top, trailing.bottom, 'Discount', discountZoneColor, label.style_label_up)
-
 deleteUnicorns() =>
     if unicornBoxes.size() > 0
         int[] indices_to_remove = array.new_int()
@@ -552,7 +488,6 @@ deleteUnicorns() =>
         if indices_to_remove.size() > 0
             for j = indices_to_remove.size() - 1 to 0
                 unicornBoxes.remove(indices_to_remove.get(j))
-    // Safety Limit
     if unicornBoxes.size() > 50
         box.delete(unicornBoxes.pop())
 
@@ -563,12 +498,10 @@ parsedOpen  = showTrendInput ? open : na
 candleColor = internalTrend.bias == BULLISH ? swingBullishColor : swingBearishColor
 plotcandle(parsedOpen,high,low,close,color = candleColor, wickcolor = candleColor, bordercolor = candleColor)
 
-if showHighLowSwingsInput or showPremiumDiscountZonesInput
+if showHighLowSwingsInput
     updateTrailingExtremes()
     if showHighLowSwingsInput
         drawHighLowSwings()
-    if showPremiumDiscountZonesInput
-        drawPremiumDiscountZones()
 
 if showFairValueGapsInput
     deleteFairValueGaps()
@@ -607,14 +540,6 @@ if barstate.islastconfirmedhistory or barstate.islast
 lastBarIndex    := currentBarIndex
 currentBarIndex := bar_index
 newBar          = currentBarIndex != lastBarIndex
-
-if barstate.islastconfirmedhistory or (barstate.isrealtime and newBar)
-    if showDailyLevelsInput and not higherTimeframe('D')
-        drawLevels('D',timeframe.isdaily,dailyLevelsStyleInput,dailyLevelsColorInput)
-    if showWeeklyLevelsInput and not higherTimeframe('W')
-        drawLevels('W',timeframe.isweekly,weeklyLevelsStyleInput,weeklyLevelsColorInput)
-    if showMonthlyLevelsInput and not higherTimeframe('M')
-        drawLevels('M',timeframe.ismonthly,monthlyLevelsStyleInput,monthlyLevelsColorInput)
 
 //---------------------------------------------------------------------------------------------------------------------}
 //ALERTS
