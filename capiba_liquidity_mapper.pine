@@ -7,13 +7,12 @@ indicator("Capiba Liquidity Mapper 31.1.26 v6", shorttitle="Capiba Liquidity", o
 // --- Inputs ---
 grp_sett = "Settings"
 grp_vis = "Visuals"
-grp_dash = "Probability Dashboard"
 grp_logic = "Order Flow Logic"
 
 lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
 lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
 zoneType  = input.string("ATR", "Zone Height Calculation", options=["ATR", "Percent"], group=grp_sett, tooltip="Method to determine the vertical size of the liquidity zone.")
-atrLen    = input.int(14, "ATR Length", minval=1, group=grp_sett)
+atrLen    = input.int(20, "ATR Length", minval=1, group=grp_sett)
 atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
 pctSize   = input.float(0.5, "Zone % Size", minval=0.01, step=0.1, group=grp_sett, tooltip="Height as % of price (if Type is Percent).")
 
@@ -22,6 +21,7 @@ colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)
 colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
 colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
 showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_vis, tooltip="Visualizes the exact wick area that captured liquidity.")
+signalSize    = input.string("Small", "Signal Label Size", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_vis)
 
 // Entry Signals
 grp_sig = "Entry Signals"
@@ -33,71 +33,21 @@ showSignalHistory = input.bool(true, "Keep Signal History", group=grp_sig, toolt
 mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Zone breaks only on candle close. Wick: Zone breaks on any touch.")
 mergeThresh    = input.float(0.1, "Cluster Merge Threshold (%)", step=0.05, group=grp_logic, tooltip="If a new pivot is within X% of an active zone, merge it instead of creating a new one.")
 absorbVolMult  = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption (wick rejection).")
-vwapLookback   = input.int(300, "VWAP Anchor Lookback", minval=10, group=grp_logic, tooltip="Lookback period to find the Highest/Lowest price to anchor the VWAP.")
-emaTrendLen    = input.int(200, "VWAP Trend EMA", minval=1, group=grp_logic, tooltip="EMA length to define the macro trend for anchoring (Price > EMA = Bull Anchor at Low).")
-showVwapPlot   = input.bool(false, "Plot VWAP on Chart", group=grp_logic)
 
-// v4 Specific Inputs
-mtfBias      = input.timeframe("240", "Bias Timeframe", group=grp_dash, tooltip="Higher Timeframe to fetch RSI/MFI for Market Bias.")
-magneticDist = input.float(0.5, "Magnetic Zone Distance (%)", step=0.1, group=grp_dash, tooltip="Distance to trigger 'MAGNETIC ZONE' alert.")
-magneticScore= input.int(80, "Magnetic Zone Score (Min)", minval=0, maxval=100, group=grp_dash, tooltip="Minimum Strength Score required to be considered 'Magnetic'.")
-
-showDash     = input.bool(true, "Show Dashboard", group=grp_dash)
-dashPos      = input.string(position.top_right, "Position", options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group=grp_dash)
-probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
-
-// --- VWAP Calculation (Auto-Anchored via Trend) ---
-var float vwapVal = na
 // Variable to track the single last sweep label to avoid clutter
 var label lastSweepLabel = na
 
-// 1. Identify Trend Direction using EMA 200 (or user input)
-trendEMA = ta.ema(close, emaTrendLen)
-isBullTrend = close > trendEMA
+// Map string size to internal size const
+getSize(s) =>
+    switch s
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Normal" => size.normal
+        "Large" => size.large
+        "Huge" => size.huge
+        => size.small
 
-// 2. Identify Anchor Point based on Trend
-// Bull Trend -> Anchor at Lowest Low of the lookback (Start of leg)
-// Bear Trend -> Anchor at Highest High of the lookback (Start of leg)
-hiOffset = ta.highestbars(high, vwapLookback)
-loOffset = ta.lowestbars(low, vwapLookback)
-
-// Determine Anchor Length (distance to anchor)
-anchorLen = 0
-
-// Safety check for NA offsets (start of chart)
-safeHiOffset = nz(hiOffset, 0)
-safeLoOffset = nz(loOffset, 0)
-
-if isBullTrend
-    // In Uptrend, we anchor at the bottom (Lowest Low)
-    anchorLen := math.abs(safeLoOffset)
-else
-    // In Downtrend, we anchor at the top (Highest High)
-    anchorLen := math.abs(safeHiOffset)
-
-// Protect against 0 length and exceeding available history
-if anchorLen == 0
-    anchorLen := 1
-
-// Cap anchorLen to available bars to prevent Runtime Error
-if anchorLen > bar_index
-    anchorLen := bar_index + 1
-
-// Calculate Cumulative VWAP from Anchor
-// VWAP = sum(price * volume) / sum(volume) over anchorLen bars
-// Note: math.sum throws error if length is too large or < 0
-sumSrcVol = 0.0
-sumVol    = 0.0
-
-// Only calculate if we have enough bars
-if bar_index >= anchorLen - 1
-    sumSrcVol := math.sum(hlc3 * volume, anchorLen)
-    sumVol    := math.sum(volume, anchorLen)
-    vwapVal   := sumSrcVol / sumVol
-else
-    vwapVal := hlc3 // Fallback for very first bars
-
-plot(showVwapPlot ? vwapVal : na, "Anchored VWAP", color=color.white, linewidth=1)
+lblSize = getSize(signalSize)
 
 // --- Arrays to track ACTIVE zones ---
 var box[] activeBearBoxes = array.new_box()
@@ -114,131 +64,6 @@ volMA = ta.sma(volume, 50)
 relVol = volume / volMA
 volScore = math.min(relVol, 3.0) / 3.0 * 50
 
-// --- Probability & Targets Logic (MTF Bias) ---
-// Function to calculate Bias metrics
-calcBias() =>
-    m = ta.mfi(close, probLen)
-    r = ta.rsi(close, probLen)
-    [m, r]
-
-// Request MTF Data (RSI, MFI)
-[mfiVal, rsiVal] = request.security(syminfo.tickerid, mtfBias, calcBias())
-
-// Heuristic Probability:
-bullScore = (mfiVal + rsiVal) / 2
-bearScore = 100 - bullScore
-
-// --- Find Nearest Targets & Magnetic Status ---
-var float nearestBearPrice = na
-var float nearestBullPrice = na
-var float distBear = na
-var float distBull = na
-var float distVWAP = na
-var bool isMagneticBear = false
-var bool isMagneticBull = false
-
-if barstate.islast and showDash
-    nearestBearPrice := na
-    nearestBullPrice := na
-    float minDistUp = 1000000.0
-    float minDistDown = 1000000.0
-    isMagneticBear := false
-    isMagneticBull := false
-
-    // Check Bear Boxes
-    if array.size(activeBearBoxes) > 0
-        for i = 0 to array.size(activeBearBoxes) - 1
-            b = array.get(activeBearBoxes, i)
-            bLevel = box.get_bottom(b)
-
-            // Calculate Current Strength Score (Age + Vol) for Magnetic Check
-            bLeft = box.get_left(b)
-            age = bar_index - bLeft
-            ageScore = math.min(age, 200) / 200.0 * 50
-            vScore = array.get(activeBearScores, i)
-            totalScore = ageScore + vScore
-
-            if bLevel > close
-                d = bLevel - close
-                if d < minDistUp
-                    minDistUp := d
-                    nearestBearPrice := bLevel
-                    // Check Magnetic Condition
-                    distPct = (d / close) * 100
-                    if distPct <= magneticDist and totalScore >= magneticScore
-                        isMagneticBear := true
-
-    // Check Bull Boxes
-    if array.size(activeBullBoxes) > 0
-        for i = 0 to array.size(activeBullBoxes) - 1
-            b = array.get(activeBullBoxes, i)
-            bLevel = box.get_top(b)
-
-            bLeft = box.get_left(b)
-            age = bar_index - bLeft
-            ageScore = math.min(age, 200) / 200.0 * 50
-            vScore = array.get(activeBullScores, i)
-            totalScore = ageScore + vScore
-
-            if bLevel < close
-                d = close - bLevel
-                if d < minDistDown
-                    minDistDown := d
-                    nearestBullPrice := bLevel
-                    distPct = (d / close) * 100
-                    if distPct <= magneticDist and totalScore >= magneticScore
-                        isMagneticBull := true
-
-    distBear := not na(nearestBearPrice) ? ((nearestBearPrice - close) / close) * 100 : na
-    distBull := not na(nearestBullPrice) ? ((close - nearestBullPrice) / close) * 100 : na
-    distVWAP := not na(vwapVal) ? ((close - vwapVal) / close) * 100 : na
-
-    // --- Draw Dashboard ---
-    var tbl = table.new(dashPos, 2, 5, bgcolor=color.new(color.black, 50), border_width=1)
-
-    string biasLabel = "NEUTRAL"
-    color biasColor = color.white
-
-    if bullScore > 60
-        biasLabel := "BULL"
-        biasColor := color.green
-    else if bullScore < 40
-        biasLabel := "BEAR"
-        biasColor := color.red
-
-    table.cell(tbl, 0, 0, "Liquidity Bias (" + mtfBias + ")", text_color=color.white, bgcolor=color.new(color.blue, 60), text_size=size.small, width=12)
-    table.cell(tbl, 1, 0, str.tostring(bullScore, "#.0") + "% " + biasLabel, text_color=biasColor, bgcolor=color.new(color.black, 30), text_size=size.small, width=10)
-
-    table.cell(tbl, 0, 1, "Next Bear Liq", text_color=color.red, text_size=size.small, text_halign=text.align_left)
-    txtUp = not na(nearestBearPrice) ? str.tostring(nearestBearPrice, format.mintick) + " (+" + str.tostring(distBear, "#.00") + "%)" : "None"
-    table.cell(tbl, 1, 1, txtUp, text_color=color.white, text_size=size.small)
-
-    table.cell(tbl, 0, 2, "Next Bull Liq", text_color=color.green, text_size=size.small, text_halign=text.align_left)
-    txtDown = not na(nearestBullPrice) ? str.tostring(nearestBullPrice, format.mintick) + " (-" + str.tostring(distBull, "#.00") + "%)" : "None"
-    table.cell(tbl, 1, 2, txtDown, text_color=color.white, text_size=size.small)
-
-    // VWAP Info (Price + Dist)
-    table.cell(tbl, 0, 3, "VWAP", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    txtVWAP = not na(vwapVal) ? str.tostring(vwapVal, format.mintick) + " (" + str.tostring(distVWAP, "#.00") + "%)" : "N/A"
-    table.cell(tbl, 1, 3, txtVWAP, text_color=color.white, text_size=size.small)
-
-    // Flow Status / Magnetic Alert
-    string statusTxt = "Neutral / Ranging"
-    color statusCol = color.gray
-
-    if isMagneticBear or isMagneticBull
-        statusTxt := "MAGNETIC ZONE!"
-        statusCol := color.new(color.purple, 0) // Solid Purple Alert
-    else
-        if bullScore > 60
-            statusTxt := "Strong Bull Flow"
-            statusCol := color.green
-        else if bullScore < 40
-            statusTxt := "Strong Bear Flow"
-            statusCol := color.red
-
-    table.cell(tbl, 0, 4, "Status", text_color=color.white, text_size=size.small, text_halign=text.align_left)
-    table.cell(tbl, 1, 4, statusTxt, text_color=statusCol, text_size=size.small, bgcolor=isMagneticBear or isMagneticBull ? color.new(color.yellow, 80) : na)
 
 // --- Calculations ---
 ph = ta.pivothigh(high, lenLeft, lenRight)
@@ -373,13 +198,19 @@ if array.size(activeBearBoxes) > 0
                         isSignal := true
                         alert("Bearish Entry Signal: Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
 
+                color lblCol = color.red
+                if txt == "SWEEP"
+                    lblCol := color.yellow // Yellow for Bearish Sweep
+                else if txt == "SELL"
+                    lblCol := color.red
+
                 if isSignal and showSignalHistory
                     // Permanent Signal Label
-                    label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                    label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
                 else
                     // Transient Sweep Label
                     label.delete(lastSweepLabel)
-                    lastSweepLabel := label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                    lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
 
             box.set_bgcolor(b, colMitigated)
             box.set_border_color(b, na)
@@ -403,11 +234,17 @@ if array.size(activeBearBoxes) > 0
                             isSignal := true
                             alert("Bearish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
 
+                    color lblCol = color.red
+                    if txt == "SWEEP"
+                        lblCol := color.yellow
+                    else if txt == "SELL"
+                        lblCol := color.red
+
                     if isSignal and showSignalHistory
-                        label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                        label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
                     else
                         label.delete(lastSweepLabel)
-                        lastSweepLabel := label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                        lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
 
             if absorbed
                 currentScore = array.get(activeBearScores, i)
@@ -473,11 +310,17 @@ if array.size(activeBullBoxes) > 0
                         isSignal := true
                         alert("Bullish Entry Signal: Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
 
+                color lblCol = color.green
+                if txt == "SWEEP"
+                    lblCol := color.blue // Blue for Bullish Sweep
+                else if txt == "BUY"
+                    lblCol := color.green
+
                 if isSignal and showSignalHistory
-                    label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                    label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
                 else
                     label.delete(lastSweepLabel)
-                    lastSweepLabel := label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                    lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
 
             box.set_bgcolor(b, colMitigated)
             box.set_border_color(b, na)
@@ -498,11 +341,17 @@ if array.size(activeBullBoxes) > 0
                             isSignal := true
                             alert("Bullish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
 
+                    color lblCol = color.green
+                    if txt == "SWEEP"
+                        lblCol := color.blue // Blue for Bullish Sweep
+                    else if txt == "BUY"
+                        lblCol := color.green
+
                     if isSignal and showSignalHistory
-                        label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                        label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
                     else
                         label.delete(lastSweepLabel)
-                        lastSweepLabel := label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                        lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
 
             if absorbed
                 currentScore = array.get(activeBullScores, i)
