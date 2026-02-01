@@ -1,0 +1,227 @@
+//@version=5
+indicator("Capiba SMC: Unicorn & AMD [Desbloqueando Smart Money]", shorttitle="Capiba SMC", overlay=true, max_bars_back=500, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+
+// -----------------------------------------------------------------------------
+// CONFIGURAÇÕES E INPUTS
+// -----------------------------------------------------------------------------
+grp_struc = "Estrutura de Mercado"
+len = input.int(5, "Comprimento do Pivot", group=grp_struc)
+show_bos = input.bool(true, "Mostrar BOS (Continuidade)", group=grp_struc)
+show_choch = input.bool(true, "Mostrar CHoCH (Inversão)", group=grp_struc)
+show_sweep = input.bool(true, "Mostrar SWEEPS (Captura de Liquidez)", group=grp_struc)
+
+grp_uni = "Modelo Unicórnio (Unicorn Model)"
+show_unicorn = input.bool(true, "Mostrar Zonas Unicórnio", group=grp_uni)
+c_unicorn = input.color(color.new(#9c27b0, 40), "Cor do Unicórnio", group=grp_uni)
+
+grp_fvg = "Fair Value Gaps (FVG)"
+show_fvg = input.bool(true, "Mostrar FVG", group=grp_fvg)
+c_fvg_bull = input.color(color.new(color.green, 85), "FVG Bullish", group=grp_fvg)
+c_fvg_bear = input.color(color.new(color.red, 85), "FVG Bearish", group=grp_fvg)
+
+grp_ote = "AMD + OTE (Fibonacci)"
+show_ote = input.bool(true, "Mostrar Auto OTE (Última Perna)", group=grp_ote)
+
+// -----------------------------------------------------------------------------
+// LÓGICA DE PIVOTS E ESTRUTURA
+// -----------------------------------------------------------------------------
+ph = ta.pivothigh(len, len)
+pl = ta.pivotlow(len, len)
+
+// Variáveis para rastrear estrutura
+var float last_high = na
+var float last_low = na
+var int last_high_idx = na
+var int last_low_idx = na
+var int dir = 0 // 1 = Bull, -1 = Bear
+
+// Arrays para Breaker Blocks (simples: armazenar últimas zonas de estrutura rompida)
+// Um Breaker é um OB falhado. Simplificando: A zona do topo anterior rompido vira Breaker Bullish.
+var box[] breakers = array.new_box()
+
+// Função para desenhar linha de estrutura
+draw_struc(x1, y, x2, txt, col, style) =>
+    line.new(x1, y, x2, y, color=col, style=style)
+    label.new(int(math.avg(x1, x2)), y, txt, color=color.new(color.white, 100), style=label.style_none, textcolor=col, size=size.tiny)
+
+// Detectar Pivots
+if not na(ph)
+    last_high := ph
+    last_high_idx := bar_index[len]
+if not na(pl)
+    last_low := pl
+    last_low_idx := bar_index[len]
+
+// Detectar quebras (Ao vivo ou fechamento)
+// Usamos crossover para detectar o momento exato da quebra
+break_high = ta.crossover(close, last_high)
+break_low = ta.crossunder(close, last_low)
+
+// SWEEP: Preço violou o nível mas fechou dentro (Wick capture)
+// Para detectar sweep, olhamos se HIGH > last_high mas CLOSE < last_high (Bullish Sweep/Bearish Trap)
+// ou LOW < last_low mas CLOSE > last_low (Bearish Sweep/Bullish Trap)
+// Isso é verificado a cada barra em relação aos pivôs ativos.
+
+// Analisando a barra atual em relação ao último topo/fundo confirmado
+is_sweep_high = high > last_high and close < last_high and not na(last_high)
+is_sweep_low = low < last_low and close > last_low and not na(last_low)
+
+if show_sweep and is_sweep_high and high == ta.highest(high, 5) // Filtro para não spammar
+    label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_triangledown, textcolor=color.white, size=size.tiny)
+    alert("Liquidez Capturada (Topo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
+
+if show_sweep and is_sweep_low and low == ta.lowest(low, 5)
+    label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_triangleup, textcolor=color.white, size=size.tiny)
+    alert("Liquidez Capturada (Fundo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
+
+// BOS e CHoCH logic
+// Se tendência era Bull (1) e rompe topo -> BOS Bull.
+// Se tendência era Bull (1) e rompe fundo -> CHoCH Bear.
+// Se tendência era Bear (-1) e rompe fundo -> BOS Bear.
+// Se tendência era Bear (-1) e rompe topo -> CHoCH Bull.
+
+if break_high and not na(last_high)
+    if dir == 1
+        // BOS Bull
+        if show_bos
+            line.new(last_high_idx, last_high, bar_index, last_high, color=color.green)
+            label.new(bar_index, last_high, "BOS", color=color.new(color.white, 100), style=label.style_none, textcolor=color.green, size=size.tiny)
+    else
+        // CHoCH Bull (Inversão)
+        // O topo anterior era uma zona de oferta (Supply). Foi rompida. Vira BREAKER.
+        if show_choch
+            line.new(last_high_idx, last_high, bar_index, last_high, color=color.green, style=line.style_dashed)
+            label.new(bar_index, last_high, "CHoCH", color=color.new(color.white, 100), style=label.style_none, textcolor=color.green, size=size.tiny)
+
+        // Criar Breaker Zone (Grosso modo: o candle de alta prévio ou o range do topo)
+        // Para simplificar: Marcamos o pivot rompido como nível de Breaker
+        // Adicionamos a um array para checar interseção com FVG depois
+        box b = box.new(last_high_idx - 1, last_high * 1.001, bar_index + 10, last_high * 0.999, border_color=color.green, bgcolor=color.new(color.green, 90))
+        array.push(breakers, b)
+
+        dir := 1
+
+if break_low and not na(last_low)
+    if dir == -1
+        // BOS Bear
+        if show_bos
+            line.new(last_low_idx, last_low, bar_index, last_low, color=color.red)
+            label.new(bar_index, last_low, "BOS", color=color.new(color.white, 100), style=label.style_none, textcolor=color.red, size=size.tiny)
+    else
+        // CHoCH Bear
+        if show_choch
+            line.new(last_low_idx, last_low, bar_index, last_low, color=color.red, style=line.style_dashed)
+            label.new(bar_index, last_low, "CHoCH", color=color.new(color.white, 100), style=label.style_none, textcolor=color.red, size=size.tiny)
+
+        // Breaker Bear (Fundo rompido vira resistência)
+        box b = box.new(last_low_idx - 1, last_low * 1.001, bar_index + 10, last_low * 0.999, border_color=color.red, bgcolor=color.new(color.red, 90))
+        array.push(breakers, b)
+
+        dir := -1
+
+// -----------------------------------------------------------------------------
+// FAIR VALUE GAPS (FVG)
+// -----------------------------------------------------------------------------
+// Bullish FVG: Low[0] > High[2]
+fvg_bull = low > high[2]
+// Bearish FVG: High[0] < Low[2]
+fvg_bear = high < low[2]
+
+// Visualização FVG e Detecção Unicórnio
+if fvg_bull
+    // Desenha FVG
+    if show_fvg
+        box.new(bar_index[2], high[2], bar_index, low, border_color=na, bgcolor=c_fvg_bull)
+
+    // Checar Unicórnio Bullish
+    // Se existe um Breaker (Topo rompido recentemente) que coincide com este FVG
+    if show_unicorn and array.size(breakers) > 0
+        // Verificar últimos breakers
+        for i = 0 to array.size(breakers) - 1
+            box b = array.get(breakers, i)
+            float b_top = box.get_top(b)
+            float b_btm = box.get_bottom(b)
+
+            // Se o FVG interage com o nível do Breaker (Breaker está dentro ou perto do FVG)
+            // Lógica: O nível do breaker (ex: last_high) está entre high[2] e low do FVG atual?
+            bool overlap = (b_top >= high[2] and b_btm <= low)
+
+            if overlap
+                // Desenha CAIXA UNICÓRNIO
+                box.new(bar_index[2], low, bar_index + 5, high[2], border_color=c_unicorn, bgcolor=c_unicorn, text="UNICÓRNIO", text_color=color.white)
+                alert("Setup Unicórnio (Bull) Detectado!", alert.freq_once_per_bar_close)
+
+if fvg_bear
+    if show_fvg
+        box.new(bar_index[2], low[2], bar_index, high, border_color=na, bgcolor=c_fvg_bear)
+
+    // Checar Unicórnio Bearish
+    if show_unicorn and array.size(breakers) > 0
+        for i = 0 to array.size(breakers) - 1
+            box b = array.get(breakers, i)
+            float b_top = box.get_top(b)
+            float b_btm = box.get_bottom(b)
+
+            // FVG Bear: Gap entre low[2] e high[0]
+            // Verificar se o breaker level está dentro do gap
+            bool overlap = (b_btm <= low[2] and b_top >= high)
+
+            if overlap
+                box.new(bar_index[2], high, bar_index + 5, low[2], border_color=c_unicorn, bgcolor=c_unicorn, text="UNICÓRNIO", text_color=color.white)
+                alert("Setup Unicórnio (Bear) Detectado!", alert.freq_once_per_bar_close)
+
+// Limpeza de arrays antigos para performance
+if array.size(breakers) > 10
+    box.delete(array.shift(breakers))
+
+// -----------------------------------------------------------------------------
+// OTE (OPTIMAL TRADE ENTRY) - AUTO FIB
+// -----------------------------------------------------------------------------
+// Desenha fibo na perna atual (Last High <-> Last Low) dependendo da estrutura
+if show_ote
+    var line fib_0 = na
+    var line fib_1 = na
+    var line fib_618 = na
+    var line fib_79 = na
+
+    line.delete(fib_0)
+    line.delete(fib_1)
+    line.delete(fib_618)
+    line.delete(fib_79)
+
+    if not na(last_high) and not na(last_low)
+        // OTE geralmente é traçado na perna que causou o BOS/CHoCH.
+        // Vamos desenhar do último Topo ao último Fundo (Range atual)
+
+        float top = last_high
+        float btm = last_low
+        int top_idx = last_high_idx
+        int btm_idx = last_low_idx
+
+        // Calcular níveis baseado na direção
+        float diff = top - btm
+        float lvl_618 = na
+        float lvl_79 = na
+
+        // Se a direção é Bullish, esperamos retração pra baixo (Buy Dip)
+        // 0% no Topo, 100% no Fundo. Retração 61.8% = Topo - 0.618*Range
+        if dir == 1
+            lvl_618 = top - (diff * 0.618)
+            lvl_79 = top - (diff * 0.79)
+        else
+            // Se a direção é Bearish, esperamos retração pra cima (Sell Rally)
+            // 0% no Fundo, 100% no Topo. Retração 61.8% = Fundo + 0.618*Range
+            lvl_618 = btm + (diff * 0.618)
+            lvl_79 = btm + (diff * 0.79)
+
+        // Desenhar apenas se os índices forem razoáveis
+        if bar_index - top_idx < 300 and bar_index - btm_idx < 300
+            fib_0 = line.new(btm_idx, btm, bar_index + 5, btm, color=color.gray, style=line.style_dotted)
+            fib_1 = line.new(top_idx, top, bar_index + 5, top, color=color.gray, style=line.style_dotted)
+
+            // Zona OTE
+            fib_618 = line.new(bar_index[10], lvl_618, bar_index + 5, lvl_618, color=color.yellow, width=1)
+            fib_79 = line.new(bar_index[10], lvl_79, bar_index + 5, lvl_79, color=color.yellow, width=1)
+
+            // Label OTE
+            label.new(bar_index + 5, (lvl_618 + lvl_79)/2, "OTE ZONE\n(61.8% - 79%)", style=label.style_none, textcolor=color.yellow, size=size.small)
