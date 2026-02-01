@@ -14,6 +14,7 @@ sz_sweep_input = input.string("Tiny", "Tamanho do Texto (SWEEP)", options=["Tiny
 
 grp_uni = "Modelo Unicórnio (Unicorn Model)"
 show_unicorn = input.bool(true, "Mostrar Zonas Unicórnio", group=grp_uni)
+uni_extend = input.int(9, "Extensão do Unicórnio (Candles)", minval=0, group=grp_uni)
 c_unicorn = input.color(color.new(#9c27b0, 40), "Cor do Unicórnio", group=grp_uni)
 
 grp_fvg = "Fair Value Gaps (FVG)"
@@ -42,10 +43,6 @@ sz_sweep = get_size(sz_sweep_input)
 // -----------------------------------------------------------------------------
 // TYPES E ARRAYS PARA GERENCIAMENTO
 // -----------------------------------------------------------------------------
-// Como não podemos usar types complexos facilmente em versões antigas sem reescrever tudo,
-// vamos usar arrays de boxes diretos e um array paralelo para saber se é Bull ou Bear se necessário.
-// Na verdade, para mitigação, só precisamos saber as coordenadas Y.
-
 var box[] fvg_boxes = array.new_box()
 var bool[] fvg_is_bull = array.new_bool() // true=bull, false=bear
 
@@ -62,7 +59,7 @@ var int last_high_idx = na
 var int last_low_idx = na
 var int dir = 0 // 1 = Bull, -1 = Bear
 
-// Arrays para Breaker Blocks (simples: armazenar últimas zonas de estrutura rompida)
+// Arrays para Breaker Blocks
 var box[] breakers = array.new_box()
 
 // Detectar Pivots
@@ -73,11 +70,11 @@ if not na(pl)
     last_low := pl
     last_low_idx := bar_index[len]
 
-// Detectar quebras (Ao vivo ou fechamento)
+// Detectar quebras
 break_high = ta.crossover(close, last_high)
 break_low = ta.crossunder(close, last_low)
 
-// SWEEP: Preço violou o nível mas fechou dentro (Wick capture)
+// SWEEP
 is_sweep_high = high > last_high and close < last_high and not na(last_high)
 is_sweep_low = low < last_low and close > last_low and not na(last_low)
 
@@ -90,18 +87,22 @@ if show_sweep and is_sweep_low and low == ta.lowest(low, 5)
     alert("Liquidez Capturada (Fundo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
 
 // BOS e CHoCH logic
+// Bullish (Alta): Texto Acima (Upper) ? Não, Acima da linha.
+// Style Lower Right: Anchor no canto inferior esquerdo do texto. Logo texto fica ACIMA e a DIREITA do ponto.
+// Bearish (Baixa): Texto Abaixo (Lower) ? Não, Abaixo da linha.
+// Style Upper Right: Anchor no canto superior esquerdo do texto. Logo texto fica ABAIXO e a DIREITA do ponto.
+
 if break_high and not na(last_high)
     if dir == 1
         // BOS Bull
         if show_bos
             line.new(last_high_idx, last_high, bar_index, last_high, color=color.green)
-            // Texto alinhado à esquerda da linha (final)
-            label.new(bar_index + 3, last_high, "BOS", color=color.new(color.white, 100), style=label.style_label_left, textcolor=color.green, size=sz_bos_choch)
+            label.new(bar_index + 3, last_high, "BOS", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
     else
-        // CHoCH Bull (Inversão)
+        // CHoCH Bull
         if show_choch
             line.new(last_high_idx, last_high, bar_index, last_high, color=color.green, style=line.style_dashed)
-            label.new(bar_index + 3, last_high, "CHoCH", color=color.new(color.white, 100), style=label.style_label_left, textcolor=color.green, size=sz_bos_choch)
+            label.new(bar_index + 3, last_high, "CHoCH", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
 
         box b = box.new(last_high_idx - 1, last_high * 1.001, bar_index + 10, last_high * 0.999, border_color=color.green, bgcolor=color.new(color.green, 90))
         array.push(breakers, b)
@@ -112,12 +113,12 @@ if break_low and not na(last_low)
         // BOS Bear
         if show_bos
             line.new(last_low_idx, last_low, bar_index, last_low, color=color.red)
-            label.new(bar_index + 3, last_low, "BOS", color=color.new(color.white, 100), style=label.style_label_left, textcolor=color.red, size=sz_bos_choch)
+            label.new(bar_index + 3, last_low, "BOS", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
     else
         // CHoCH Bear
         if show_choch
             line.new(last_low_idx, last_low, bar_index, last_low, color=color.red, style=line.style_dashed)
-            label.new(bar_index + 3, last_low, "CHoCH", color=color.new(color.white, 100), style=label.style_label_left, textcolor=color.red, size=sz_bos_choch)
+            label.new(bar_index + 3, last_low, "CHoCH", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
 
         box b = box.new(last_low_idx - 1, last_low * 1.001, bar_index + 10, last_low * 0.999, border_color=color.red, bgcolor=color.new(color.red, 90))
         array.push(breakers, b)
@@ -131,11 +132,7 @@ fvg_bear = high < low[2]
 
 // Função para criar FVG e adicionar à lista de monitoramento
 create_fvg(left, top, right, bottom, col, is_bull, text_lbl) =>
-    // Se "Cortar ao Mitigar" estiver ligado, right é indefinido visualmente inicialmente (extend),
-    // mas vamos controlar logicamente. Se não, usamos o extend fixo no visual.
-    // Usamos 'right' fixo inicial base + extend.
     b = box.new(left, top, right, bottom, border_color=na, bgcolor=col, text=text_lbl, text_color=color.white)
-
     if mitigate_fvg
         array.push(fvg_boxes, b)
         array.push(fvg_is_bull, is_bull)
@@ -154,7 +151,7 @@ if fvg_bull
                     is_uni := true
 
         if is_uni
-            create_fvg(bar_index[2], low, bar_index + fvg_extend, high[2], c_unicorn, true, "UNICÓRNIO")
+            create_fvg(bar_index[2], low, bar_index + uni_extend, high[2], c_unicorn, true, "UNICÓRNIO")
             alert("Setup Unicórnio (Bull) Detectado!", alert.freq_once_per_bar_close)
         else
             create_fvg(bar_index[2], high[2], bar_index + fvg_extend, low, c_fvg_bull, true, "")
@@ -173,7 +170,7 @@ if fvg_bear
                     is_uni := true
 
         if is_uni
-            create_fvg(bar_index[2], high, bar_index + fvg_extend, low[2], c_unicorn, false, "UNICÓRNIO")
+            create_fvg(bar_index[2], high, bar_index + uni_extend, low[2], c_unicorn, false, "UNICÓRNIO")
             alert("Setup Unicórnio (Bear) Detectado!", alert.freq_once_per_bar_close)
         else
             create_fvg(bar_index[2], low[2], bar_index + fvg_extend, high, c_fvg_bear, false, "")
@@ -182,11 +179,6 @@ if fvg_bear
 // LÓGICA DE MITIGAÇÃO (CORTAR FVG)
 // -----------------------------------------------------------------------------
 if mitigate_fvg and array.size(fvg_boxes) > 0
-    // Itera reverso para poder deletar se necessário (embora box.delete não seja o objetivo, queremos encurtar)
-    // Na verdade, só precisamos parar de rastrear se mitigou.
-    // Iterando do último para o primeiro? Não, precisamos checar todos ativos.
-
-    // Arrays para manter só os não mitigados
     int[] indices_to_remove = array.new_int()
 
     for i = 0 to array.size(fvg_boxes) - 1
@@ -195,29 +187,21 @@ if mitigate_fvg and array.size(fvg_boxes) > 0
 
         float top = box.get_top(b)
         float bot = box.get_bottom(b)
-        int right_idx = box.get_right(b)
 
-        // Se a box já passou (velho) ou se preço atual tocou
-        bool mitigated = false
+        bool mitigate = false
 
-        if is_b // Bullish FVG (Suporte) -> Mitiga se preço descer e tocar no Topo (ou entrar dentro)
+        if is_b
             if low <= top
-                mitigated := true
-        else // Bearish FVG (Resistência) -> Mitiga se preço subir e tocar no Fundo (ou entrar dentro)
+                mitigate := true
+        else
             if high >= bot
-                mitigated := true
+                mitigate := true
 
-        // Se mitigou, atualizamos o 'right' para o bar_index atual e marcamos para remoção da lista de ativos
-        if mitigated
+        if mitigate
             box.set_right(b, bar_index)
             array.push(indices_to_remove, i)
 
-    // Remover da lista de rastreamento (reverso para não zoar indices)
     if array.size(indices_to_remove) > 0
-        // Ordenar decrescente para remover do fim pro começo
-        // Pine Script não tem sort reverso fácil para int[], mas podemos fazer loop reverso manualmente
-        // Workaround: Criar novo array com os que SOBRAM é mais fácil? Não, push remove é O(N).
-        // Vamos remover um por um de trás pra frente
         for j = array.size(indices_to_remove) - 1 to 0
             int idx = array.get(indices_to_remove, j)
             array.remove(fvg_boxes, idx)
@@ -226,7 +210,7 @@ if mitigate_fvg and array.size(fvg_boxes) > 0
 // Limpeza de arrays antigos
 if array.size(breakers) > 10
     box.delete(array.shift(breakers))
-if array.size(fvg_boxes) > 50 // Limite de segurança para FVGs ativos
+if array.size(fvg_boxes) > 50
     array.shift(fvg_boxes)
     array.shift(fvg_is_bull)
 
@@ -238,11 +222,13 @@ if show_ote
     var line fib_1 = na
     var line fib_618 = na
     var line fib_79 = na
+    var label ote_lbl = na
 
     line.delete(fib_0)
     line.delete(fib_1)
     line.delete(fib_618)
     line.delete(fib_79)
+    label.delete(ote_lbl)
 
     if not na(last_high) and not na(last_low)
         float top = last_high
@@ -265,4 +251,4 @@ if show_ote
             fib_1 = line.new(top_idx, top, bar_index + 5, top, color=color.gray, style=line.style_dotted)
             fib_618 = line.new(bar_index[10], lvl_618, bar_index + 5, lvl_618, color=color.yellow, width=1)
             fib_79 = line.new(bar_index[10], lvl_79, bar_index + 5, lvl_79, color=color.yellow, width=1)
-            label.new(bar_index + 5, (lvl_618 + lvl_79)/2, "OTE ZONE\n(61.8% - 79%)", style=label.style_none, textcolor=color.yellow, size=size.small)
+            ote_lbl := label.new(bar_index + 5, (lvl_618 + lvl_79)/2, "OTE ZONE\n(61.8% - 79%)", style=label.style_none, textcolor=color.yellow, size=size.small)
