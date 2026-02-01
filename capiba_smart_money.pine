@@ -8,7 +8,9 @@ grp_struc = "Estrutura de Mercado"
 len = input.int(5, "Comprimento do Pivot", group=grp_struc)
 show_bos = input.bool(true, "Mostrar BOS (Continuidade)", group=grp_struc)
 show_choch = input.bool(true, "Mostrar CHoCH (Inversão)", group=grp_struc)
+sz_bos_choch_input = input.string("Tiny", "Tamanho do Texto (BOS/CHoCH)", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_struc)
 show_sweep = input.bool(true, "Mostrar SWEEPS (Captura de Liquidez)", group=grp_struc)
+sz_sweep_input = input.string("Tiny", "Tamanho do Texto (SWEEP)", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_struc)
 
 grp_uni = "Modelo Unicórnio (Unicorn Model)"
 show_unicorn = input.bool(true, "Mostrar Zonas Unicórnio", group=grp_uni)
@@ -16,11 +18,25 @@ c_unicorn = input.color(color.new(#9c27b0, 40), "Cor do Unicórnio", group=grp_u
 
 grp_fvg = "Fair Value Gaps (FVG)"
 show_fvg = input.bool(true, "Mostrar FVG", group=grp_fvg)
+fvg_extend = input.int(9, "Extensão do FVG (Candles)", minval=0, group=grp_fvg)
 c_fvg_bull = input.color(color.new(color.green, 85), "FVG Bullish", group=grp_fvg)
 c_fvg_bear = input.color(color.new(color.red, 85), "FVG Bearish", group=grp_fvg)
 
 grp_ote = "AMD + OTE (Fibonacci)"
 show_ote = input.bool(true, "Mostrar Auto OTE (Última Perna)", group=grp_ote)
+
+// Helper para converter string size em size type
+get_size(sz_str) =>
+    switch sz_str
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Normal" => size.normal
+        "Large" => size.large
+        "Huge" => size.huge
+        => size.tiny
+
+sz_bos_choch = get_size(sz_bos_choch_input)
+sz_sweep = get_size(sz_sweep_input)
 
 // -----------------------------------------------------------------------------
 // LÓGICA DE PIVOTS E ESTRUTURA
@@ -40,9 +56,9 @@ var int dir = 0 // 1 = Bull, -1 = Bear
 var box[] breakers = array.new_box()
 
 // Função para desenhar linha de estrutura
-draw_struc(x1, y, x2, txt, col, style) =>
+draw_struc(x1, y, x2, txt, col, style, sz_text) =>
     line.new(x1, y, x2, y, color=col, style=style)
-    label.new(int(math.avg(x1, x2)), y, txt, color=color.new(color.white, 100), style=label.style_none, textcolor=col, size=size.tiny)
+    label.new(int(math.avg(x1, x2)), y, txt, color=color.new(color.white, 100), style=label.style_none, textcolor=col, size=sz_text)
 
 // Detectar Pivots
 if not na(ph)
@@ -67,11 +83,11 @@ is_sweep_high = high > last_high and close < last_high and not na(last_high)
 is_sweep_low = low < last_low and close > last_low and not na(last_low)
 
 if show_sweep and is_sweep_high and high == ta.highest(high, 5) // Filtro para não spammar
-    label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_triangledown, textcolor=color.white, size=size.tiny)
+    label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_triangledown, textcolor=color.white, size=sz_sweep)
     alert("Liquidez Capturada (Topo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
 
 if show_sweep and is_sweep_low and low == ta.lowest(low, 5)
-    label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_triangleup, textcolor=color.white, size=size.tiny)
+    label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_triangleup, textcolor=color.white, size=sz_sweep)
     alert("Liquidez Capturada (Fundo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
 
 // BOS e CHoCH logic
@@ -85,13 +101,13 @@ if break_high and not na(last_high)
         // BOS Bull
         if show_bos
             line.new(last_high_idx, last_high, bar_index, last_high, color=color.green)
-            label.new(bar_index, last_high, "BOS", color=color.new(color.white, 100), style=label.style_none, textcolor=color.green, size=size.tiny)
+            label.new(bar_index, last_high, "BOS", color=color.new(color.white, 100), style=label.style_none, textcolor=color.green, size=sz_bos_choch)
     else
         // CHoCH Bull (Inversão)
         // O topo anterior era uma zona de oferta (Supply). Foi rompida. Vira BREAKER.
         if show_choch
             line.new(last_high_idx, last_high, bar_index, last_high, color=color.green, style=line.style_dashed)
-            label.new(bar_index, last_high, "CHoCH", color=color.new(color.white, 100), style=label.style_none, textcolor=color.green, size=size.tiny)
+            label.new(bar_index, last_high, "CHoCH", color=color.new(color.white, 100), style=label.style_none, textcolor=color.green, size=sz_bos_choch)
 
         // Criar Breaker Zone (Grosso modo: o candle de alta prévio ou o range do topo)
         // Para simplificar: Marcamos o pivot rompido como nível de Breaker
@@ -106,12 +122,12 @@ if break_low and not na(last_low)
         // BOS Bear
         if show_bos
             line.new(last_low_idx, last_low, bar_index, last_low, color=color.red)
-            label.new(bar_index, last_low, "BOS", color=color.new(color.white, 100), style=label.style_none, textcolor=color.red, size=size.tiny)
+            label.new(bar_index, last_low, "BOS", color=color.new(color.white, 100), style=label.style_none, textcolor=color.red, size=sz_bos_choch)
     else
         // CHoCH Bear
         if show_choch
             line.new(last_low_idx, last_low, bar_index, last_low, color=color.red, style=line.style_dashed)
-            label.new(bar_index, last_low, "CHoCH", color=color.new(color.white, 100), style=label.style_none, textcolor=color.red, size=size.tiny)
+            label.new(bar_index, last_low, "CHoCH", color=color.new(color.white, 100), style=label.style_none, textcolor=color.red, size=sz_bos_choch)
 
         // Breaker Bear (Fundo rompido vira resistência)
         box b = box.new(last_low_idx - 1, last_low * 1.001, bar_index + 10, last_low * 0.999, border_color=color.red, bgcolor=color.new(color.red, 90))
@@ -131,7 +147,7 @@ fvg_bear = high < low[2]
 if fvg_bull
     // Desenha FVG
     if show_fvg
-        box.new(bar_index[2], high[2], bar_index, low, border_color=na, bgcolor=c_fvg_bull)
+        box.new(bar_index[2], high[2], bar_index + fvg_extend, low, border_color=na, bgcolor=c_fvg_bull)
 
     // Checar Unicórnio Bullish
     // Se existe um Breaker (Topo rompido recentemente) que coincide com este FVG
@@ -153,7 +169,7 @@ if fvg_bull
 
 if fvg_bear
     if show_fvg
-        box.new(bar_index[2], low[2], bar_index, high, border_color=na, bgcolor=c_fvg_bear)
+        box.new(bar_index[2], low[2], bar_index + fvg_extend, high, border_color=na, bgcolor=c_fvg_bear)
 
     // Checar Unicórnio Bearish
     if show_unicorn and array.size(breakers) > 0
