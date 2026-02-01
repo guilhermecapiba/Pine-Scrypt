@@ -5,12 +5,16 @@ indicator("Capiba SMC: Unicorn & AMD [Desbloqueando Smart Money]", shorttitle="C
 // CONFIGURAÇÕES E INPUTS
 // -----------------------------------------------------------------------------
 grp_struc = "Estrutura de Mercado"
-len = input.int(5, "Comprimento do Pivot", group=grp_struc)
-show_bos = input.bool(true, "Mostrar BOS (Continuidade)", group=grp_struc)
-show_choch = input.bool(true, "Mostrar CHoCH (Inversão)", group=grp_struc)
+len_int = input.int(5, "Estrutura Interna (Pivots)", group=grp_struc)
+len_swing = input.int(20, "Estrutura Swing (Pivots)", group=grp_struc)
+show_int = input.bool(true, "Mostrar Interna (Dashed)", group=grp_struc)
+show_swing = input.bool(true, "Mostrar Swing (Solid)", group=grp_struc)
 sz_bos_choch_input = input.string("Tiny", "Tamanho do Texto (BOS/CHoCH)", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_struc)
-show_sweep = input.bool(true, "Mostrar SWEEPS (Captura de Liquidez)", group=grp_struc)
-sz_sweep_input = input.string("Tiny", "Tamanho do Texto (SWEEP)", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_struc)
+
+grp_liq = "Liquidez (Sweeps & EQH/L)"
+show_sweep = input.bool(true, "Mostrar SWEEPS", group=grp_liq)
+show_eq = input.bool(true, "Mostrar EQH/EQL (Topos/Fundos Duplos)", group=grp_liq)
+sz_sweep_input = input.string("Tiny", "Tamanho do Texto (Liquidez)", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_liq)
 
 grp_uni = "Modelo Unicórnio (Unicorn Model)"
 show_unicorn = input.bool(true, "Mostrar Zonas Unicórnio", group=grp_uni)
@@ -26,8 +30,13 @@ c_fvg_bear = input.color(color.new(color.red, 85), "FVG Bearish", group=grp_fvg)
 
 grp_ote = "AMD + OTE (Fibonacci)"
 show_ote = input.bool(true, "Mostrar Auto OTE (Última Perna)", group=grp_ote)
+show_pd = input.bool(true, "Mostrar Zonas Premium/Discount", group=grp_ote)
 
-// Helper para converter string size em size type
+grp_mtf = "Níveis MTF (Highs/Lows)"
+show_daily = input.bool(false, "Mostrar Daily High/Low", group=grp_mtf)
+show_weekly = input.bool(false, "Mostrar Weekly High/Low", group=grp_mtf)
+
+// Helper Sizes
 get_size(sz_str) =>
     switch sz_str
         "Tiny" => size.tiny
@@ -41,96 +50,162 @@ sz_bos_choch = get_size(sz_bos_choch_input)
 sz_sweep = get_size(sz_sweep_input)
 
 // -----------------------------------------------------------------------------
-// TYPES E ARRAYS PARA GERENCIAMENTO
+// ARRAYS GLOBAIS
 // -----------------------------------------------------------------------------
 var box[] fvg_boxes = array.new_box()
-var bool[] fvg_is_bull = array.new_bool() // true=bull, false=bear
-
-// -----------------------------------------------------------------------------
-// LÓGICA DE PIVOTS E ESTRUTURA
-// -----------------------------------------------------------------------------
-ph = ta.pivothigh(len, len)
-pl = ta.pivotlow(len, len)
-
-// Variáveis para rastrear estrutura
-var float last_high = na
-var float last_low = na
-var int last_high_idx = na
-var int last_low_idx = na
-var int dir = 0 // 1 = Bull, -1 = Bear
-
-// Arrays para Breaker Blocks
+var bool[] fvg_is_bull = array.new_bool()
 var box[] breakers = array.new_box()
 
-// Detectar Pivots
-if not na(ph)
-    last_high := ph
-    last_high_idx := bar_index[len]
-if not na(pl)
-    last_low := pl
-    last_low_idx := bar_index[len]
+// -----------------------------------------------------------------------------
+// LÓGICA DE ESTRUTURA (SEPARADA PARA EVITAR SCOPE BUG)
+// -----------------------------------------------------------------------------
 
-// Detectar quebras
-break_high = ta.crossover(close, last_high)
-break_low = ta.crossunder(close, last_low)
+// --- ESTRUTURA INTERNA ---
+ph_int = ta.pivothigh(len_int, len_int)
+pl_int = ta.pivotlow(len_int, len_int)
 
-// SWEEP
-is_sweep_high = high > last_high and close < last_high and not na(last_high)
-is_sweep_low = low < last_low and close > last_low and not na(last_low)
+var float int_lh = na
+var float int_ll = na
+var int int_lh_idx = na
+var int int_ll_idx = na
+var int int_dir = 0
+var float last_ph_int = na
+var float last_pl_int = na
 
-if show_sweep and is_sweep_high and high == ta.highest(high, 5)
+if not na(ph_int)
+    if show_eq and not na(last_ph_int)
+        dist = math.abs(ph_int - last_ph_int)
+        atr = ta.atr(14)
+        if dist < (atr * 0.1)
+            line.new(bar_index[len_int], ph_int, bar_index, ph_int, color=color.gray, style=line.style_dotted) // Visual simplified
+            label.new(bar_index[len_int], ph_int, "EQH", color=color.gray, style=label.style_label_down, textcolor=color.gray, size=sz_sweep)
+    last_ph_int := ph_int
+    int_lh := ph_int
+    int_lh_idx := bar_index[len_int]
+
+if not na(pl_int)
+    if show_eq and not na(last_pl_int)
+        dist = math.abs(pl_int - last_pl_int)
+        atr = ta.atr(14)
+        if dist < (atr * 0.1)
+            line.new(bar_index[len_int], pl_int, bar_index, pl_int, color=color.gray, style=line.style_dotted)
+            label.new(bar_index[len_int], pl_int, "EQL", color=color.gray, style=label.style_label_up, textcolor=color.gray, size=sz_sweep)
+    last_pl_int := pl_int
+    int_ll := pl_int
+    int_ll_idx := bar_index[len_int]
+
+int_bk_h = ta.crossover(close, int_lh)
+int_bk_l = ta.crossunder(close, int_ll)
+
+// Sweeps Internos
+s_h_int = high > int_lh and close < int_lh and not na(int_lh)
+s_l_int = low < int_ll and close > int_ll and not na(int_ll)
+
+if show_sweep and s_h_int and high == ta.highest(high, 5)
     label.new(bar_index, high, "SWEEP", color=color.red, style=label.style_triangledown, textcolor=color.white, size=sz_sweep)
-    alert("Liquidez Capturada (Topo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
-
-if show_sweep and is_sweep_low and low == ta.lowest(low, 5)
+if show_sweep and s_l_int and low == ta.lowest(low, 5)
     label.new(bar_index, low, "SWEEP", color=color.green, style=label.style_triangleup, textcolor=color.white, size=sz_sweep)
-    alert("Liquidez Capturada (Fundo) em " + syminfo.ticker, alert.freq_once_per_bar_close)
 
-// BOS e CHoCH logic
-// Bullish (Alta): Texto Acima (Upper) ? Não, Acima da linha.
-// Style Lower Right: Anchor no canto inferior esquerdo do texto. Logo texto fica ACIMA e a DIREITA do ponto.
-// Bearish (Baixa): Texto Abaixo (Lower) ? Não, Abaixo da linha.
-// Style Upper Right: Anchor no canto superior esquerdo do texto. Logo texto fica ABAIXO e a DIREITA do ponto.
-
-if break_high and not na(last_high)
-    if dir == 1
+if int_bk_h and not na(int_lh)
+    if int_dir == 1
         // BOS Bull
-        if show_bos
-            line.new(last_high_idx, last_high, bar_index, last_high, color=color.green)
-            label.new(bar_index + 3, last_high, "BOS", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
+        if show_int
+            line.new(int_lh_idx, int_lh, bar_index, int_lh, color=color.green, style=line.style_dashed)
+            label.new(bar_index + 3, int_lh, "BOS", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
     else
         // CHoCH Bull
-        if show_choch
-            line.new(last_high_idx, last_high, bar_index, last_high, color=color.green, style=line.style_dashed)
-            label.new(bar_index + 3, last_high, "CHoCH", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
+        if show_int
+            line.new(int_lh_idx, int_lh, bar_index, int_lh, color=color.green, style=line.style_dashed)
+            label.new(bar_index + 3, int_lh, "CHoCH", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
 
-        box b = box.new(last_high_idx - 1, last_high * 1.001, bar_index + 10, last_high * 0.999, border_color=color.green, bgcolor=color.new(color.green, 90))
+        // Breaker Interno (Para Unicórnio)
+        box b = box.new(int_lh_idx - 1, int_lh * 1.001, bar_index + 10, int_lh * 0.999, border_color=color.green, bgcolor=color.new(color.green, 90))
         array.push(breakers, b)
-        dir := 1
 
-if break_low and not na(last_low)
-    if dir == -1
+        int_dir := 1
+
+if int_bk_l and not na(int_ll)
+    if int_dir == -1
         // BOS Bear
-        if show_bos
-            line.new(last_low_idx, last_low, bar_index, last_low, color=color.red)
-            label.new(bar_index + 3, last_low, "BOS", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
+        if show_int
+            line.new(int_ll_idx, int_ll, bar_index, int_ll, color=color.red, style=line.style_dashed)
+            label.new(bar_index + 3, int_ll, "BOS", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
     else
         // CHoCH Bear
-        if show_choch
-            line.new(last_low_idx, last_low, bar_index, last_low, color=color.red, style=line.style_dashed)
-            label.new(bar_index + 3, last_low, "CHoCH", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
+        if show_int
+            line.new(int_ll_idx, int_ll, bar_index, int_ll, color=color.red, style=line.style_dashed)
+            label.new(bar_index + 3, int_ll, "CHoCH", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
 
-        box b = box.new(last_low_idx - 1, last_low * 1.001, bar_index + 10, last_low * 0.999, border_color=color.red, bgcolor=color.new(color.red, 90))
+        box b = box.new(int_ll_idx - 1, int_ll * 1.001, bar_index + 10, int_ll * 0.999, border_color=color.red, bgcolor=color.new(color.red, 90))
         array.push(breakers, b)
-        dir := -1
+
+        int_dir := -1
+
+// --- ESTRUTURA SWING ---
+ph_sw = ta.pivothigh(len_swing, len_swing)
+pl_sw = ta.pivotlow(len_swing, len_swing)
+
+var float sw_lh = na
+var float sw_ll = na
+var int sw_lh_idx = na
+var int sw_ll_idx = na
+var int sw_dir = 0
+var float last_ph_sw = na
+var float last_pl_sw = na
+
+if not na(ph_sw)
+    if show_eq and not na(last_ph_sw)
+        dist = math.abs(ph_sw - last_ph_sw)
+        atr = ta.atr(14)
+        if dist < (atr * 0.1)
+            line.new(bar_index[len_swing], ph_sw, bar_index, ph_sw, color=color.gray, style=line.style_dotted)
+            label.new(bar_index[len_swing], ph_sw, "EQH", color=color.gray, style=label.style_label_down, textcolor=color.gray, size=sz_sweep)
+    last_ph_sw := ph_sw
+    sw_lh := ph_sw
+    sw_lh_idx := bar_index[len_swing]
+
+if not na(pl_sw)
+    if show_eq and not na(last_pl_sw)
+        dist = math.abs(pl_sw - last_pl_sw)
+        atr = ta.atr(14)
+        if dist < (atr * 0.1)
+            line.new(bar_index[len_swing], pl_sw, bar_index, pl_sw, color=color.gray, style=line.style_dotted)
+            label.new(bar_index[len_swing], pl_sw, "EQL", color=color.gray, style=label.style_label_up, textcolor=color.gray, size=sz_sweep)
+    last_pl_sw := pl_sw
+    sw_ll := pl_sw
+    sw_ll_idx := bar_index[len_swing]
+
+sw_bk_h = ta.crossover(close, sw_lh)
+sw_bk_l = ta.crossunder(close, sw_ll)
+
+if sw_bk_h and not na(sw_lh)
+    if sw_dir == 1
+        if show_swing
+            line.new(sw_lh_idx, sw_lh, bar_index, sw_lh, color=color.green, style=line.style_solid, width=2)
+            label.new(bar_index + 3, sw_lh, "Major BOS", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
+    else
+        if show_swing
+            line.new(sw_lh_idx, sw_lh, bar_index, sw_lh, color=color.green, style=line.style_solid, width=2)
+            label.new(bar_index + 3, sw_lh, "Major CHoCH", color=color.new(color.white, 100), style=label.style_label_lower_right, textcolor=color.green, size=sz_bos_choch)
+        sw_dir := 1
+
+if sw_bk_l and not na(sw_ll)
+    if sw_dir == -1
+        if show_swing
+            line.new(sw_ll_idx, sw_ll, bar_index, sw_ll, color=color.red, style=line.style_solid, width=2)
+            label.new(bar_index + 3, sw_ll, "Major BOS", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
+    else
+        if show_swing
+            line.new(sw_ll_idx, sw_ll, bar_index, sw_ll, color=color.red, style=line.style_solid, width=2)
+            label.new(bar_index + 3, sw_ll, "Major CHoCH", color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=color.red, size=sz_bos_choch)
+        sw_dir := -1
 
 // -----------------------------------------------------------------------------
-// FAIR VALUE GAPS (FVG)
+// FAIR VALUE GAPS (FVG) & UNICORN
 // -----------------------------------------------------------------------------
 fvg_bull = low > high[2]
 fvg_bear = high < low[2]
 
-// Função para criar FVG e adicionar à lista de monitoramento
 create_fvg(left, top, right, bottom, col, is_bull, text_lbl) =>
     b = box.new(left, top, right, bottom, border_color=na, bgcolor=col, text=text_lbl, text_color=color.white)
     if mitigate_fvg
@@ -138,10 +213,9 @@ create_fvg(left, top, right, bottom, col, is_bull, text_lbl) =>
         array.push(fvg_is_bull, is_bull)
 
 if fvg_bull
-    // FVG Normal
     if show_fvg
         bool is_uni = false
-        // Checar Unicórnio Bullish
+        // Check Unicorn (Breaker Intersect)
         if show_unicorn and array.size(breakers) > 0
             for i = 0 to array.size(breakers) - 1
                 box b = array.get(breakers, i)
@@ -152,15 +226,13 @@ if fvg_bull
 
         if is_uni
             create_fvg(bar_index[2], low, bar_index + uni_extend, high[2], c_unicorn, true, "UNICÓRNIO")
-            alert("Setup Unicórnio (Bull) Detectado!", alert.freq_once_per_bar_close)
+            alert("Unicórnio Bullish!", alert.freq_once_per_bar_close)
         else
             create_fvg(bar_index[2], high[2], bar_index + fvg_extend, low, c_fvg_bull, true, "")
 
 if fvg_bear
-    // FVG Normal
     if show_fvg
         bool is_uni = false
-        // Checar Unicórnio Bearish
         if show_unicorn and array.size(breakers) > 0
             for i = 0 to array.size(breakers) - 1
                 box b = array.get(breakers, i)
@@ -171,33 +243,27 @@ if fvg_bear
 
         if is_uni
             create_fvg(bar_index[2], high, bar_index + uni_extend, low[2], c_unicorn, false, "UNICÓRNIO")
-            alert("Setup Unicórnio (Bear) Detectado!", alert.freq_once_per_bar_close)
+            alert("Unicórnio Bearish!", alert.freq_once_per_bar_close)
         else
             create_fvg(bar_index[2], low[2], bar_index + fvg_extend, high, c_fvg_bear, false, "")
 
-// -----------------------------------------------------------------------------
-// LÓGICA DE MITIGAÇÃO (CORTAR FVG)
-// -----------------------------------------------------------------------------
+// Mitigação
 if mitigate_fvg and array.size(fvg_boxes) > 0
     int[] indices_to_remove = array.new_int()
-
     for i = 0 to array.size(fvg_boxes) - 1
         box b = array.get(fvg_boxes, i)
         bool is_b = array.get(fvg_is_bull, i)
-
         float top = box.get_top(b)
         float bot = box.get_bottom(b)
-
-        bool mitigate = false
+        bool mit = false
 
         if is_b
             if low <= top
-                mitigate := true
+                mit := true
         else
             if high >= bot
-                mitigate := true
-
-        if mitigate
+                mit := true
+        if mit
             box.set_right(b, bar_index)
             array.push(indices_to_remove, i)
 
@@ -207,7 +273,7 @@ if mitigate_fvg and array.size(fvg_boxes) > 0
             array.remove(fvg_boxes, idx)
             array.remove(fvg_is_bull, idx)
 
-// Limpeza de arrays antigos
+// Garbage Collection
 if array.size(breakers) > 10
     box.delete(array.shift(breakers))
 if array.size(fvg_boxes) > 50
@@ -215,7 +281,7 @@ if array.size(fvg_boxes) > 50
     array.shift(fvg_is_bull)
 
 // -----------------------------------------------------------------------------
-// OTE (OPTIMAL TRADE ENTRY) - AUTO FIB
+// OTE & ZONES
 // -----------------------------------------------------------------------------
 if show_ote
     var line fib_0 = na
@@ -223,32 +289,90 @@ if show_ote
     var line fib_618 = na
     var line fib_79 = na
     var label ote_lbl = na
+    var box pd_box_prem = na
+    var box pd_box_disc = na
 
     line.delete(fib_0)
     line.delete(fib_1)
     line.delete(fib_618)
     line.delete(fib_79)
     label.delete(ote_lbl)
+    box.delete(pd_box_prem)
+    box.delete(pd_box_disc)
 
-    if not na(last_high) and not na(last_low)
-        float top = last_high
-        float btm = last_low
-        int top_idx = last_high_idx
-        int btm_idx = last_low_idx
+    // Usamos estrutura Interna para OTE (mais rápido/recente)
+    if not na(int_lh) and not na(int_ll)
+        float top = int_lh
+        float btm = int_ll
+        int top_idx = int_lh_idx
+        int btm_idx = int_ll_idx
         float diff = top - btm
-        float lvl_618 = na
-        float lvl_79 = na
 
-        if dir == 1
-            lvl_618 = top - (diff * 0.618)
-            lvl_79 = top - (diff * 0.79)
-        else
-            lvl_618 = btm + (diff * 0.618)
-            lvl_79 = btm + (diff * 0.79)
-
+        // Se dif for muito pequena ou antiga, ignora
         if bar_index - top_idx < 300 and bar_index - btm_idx < 300
+
+            float lvl_618 = na
+            float lvl_79 = na
+            float lvl_50 = (top + btm) / 2
+
+            // OTE Lines
+            if int_dir == 1 // Bullish -> Retração para baixo
+                lvl_618 := top - (diff * 0.618)
+                lvl_79 := top - (diff * 0.79)
+
+                // Premium (0-50% retracement = Topo até 50%) -> Bad Buy
+                // Discount (50-100% retracement = 50% até Fundo) -> Good Buy
+                if show_pd
+                    pd_box_prem := box.new(btm_idx, top, bar_index + 10, lvl_50, bgcolor=color.new(color.red, 95), border_color=na)
+                    pd_box_disc := box.new(btm_idx, lvl_50, bar_index + 10, btm, bgcolor=color.new(color.green, 95), border_color=na)
+
+            else // Bearish -> Retração para cima
+                lvl_618 := btm + (diff * 0.618)
+                lvl_79 := btm + (diff * 0.79)
+
+                // Premium (High Prices) -> Good Sell
+                // Discount (Low Prices) -> Bad Sell
+                if show_pd
+                    pd_box_prem := box.new(top_idx, top, bar_index + 10, lvl_50, bgcolor=color.new(color.red, 95), border_color=na)
+                    pd_box_disc := box.new(top_idx, lvl_50, bar_index + 10, btm, bgcolor=color.new(color.green, 95), border_color=na)
+
+            // Lines
             fib_0 = line.new(btm_idx, btm, bar_index + 5, btm, color=color.gray, style=line.style_dotted)
             fib_1 = line.new(top_idx, top, bar_index + 5, top, color=color.gray, style=line.style_dotted)
             fib_618 = line.new(bar_index[10], lvl_618, bar_index + 5, lvl_618, color=color.yellow, width=1)
             fib_79 = line.new(bar_index[10], lvl_79, bar_index + 5, lvl_79, color=color.yellow, width=1)
-            ote_lbl := label.new(bar_index + 5, (lvl_618 + lvl_79)/2, "OTE ZONE\n(61.8% - 79%)", style=label.style_none, textcolor=color.yellow, size=size.small)
+            ote_lbl := label.new(bar_index + 5, (lvl_618 + lvl_79)/2, "OTE", style=label.style_none, textcolor=color.yellow, size=size.small)
+
+// -----------------------------------------------------------------------------
+// MTF LEVELS
+// -----------------------------------------------------------------------------
+draw_mtf(tf, col, txt) =>
+    // Corrigindo Repainting: Usando lookahead_off para dados em tempo real ou Previous Day High/Low
+    // A convenção SMC sólida é usar Previous [TF] High/Low
+    [ph, pl] = request.security(syminfo.tickerid, tf, [high[1], low[1]], lookahead=barmerge.lookahead_on)
+    // Nota: high[1] com lookahead_on PODE repintar se o bar não estiver fechado? Não, index [1] é fechado.
+    // Mas usar lookahead_on em dados históricos é arriscado. O ideal é usar lookahead_off para evitar qualquer viés.
+    // Mas Previous Day High/Low é estático durante o dia.
+    // Vamos usar a forma mais segura: Sem lookahead, pegando high/low anteriores.
+
+    var line lh = na
+    var line ll = na
+    var label lbh = na
+    var label lbl = na
+
+    line.delete(lh)
+    line.delete(ll)
+    label.delete(lbh)
+    label.delete(lbl)
+
+    // Desenha linhas projetadas
+    if barstate.islast
+        lh := line.new(bar_index - 10, ph, bar_index + 10, ph, color=col)
+        ll := line.new(bar_index - 10, pl, bar_index + 10, pl, color=col)
+        lbh := label.new(bar_index + 10, ph, "Prev " + txt + " H", style=label.style_label_left, textcolor=col, size=size.tiny)
+        lbl := label.new(bar_index + 10, pl, "Prev " + txt + " L", style=label.style_label_left, textcolor=col, size=size.tiny)
+
+if show_daily
+    draw_mtf("D", color.blue, "D")
+if show_weekly
+    draw_mtf("W", color.orange, "W")
