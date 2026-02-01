@@ -179,11 +179,16 @@ var swingBullishColor               = styleInput == MONOCHROME ? MONO_BULLISH : 
 var swingBearishColor               = styleInput == MONOCHROME ? MONO_BEARISH : swingBearColorInput
 var fairValueGapBullishColor        = styleInput == MONOCHROME ? color.new(MONO_BULLISH,70) : fairValueGapsBullColorInput
 var fairValueGapBearishColor        = styleInput == MONOCHROME ? color.new(MONO_BEARISH,70) : fairValueGapsBearColorInput
+var premiumZoneColor                = styleInput == MONOCHROME ? MONO_BEARISH : premiumZoneColorInput
+var discountZoneColor               = styleInput == MONOCHROME ? MONO_BULLISH : discountZoneColorInput
 varip int currentBarIndex           = bar_index
 varip int lastBarIndex              = bar_index
 alerts currentAlerts                = alerts.new()
 var initialTime                     = time
 var array<box> unicornBoxes         = array.new<box>()
+
+// Fix: Define last_bar_time to avoid compilation error
+last_bar_time = time
 
 if barstate.isfirst
     if showSwingOrderBlocksInput
@@ -304,18 +309,20 @@ deleteOrderBlocks(bool internal = false) =>
             orderBlock eachOrderBlock = orderBlocks.get(index)
             bool crossedOderBlock = false
 
-            if bearishOrderBlockMitigationSource > eachOrderBlock.barHigh and eachOrderBlock.bias == BEARISH
-                crossedOderBlock := true
-                if internal
-                    currentAlerts.internalBearishOrderBlock := true
-                else
-                    currentAlerts.swingBearishOrderBlock    := true
-            else if bullishOrderBlockMitigationSource < eachOrderBlock.barLow and eachOrderBlock.bias == BULLISH
-                crossedOderBlock := true
-                if internal
-                    currentAlerts.internalBullishOrderBlock := true
-                else
-                    currentAlerts.swingBullishOrderBlock    := true
+            if eachOrderBlock.bias == BEARISH
+                if high > eachOrderBlock.barHigh
+                    crossedOderBlock := true
+                    if internal
+                        currentAlerts.internalBearishOrderBlock := true
+                    else
+                        currentAlerts.swingBearishOrderBlock    := true
+            else // BULLISH
+                if low < eachOrderBlock.barLow
+                    crossedOderBlock := true
+                    if internal
+                        currentAlerts.internalBullishOrderBlock := true
+                    else
+                        currentAlerts.swingBullishOrderBlock    := true
 
             if crossedOderBlock
                 if showUnicornInput and fairValueGaps.size() > 0
@@ -447,12 +454,6 @@ drawFairValueGaps() =>
         oldest = fairValueGaps.pop()
         oldest.topBox.delete()
         oldest.bottomBox.delete()
-
-getStyle(string style) =>
-    switch style
-        SOLID => line.style_solid
-        DASHED => line.style_dashed
-        DOTTED => line.style_dotted
 
 updateTrailingExtremes() =>
     trailing.top            := math.max(high,trailing.top)
