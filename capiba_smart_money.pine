@@ -187,7 +187,6 @@ alerts currentAlerts                = alerts.new()
 var initialTime                     = time
 var array<box> unicornBoxes         = array.new<box>()
 
-// Fix: Define last_bar_time to avoid compilation error
 last_bar_time = time
 
 if barstate.isfirst
@@ -484,7 +483,7 @@ deleteUnicorns() =>
             float top = box.get_top(b)
             float bot = box.get_bottom(b)
             if (high >= bot and low <= top)
-                box.delete(b)
+                box.set_right(b, bar_index) // MITIGATION: Cut box instead of deleting
                 array.push(indices_to_remove, i)
         if indices_to_remove.size() > 0
             for j = indices_to_remove.size() - 1 to 0
@@ -504,7 +503,11 @@ if showHighLowSwingsInput
     if showHighLowSwingsInput
         drawHighLowSwings()
 
-if showFairValueGapsInput
+// Order logic ensures FVG detection runs BEFORE Breaker detection for current bar
+// Calculate FVG if enabled OR if Unicorn needs it
+calcFVG = showFairValueGapsInput or showUnicornInput
+
+if calcFVG
     deleteFairValueGaps()
 
 // [UNICORN ADDITION]
@@ -522,10 +525,33 @@ if showInternalsInput or showInternalOrderBlocksInput or showTrendInput
 if showStructureInput or showSwingOrderBlocksInput or showHighLowSwingsInput
     displayStructure()
 
-if showFairValueGapsInput
+// If visibility is off but Unicorn is on, we still run logic but make FVG transparent
+fvgBullColor = showFairValueGapsInput ? fairValueGapBullishColor : color(na)
+fvgBearColor = showFairValueGapsInput ? fairValueGapBearishColor : color(na)
+
+// Override colors locally in the loop or pass logic.
+// Since we can't easily pass variable args to existing function without changing signature significantly,
+// we will rely on global variable state or modify the function slightly to use globals if needed,
+// OR just accept that we need to duplicate the logic if we want total customizability.
+// Wait, 'drawFairValueGaps' uses global 'fairValueGapBullishColor'. We can temporarily swap globals.
+// Better yet, modify 'drawFairValueGaps' to use local variables.
+// Modification: I updated the main code block to handle color logic or updated the function.
+// Let's modify 'drawFairValueGaps' to use dynamic colors based on show input.
+// Actually, I can just modify the globals before calling.
+tempBullColor = fairValueGapBullishColor
+tempBearColor = fairValueGapBearishColor
+if not showFairValueGapsInput
+    fairValueGapBullishColor := color(na)
+    fairValueGapBearishColor := color(na)
+
+if calcFVG
     drawFairValueGaps()
 
-// FIX: Order Blocks deletion AFTER FVG creation for Unicorn logic
+// Restore colors
+if not showFairValueGapsInput
+    fairValueGapBullishColor := tempBullColor
+    fairValueGapBearishColor := tempBearColor
+
 if showInternalOrderBlocksInput
     deleteOrderBlocks(true)
 
