@@ -26,6 +26,7 @@ colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)",
 grp_sig = "Entry Signals"
 showSignals = input.bool(true, "Show Entry Signals", group=grp_sig)
 reqRejection = input.bool(true, "Require Candle Color Rejection", group=grp_sig, tooltip="For Bearish Sweep (Highs), requires Red candle. For Bullish Sweep (Lows), requires Green candle.")
+showSignalHistory = input.bool(true, "Keep Signal History", group=grp_sig, tooltip="If enabled, BUY/SELL signals will remain on the chart. If disabled, only the last signal/sweep is shown.")
 
 // v3/v4 Logic Inputs
 mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Zone breaks only on candle close. Wick: Zone breaks on any touch.")
@@ -350,15 +351,22 @@ if array.size(activeBearBoxes) > 0
             // In Wick Mode, mitigated is TRUE if High > Bottom.
             if mitigateMethod == "Wick" and close < bBottom
                 // Wick Mode Sweep!
-                label.delete(lastSweepLabel) // Remove previous
 
                 string txt = "SWEEP"
+                bool isSignal = false
                 if showSignals
                     if (reqRejection and close < open) or (not reqRejection)
                         txt := "SELL"
+                        isSignal := true
                         alert("Bearish Entry Signal: Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
 
-                lastSweepLabel := label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                if isSignal and showSignalHistory
+                    // Permanent Signal Label
+                    label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                else
+                    // Transient Sweep Label
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
 
             box.set_bgcolor(b, colMitigated)
             box.set_border_color(b, na)
@@ -372,15 +380,20 @@ if array.size(activeBearBoxes) > 0
                 // It touched but didn't close above. Effectively a sweep.
                 // Label it if volume is high (strong rejection)
                 if volume > (volMA * absorbVolMult)
-                    label.delete(lastSweepLabel) // Remove previous
 
                     string txt = "SWEEP"
+                    bool isSignal = false
                     if showSignals
                         if (reqRejection and close < open) or (not reqRejection)
                             txt := "SELL"
+                            isSignal := true
                             alert("Bearish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
 
-                    lastSweepLabel := label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                    if isSignal and showSignalHistory
+                        label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, high, txt, color=color.red, style=label.style_label_down, textcolor=color.white, size=size.tiny)
 
             if absorbed
                 currentScore = array.get(activeBearScores, i)
@@ -426,15 +439,20 @@ if array.size(activeBullBoxes) > 0
 
         if mitigated
             if mitigateMethod == "Wick" and close > bTop
-                label.delete(lastSweepLabel)
 
                 string txt = "SWEEP"
+                bool isSignal = false
                 if showSignals
                     if (reqRejection and close > open) or (not reqRejection)
                         txt := "BUY"
+                        isSignal := true
                         alert("Bullish Entry Signal: Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
 
-                lastSweepLabel := label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                if isSignal and showSignalHistory
+                    label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                else
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
 
             box.set_bgcolor(b, colMitigated)
             box.set_border_color(b, na)
@@ -445,15 +463,20 @@ if array.size(activeBullBoxes) > 0
 
             if isSweep and mitigateMethod == "Close"
                 if volume > (volMA * absorbVolMult)
-                    label.delete(lastSweepLabel)
 
                     string txt = "SWEEP"
+                    bool isSignal = false
                     if showSignals
                         if (reqRejection and close > open) or (not reqRejection)
                             txt := "BUY"
+                            isSignal := true
                             alert("Bullish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
 
-                    lastSweepLabel := label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                    if isSignal and showSignalHistory
+                        label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, low, txt, color=color.green, style=label.style_label_up, textcolor=color.white, size=size.tiny)
 
             if absorbed
                 currentScore = array.get(activeBullScores, i)
