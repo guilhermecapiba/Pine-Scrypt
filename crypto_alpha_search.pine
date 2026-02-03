@@ -6,23 +6,25 @@ indicator("Crypto Alpha Search (Top 3)", shorttitle="Capiba Alpha Search", overl
 // -----------------------------------------------------------------------------
 group_sets = "Configurações"
 len = input.int(20, "Período da Média (SMA)", minval=5, group=group_sets)
-limit_calls = "Nota: O Pine Script limita a 40 chamadas de segurança. \nEste indicador monitora 35 das principais Altcoins."
+limit_calls = "Nota: Monitorando as 20 principais Altcoins para estabilidade."
 
 // -----------------------------------------------------------------------------
 // 2. FUNÇÃO DE CÁLCULO
 // -----------------------------------------------------------------------------
 // Calcula a força relativa da dominância atual contra sua própria média
 // Retorna: (Preço / SMA) - 1. Ex: 0.05 significa 5% acima da média.
+// Adicionado tratamento de erro para valores NA
 calc_strength(ticker) =>
-    val = request.security(ticker, timeframe.period, close)
+    val = request.security(ticker, timeframe.period, close, ignore_invalid_symbol = true)
     avg = ta.sma(val, len)
-    strength = avg != 0 ? (val / avg) - 1 : -999
+    // Se dados inválidos, retorna -999 para ir para o final da lista
+    strength = (not na(val) and not na(avg) and avg != 0) ? (val / avg) - 1 : -999
     strength
 
 // -----------------------------------------------------------------------------
-// 3. COLETA DE DADOS (TOP 35 ALTS - Hardcoded devido a limites do Pine)
+// 3. COLETA DE DADOS (TOP 20 ALTS - Lista Segura)
 // -----------------------------------------------------------------------------
-// Lista selecionada por Relevância/Market Cap (excluindo Stables e BTC)
+// Reduzido para 20 ativos de alta liquidez e histórico garantido para evitar Runtime Errors
 s01 = calc_strength("CRYPTOCAP:ETH.D")
 s02 = calc_strength("CRYPTOCAP:BNB.D")
 s03 = calc_strength("CRYPTOCAP:SOL.D")
@@ -40,33 +42,18 @@ s14 = calc_strength("CRYPTOCAP:UNI.D")
 s15 = calc_strength("CRYPTOCAP:BCH.D")
 s16 = calc_strength("CRYPTOCAP:ATOM.D")
 s17 = calc_strength("CRYPTOCAP:XLM.D")
-s18 = calc_strength("CRYPTOCAP:XMR.D")
-s19 = calc_strength("CRYPTOCAP:ETC.D")
-s20 = calc_strength("CRYPTOCAP:FIL.D")
-s21 = calc_strength("CRYPTOCAP:LDO.D")
-s22 = calc_strength("CRYPTOCAP:HBAR.D")
-s23 = calc_strength("CRYPTOCAP:APT.D")
-s24 = calc_strength("CRYPTOCAP:ARB.D")
-s25 = calc_strength("CRYPTOCAP:OP.D")
-s26 = calc_strength("CRYPTOCAP:NEAR.D")
-s27 = calc_strength("CRYPTOCAP:VET.D")
-s28 = calc_strength("CRYPTOCAP:MKR.D")
-s29 = calc_strength("CRYPTOCAP:AAVE.D")
-s30 = calc_strength("CRYPTOCAP:GRT.D")
-s31 = calc_strength("CRYPTOCAP:ALGO.D")
-s32 = calc_strength("CRYPTOCAP:SAND.D")
-s33 = calc_strength("CRYPTOCAP:FTM.D")
-s34 = calc_strength("CRYPTOCAP:EOS.D")
-s35 = calc_strength("CRYPTOCAP:MANA.D")
+s18 = calc_strength("CRYPTOCAP:ETC.D")
+s19 = calc_strength("CRYPTOCAP:FIL.D")
+s20 = calc_strength("CRYPTOCAP:VET.D")
 
 // -----------------------------------------------------------------------------
 // 4. PROCESSAMENTO E ORDENAÇÃO
 // -----------------------------------------------------------------------------
-// Arrays para armazenar Tickers e Valores
-var names = array.new_string(35)
-var values = array.new_float(35)
+// Arrays para armazenar Tickers e Valores (Tamanho 20)
+var names = array.new_string(20)
+var values = array.new_float(20)
 
-// Popula os arrays a cada bar (necessário para recalcular o ranking em tempo real)
+// Popula os arrays a cada bar, mas o sort pesado ocorre apenas no último
 if barstate.islast
     array.set(names, 0, "ETH")
     array.set(values, 0, s01)
@@ -102,48 +89,16 @@ if barstate.islast
     array.set(values, 15, s16)
     array.set(names, 16, "XLM")
     array.set(values, 16, s17)
-    array.set(names, 17, "XMR")
+    array.set(names, 17, "ETC")
     array.set(values, 17, s18)
-    array.set(names, 18, "ETC")
+    array.set(names, 18, "FIL")
     array.set(values, 18, s19)
-    array.set(names, 19, "FIL")
+    array.set(names, 19, "VET")
     array.set(values, 19, s20)
-    array.set(names, 20, "LDO")
-    array.set(values, 20, s21)
-    array.set(names, 21, "HBAR")
-    array.set(values, 21, s22)
-    array.set(names, 22, "APT")
-    array.set(values, 22, s23)
-    array.set(names, 23, "ARB")
-    array.set(values, 23, s24)
-    array.set(names, 24, "OP")
-    array.set(values, 24, s25)
-    array.set(names, 25, "NEAR")
-    array.set(values, 25, s26)
-    array.set(names, 26, "VET")
-    array.set(values, 26, s27)
-    array.set(names, 27, "MKR")
-    array.set(values, 27, s28)
-    array.set(names, 28, "AAVE")
-    array.set(values, 28, s29)
-    array.set(names, 29, "GRT")
-    array.set(values, 29, s30)
-    array.set(names, 30, "ALGO")
-    array.set(values, 30, s31)
-    array.set(names, 31, "SAND")
-    array.set(values, 31, s32)
-    array.set(names, 32, "FTM")
-    array.set(values, 32, s33)
-    array.set(names, 33, "EOS")
-    array.set(values, 33, s34)
-    array.set(names, 34, "MANA")
-    array.set(values, 34, s35)
 
-    // Bubble Sort simples para encontrar os Top Winners (Decrescente)
-    // Ordenamos apenas os índices para não destruir os arrays originais se não quisermos
-    // Mas aqui vamos ordenar os arrays diretamente para simplificar
-    for i = 0 to 34
-        for j = i + 1 to 34
+    // Bubble Sort (Tamanho 20)
+    for i = 0 to 19
+        for j = i + 1 to 19
             if array.get(values, i) < array.get(values, j)
                 // Swap Values
                 tempVal = array.get(values, i)
@@ -157,7 +112,6 @@ if barstate.islast
 // -----------------------------------------------------------------------------
 // 5. DISPLAY (TABELA)
 // -----------------------------------------------------------------------------
-// Simplificação radical do table.new para evitar erros de sintaxe com argumentos nomeados
 var table panel = table.new(position.top_right, 2, 4)
 
 if barstate.islast
@@ -166,19 +120,22 @@ if barstate.islast
     table.cell(panel, 1, 0, "% vs SMA" + str.tostring(len), bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.normal)
 
     // Row 1
-    val1 = array.get(values, 0) * 100
+    val1 = array.get(values, 0) != -999 ? array.get(values, 0) * 100 : 0
     col1 = val1 > 0 ? color.green : color.red
-    table.cell(panel, 0, 1, array.get(names, 0), bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
+    name1 = array.get(values, 0) != -999 ? array.get(names, 0) : "-"
+    table.cell(panel, 0, 1, name1, bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
     table.cell(panel, 1, 1, str.tostring(val1, "#.##") + "%", bgcolor=color.new(col1, 70), text_color=color.white, text_size=size.normal)
 
     // Row 2
-    val2 = array.get(values, 1) * 100
+    val2 = array.get(values, 1) != -999 ? array.get(values, 1) * 100 : 0
     col2 = val2 > 0 ? color.green : color.red
-    table.cell(panel, 0, 2, array.get(names, 1), bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
+    name2 = array.get(values, 1) != -999 ? array.get(names, 1) : "-"
+    table.cell(panel, 0, 2, name2, bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
     table.cell(panel, 1, 2, str.tostring(val2, "#.##") + "%", bgcolor=color.new(col2, 70), text_color=color.white, text_size=size.normal)
 
     // Row 3
-    val3 = array.get(values, 2) * 100
+    val3 = array.get(values, 2) != -999 ? array.get(values, 2) * 100 : 0
     col3 = val3 > 0 ? color.green : color.red
-    table.cell(panel, 0, 3, array.get(names, 2), bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
+    name3 = array.get(values, 2) != -999 ? array.get(names, 2) : "-"
+    table.cell(panel, 0, 3, name3, bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
     table.cell(panel, 1, 3, str.tostring(val3, "#.##") + "%", bgcolor=color.new(col3, 70), text_color=color.white, text_size=size.normal)
