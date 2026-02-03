@@ -1,11 +1,40 @@
 //@version=5
 indicator("Crypto Macro Indicator", shorttitle="Crypto Macro", overlay=false)
 
+// -----------------------------------------------------------------------------
+// 1. INPUTS
+// -----------------------------------------------------------------------------
+
 // Symbols
 sym_rut = input.symbol("TVC:RUT", "RUT Symbol")
 sym_spx = input.symbol("TVC:SPX", "SPX Symbol")
 
-// Fetch data
+// Calculation Settings
+grp_calc = "Configuração do Fluxo"
+len      = input.int(20, "Período de Análise (Média)", minval=5, group=grp_calc)
+smooth   = input.int(8, "Suavização Gaussiana", minval=1, group=grp_calc)
+
+// Visual Settings
+grp_vis = "Visualização de Linhas"
+col_main   = input.color(color.blue, "Cor Principal", group=grp_vis, inline="1")
+wid_main   = input.int(2, "", minval=1, group=grp_vis, inline="1")
+
+col_ema20  = input.color(color.orange, "Cor EMA 20 (Laranja)", group=grp_vis, inline="3")
+wid_ema20  = input.int(2, "", minval=1, group=grp_vis, inline="3")
+
+col_ema200 = input.color(color.white, "Cor EMA 200 (Branca)", group=grp_vis, inline="4")
+wid_ema200 = input.int(1, "", minval=1, group=grp_vis, inline="4")
+
+grp_style = "Zonas de Exaustão (OB/OS)"
+obValue   = input.float(80, 'Limite Superior (OB)', inline = 'ob', group = grp_style)
+obAreaCss = input(color.new(#00c853, 70), 'Cor Alta', inline = 'ob', group = grp_style)
+osValue   = input.float(20, 'Limite Inferior (OS)', inline = 'os', group = grp_style)
+osAreaCss = input(color.new(#ff1744, 70), 'Cor Baixa', inline = 'os', group = grp_style)
+
+// -----------------------------------------------------------------------------
+// 2. BUSCA DE DADOS E CÁLCULO
+// -----------------------------------------------------------------------------
+
 // We use the current chart's data for the asset
 curr_close = close
 curr_high = high
@@ -16,25 +45,48 @@ rut = request.security(sym_rut, timeframe.period, close)
 spx = request.security(sym_spx, timeframe.period, close)
 
 // Formula: Asset / (RUT / SPX) - Asset
-// This is equivalent to Asset * (SPX/RUT - 1)
-// We check for division by zero just in case, though unlikely for indices
 ratio_market = (rut != 0 and spx != 0) ? (rut / spx) : na
-main_value = (not na(ratio_market) and ratio_market != 0) ? (curr_close / ratio_market - curr_close) : na
+raw_value = (not na(ratio_market) and ratio_market != 0) ? (curr_close / ratio_market - curr_close) : na
 
-// EMA 1 (Default 20)
-ema_length = input.int(20, title="EMA 1 Length", group="Moving Averages")
-ema_value = ta.ema(main_value, ema_length)
+// Normalization Logic (Z-Score -> Sigmoid)
+mean       = ta.sma(raw_value, len)
+stdDev     = ta.stdev(raw_value, len)
+zScore     = stdDev != 0 ? (raw_value - mean) / stdDev : 0
+normalized = 100 / (1 + math.exp(-zScore))
 
-// EMA 2 (Default 200)
-ema2_length = input.int(200, title="EMA 2 Length", group="Moving Averages")
-ema2_value = ta.ema(main_value, ema2_length)
+// Smoothing
+main_value = ta.ema(normalized, smooth)
 
-// Plotting
-plot(main_value, title="Main Line", color=color.blue, linewidth=2)
-plot(ema_value, title="EMA 1", color=color.orange, linewidth=2)
-plot(ema2_value, title="EMA 2", color=color.white, linewidth=1)
+// EMAs on the normalized/smoothed value
+ema20   = ta.ema(main_value, 20)
+ema200  = ta.ema(main_value, 200)
 
-//===== DIVERGENCE DETECTION =====
+// -----------------------------------------------------------------------------
+// 3. PLOTAGEM
+// -----------------------------------------------------------------------------
+plot_up  = plot(obValue, color = na, editable = false)
+plot_avg = plot(50, color = na, editable = false)
+plot_dn  = plot(osValue, color = na, editable = false)
+
+plot_main = plot(main_value, "Crypto Macro", color=col_main, linewidth=wid_main)
+plot(ema20, "EMA 20", color=col_ema20, linewidth=wid_ema20)
+plot(ema200, "EMA 200", color=col_ema200, linewidth=wid_ema200)
+
+// Fills
+fill(plot_main, plot_up, main_value > obValue ? obAreaCss : na, title="Excesso Alta")
+fill(plot_dn, plot_main, main_value < osValue ? osAreaCss : na, title="Excesso Baixa")
+
+fill(plot_main, plot_avg, obValue, 50, obAreaCss, color.new(chart.bg_color, 100))
+fill(plot_avg, plot_main, 50, osValue, color.new(chart.bg_color, 100), osAreaCss)
+
+// Horizontal Lines
+hline(obValue, 'OB Line', color=color.new(obAreaCss, 30))
+hline(50, 'Midline', color=color.new(color.gray, 50), linewidth=1)
+hline(osValue, 'OS Line', color=color.new(osAreaCss, 30))
+
+// -----------------------------------------------------------------------------
+// 4. DIVERGÊNCIAS
+// -----------------------------------------------------------------------------
 string groupDiv = "Divergence Detection"
 showDivergences = input.bool(true, "Show Divergences?", group = groupDiv)
 pivotLeft = input.int(5, "Pivot Lookback Left", minval = 1, group = groupDiv)
@@ -45,7 +97,7 @@ bearishDivColor = input.color(color.new(color.red, 0), "Bearish Color", inline="
 bearishLineWidth = input.int(2, "Line Width", minval=1, inline="bear", group=groupDiv)
 
 if showDivergences
-    // We compare the Indicator (main_value) pivots vs the Price (high / low) pivots
+    // We compare the Indicator (main_value) pivots vs the Price (curr_high / curr_low) pivots
 
     pivotHighInd = ta.pivothigh(main_value, pivotLeft, pivotRight)
     pivotLowInd = ta.pivotlow(main_value, pivotLeft, pivotRight)
@@ -61,9 +113,6 @@ if showDivergences
         prevPivotHigh_bar = ta.valuewhen(pivotHighInd, bar_index[pivotRight], 1)
 
         // Comparison
-        // Current pivot price (curr_high[pivotRight]) > Previous pivot price
-        // Current pivot indicator (main_value[pivotRight]) < Previous pivot indicator
-        // We use not na checks to ensure valid history
         if not na(prevPivotHigh_price) and not na(prevPivotHighInd_val)
             if curr_high[pivotRight] > prevPivotHigh_price and main_value[pivotRight] < prevPivotHighInd_val
                 line.new(prevPivotHigh_bar, prevPivotHighInd_val, bar_index[pivotRight], main_value[pivotRight], color=bearishDivColor, width=bearishLineWidth)
@@ -79,8 +128,6 @@ if showDivergences
         prevPivotLow_bar = ta.valuewhen(pivotLowInd, bar_index[pivotRight], 1)
 
         // Comparison
-        // Current pivot price (curr_low[pivotRight]) < Previous pivot price
-        // Current pivot indicator (main_value[pivotRight]) > Previous pivot indicator
         if not na(prevPivotLow_price) and not na(prevPivotLowInd_val)
             if curr_low[pivotRight] < prevPivotLow_price and main_value[pivotRight] > prevPivotLowInd_val
                 line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index[pivotRight], main_value[pivotRight], color=bullishDivColor, width=bullishLineWidth)
