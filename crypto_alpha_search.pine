@@ -1,0 +1,183 @@
+//@version=5
+indicator("Crypto Alpha Search (Top 3)", shorttitle="Capiba Alpha Search", overlay=true)
+
+// -----------------------------------------------------------------------------
+// 1. CONFIGURAÇÃO
+// -----------------------------------------------------------------------------
+group_sets = "Configurações"
+len = input.int(20, "Período da Média (SMA)", minval=5, group=group_sets)
+limit_calls = "Nota: O Pine Script limita a 40 chamadas de segurança. \nEste indicador monitora 35 das principais Altcoins."
+
+// -----------------------------------------------------------------------------
+// 2. FUNÇÃO DE CÁLCULO
+// -----------------------------------------------------------------------------
+// Calcula a força relativa da dominância atual contra sua própria média
+// Retorna: (Preço / SMA) - 1. Ex: 0.05 significa 5% acima da média.
+calc_strength(ticker) =>
+    val = request.security(ticker, timeframe.period, close)
+    avg = ta.sma(val, len)
+    strength = avg != 0 ? (val / avg) - 1 : -999
+    strength
+
+// -----------------------------------------------------------------------------
+// 3. COLETA DE DADOS (TOP 35 ALTS - Hardcoded devido a limites do Pine)
+// -----------------------------------------------------------------------------
+// Lista selecionada por Relevância/Market Cap (excluindo Stables e BTC)
+s01 = calc_strength("CRYPTOCAP:ETH.D")
+s02 = calc_strength("CRYPTOCAP:BNB.D")
+s03 = calc_strength("CRYPTOCAP:SOL.D")
+s04 = calc_strength("CRYPTOCAP:XRP.D")
+s05 = calc_strength("CRYPTOCAP:ADA.D")
+s06 = calc_strength("CRYPTOCAP:DOGE.D")
+s07 = calc_strength("CRYPTOCAP:AVAX.D")
+s08 = calc_strength("CRYPTOCAP:TRX.D")
+s09 = calc_strength("CRYPTOCAP:DOT.D")
+s10 = calc_strength("CRYPTOCAP:MATIC.D")
+s11 = calc_strength("CRYPTOCAP:LINK.D")
+s12 = calc_strength("CRYPTOCAP:LTC.D")
+s13 = calc_strength("CRYPTOCAP:SHIB.D")
+s14 = calc_strength("CRYPTOCAP:UNI.D")
+s15 = calc_strength("CRYPTOCAP:BCH.D")
+s16 = calc_strength("CRYPTOCAP:ATOM.D")
+s17 = calc_strength("CRYPTOCAP:XLM.D")
+s18 = calc_strength("CRYPTOCAP:XMR.D")
+s19 = calc_strength("CRYPTOCAP:ETC.D")
+s20 = calc_strength("CRYPTOCAP:FIL.D")
+s21 = calc_strength("CRYPTOCAP:LDO.D")
+s22 = calc_strength("CRYPTOCAP:HBAR.D")
+s23 = calc_strength("CRYPTOCAP:APT.D")
+s24 = calc_strength("CRYPTOCAP:ARB.D")
+s25 = calc_strength("CRYPTOCAP:OP.D")
+s26 = calc_strength("CRYPTOCAP:NEAR.D")
+s27 = calc_strength("CRYPTOCAP:VET.D")
+s28 = calc_strength("CRYPTOCAP:MKR.D")
+s29 = calc_strength("CRYPTOCAP:AAVE.D")
+s30 = calc_strength("CRYPTOCAP:GRT.D")
+s31 = calc_strength("CRYPTOCAP:ALGO.D")
+s32 = calc_strength("CRYPTOCAP:SAND.D")
+s33 = calc_strength("CRYPTOCAP:FTM.D")
+s34 = calc_strength("CRYPTOCAP:EOS.D")
+s35 = calc_strength("CRYPTOCAP:MANA.D")
+
+// -----------------------------------------------------------------------------
+// 4. PROCESSAMENTO E ORDENAÇÃO
+// -----------------------------------------------------------------------------
+// Arrays para armazenar Tickers e Valores
+var names = array.new_string(35)
+var values = array.new_float(35)
+
+// Popula os arrays a cada bar (necessário para recalcular o ranking em tempo real)
+if barstate.islast
+    array.set(names, 0, "ETH")
+    array.set(values, 0, s01)
+    array.set(names, 1, "BNB")
+    array.set(values, 1, s02)
+    array.set(names, 2, "SOL")
+    array.set(values, 2, s03)
+    array.set(names, 3, "XRP")
+    array.set(values, 3, s04)
+    array.set(names, 4, "ADA")
+    array.set(values, 4, s05)
+    array.set(names, 5, "DOGE")
+    array.set(values, 5, s06)
+    array.set(names, 6, "AVAX")
+    array.set(values, 6, s07)
+    array.set(names, 7, "TRX")
+    array.set(values, 7, s08)
+    array.set(names, 8, "DOT")
+    array.set(values, 8, s09)
+    array.set(names, 9, "MATIC")
+    array.set(values, 9, s10)
+    array.set(names, 10, "LINK")
+    array.set(values, 10, s11)
+    array.set(names, 11, "LTC")
+    array.set(values, 11, s12)
+    array.set(names, 12, "SHIB")
+    array.set(values, 12, s13)
+    array.set(names, 13, "UNI")
+    array.set(values, 13, s14)
+    array.set(names, 14, "BCH")
+    array.set(values, 14, s15)
+    array.set(names, 15, "ATOM")
+    array.set(values, 15, s16)
+    array.set(names, 16, "XLM")
+    array.set(values, 16, s17)
+    array.set(names, 17, "XMR")
+    array.set(values, 17, s18)
+    array.set(names, 18, "ETC")
+    array.set(values, 18, s19)
+    array.set(names, 19, "FIL")
+    array.set(values, 19, s20)
+    array.set(names, 20, "LDO")
+    array.set(values, 20, s21)
+    array.set(names, 21, "HBAR")
+    array.set(values, 21, s22)
+    array.set(names, 22, "APT")
+    array.set(values, 22, s23)
+    array.set(names, 23, "ARB")
+    array.set(values, 23, s24)
+    array.set(names, 24, "OP")
+    array.set(values, 24, s25)
+    array.set(names, 25, "NEAR")
+    array.set(values, 25, s26)
+    array.set(names, 26, "VET")
+    array.set(values, 26, s27)
+    array.set(names, 27, "MKR")
+    array.set(values, 27, s28)
+    array.set(names, 28, "AAVE")
+    array.set(values, 28, s29)
+    array.set(names, 29, "GRT")
+    array.set(values, 29, s30)
+    array.set(names, 30, "ALGO")
+    array.set(values, 30, s31)
+    array.set(names, 31, "SAND")
+    array.set(values, 31, s32)
+    array.set(names, 32, "FTM")
+    array.set(values, 32, s33)
+    array.set(names, 33, "EOS")
+    array.set(values, 33, s34)
+    array.set(names, 34, "MANA")
+    array.set(values, 34, s35)
+
+    // Bubble Sort simples para encontrar os Top Winners (Decrescente)
+    // Ordenamos apenas os índices para não destruir os arrays originais se não quisermos
+    // Mas aqui vamos ordenar os arrays diretamente para simplificar
+    for i = 0 to 34
+        for j = i + 1 to 34
+            if array.get(values, i) < array.get(values, j)
+                // Swap Values
+                tempVal = array.get(values, i)
+                array.set(values, i, array.get(values, j))
+                array.set(values, j, tempVal)
+                // Swap Names
+                tempName = array.get(names, i)
+                array.set(names, i, array.get(names, j))
+                array.set(names, j, tempName)
+
+// -----------------------------------------------------------------------------
+// 5. DISPLAY (TABELA)
+// -----------------------------------------------------------------------------
+var table panel = table.new(position.top_right, 2, 4, border_width=1, frame_color=#333, frame_width=1)
+
+if barstate.islast
+    // Header
+    table.cell(panel, 0, 0, "TOP ALPHA", bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.normal)
+    table.cell(panel, 1, 0, "% vs SMA" + str.tostring(len), bgcolor=color.new(color.blue, 30), text_color=color.white, text_size=size.normal)
+
+    // Row 1
+    val1 = array.get(values, 0) * 100
+    col1 = val1 > 0 ? color.green : color.red
+    table.cell(panel, 0, 1, array.get(names, 0), bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
+    table.cell(panel, 1, 1, str.tostring(val1, "#.##") + "%", bgcolor=color.new(col1, 70), text_color=color.white, text_size=size.normal)
+
+    // Row 2
+    val2 = array.get(values, 1) * 100
+    col2 = val2 > 0 ? color.green : color.red
+    table.cell(panel, 0, 2, array.get(names, 1), bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
+    table.cell(panel, 1, 2, str.tostring(val2, "#.##") + "%", bgcolor=color.new(col2, 70), text_color=color.white, text_size=size.normal)
+
+    // Row 3
+    val3 = array.get(values, 2) * 100
+    col3 = val3 > 0 ? color.green : color.red
+    table.cell(panel, 0, 3, array.get(names, 2), bgcolor=color.new(color.black, 50), text_color=color.white, text_size=size.normal)
+    table.cell(panel, 1, 3, str.tostring(val3, "#.##") + "%", bgcolor=color.new(col3, 70), text_color=color.white, text_size=size.normal)
