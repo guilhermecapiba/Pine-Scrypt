@@ -1,0 +1,86 @@
+//@version=5
+indicator("Crypto Macro Indicator", shorttitle="Crypto Macro", overlay=false)
+
+// Symbols
+sym_rut = input.symbol("TVC:RUT", "RUT Symbol")
+sym_spx = input.symbol("TVC:SPX", "SPX Symbol")
+
+// Fetch data
+// We use the current chart's data for the asset
+curr_close = close
+curr_high = high
+curr_low = low
+
+// Fetch external data
+rut = request.security(sym_rut, timeframe.period, close)
+spx = request.security(sym_spx, timeframe.period, close)
+
+// Formula: Asset / (RUT / SPX) - Asset
+// This is equivalent to Asset * (SPX/RUT - 1)
+// We check for division by zero just in case, though unlikely for indices
+ratio_market = (rut != 0 and spx != 0) ? (rut / spx) : na
+main_value = (not na(ratio_market) and ratio_market != 0) ? (curr_close / ratio_market - curr_close) : na
+
+// EMA 1 (Default 20)
+ema_length = input.int(20, title="EMA 1 Length", group="Moving Averages")
+ema_value = ta.ema(main_value, ema_length)
+
+// EMA 2 (Default 200)
+ema2_length = input.int(200, title="EMA 2 Length", group="Moving Averages")
+ema2_value = ta.ema(main_value, ema2_length)
+
+// Plotting
+plot(main_value, title="Main Line", color=color.blue, linewidth=2)
+plot(ema_value, title="EMA 1", color=color.orange, linewidth=2)
+plot(ema2_value, title="EMA 2", color=color.white, linewidth=1)
+
+//===== DIVERGENCE DETECTION =====
+string groupDiv = "Divergence Detection"
+showDivergences = input.bool(true, "Show Divergences?", group = groupDiv)
+pivotLeft = input.int(5, "Pivot Lookback Left", minval = 1, group = groupDiv)
+pivotRight = input.int(5, "Pivot Lookback Right", minval = 1, group = groupDiv)
+bullishDivColor = input.color(color.new(color.green, 0), "Bullish Color", inline="bull", group = groupDiv)
+bullishLineWidth = input.int(2, "Line Width", minval=1, inline="bull", group=groupDiv)
+bearishDivColor = input.color(color.new(color.red, 0), "Bearish Color", inline="bear", group = groupDiv)
+bearishLineWidth = input.int(2, "Line Width", minval=1, inline="bear", group=groupDiv)
+
+if showDivergences
+    // We compare the Indicator (main_value) pivots vs the Price (high / low) pivots
+
+    pivotHighInd = ta.pivothigh(main_value, pivotLeft, pivotRight)
+    pivotLowInd = ta.pivotlow(main_value, pivotLeft, pivotRight)
+
+    // --- BEARISH DIVERGENCE ---
+    // Price makes Higher High, Indicator makes Lower High
+    if not na(pivotHighInd)
+        // Find previous pivot high of indicator
+        prevPivotHighInd_val = ta.valuewhen(pivotHighInd, main_value[pivotRight], 1)
+        // Find price at that previous pivot moment
+        prevPivotHigh_price = ta.valuewhen(pivotHighInd, curr_high[pivotRight], 1)
+        // Find bar index
+        prevPivotHigh_bar = ta.valuewhen(pivotHighInd, bar_index[pivotRight], 1)
+
+        // Comparison
+        // Current pivot price (curr_high[pivotRight]) > Previous pivot price
+        // Current pivot indicator (main_value[pivotRight]) < Previous pivot indicator
+        // We use not na checks to ensure valid history
+        if not na(prevPivotHigh_price) and not na(prevPivotHighInd_val)
+            if curr_high[pivotRight] > prevPivotHigh_price and main_value[pivotRight] < prevPivotHighInd_val
+                line.new(prevPivotHigh_bar, prevPivotHighInd_val, bar_index[pivotRight], main_value[pivotRight], color=bearishDivColor, width=bearishLineWidth)
+
+    // --- BULLISH DIVERGENCE ---
+    // Price makes Lower Low, Indicator makes Higher Low
+    if not na(pivotLowInd)
+        // Find previous pivot low of indicator
+        prevPivotLowInd_val = ta.valuewhen(pivotLowInd, main_value[pivotRight], 1)
+        // Find price at that previous pivot moment
+        prevPivotLow_price = ta.valuewhen(pivotLowInd, curr_low[pivotRight], 1)
+        // Find bar index
+        prevPivotLow_bar = ta.valuewhen(pivotLowInd, bar_index[pivotRight], 1)
+
+        // Comparison
+        // Current pivot price (curr_low[pivotRight]) < Previous pivot price
+        // Current pivot indicator (main_value[pivotRight]) > Previous pivot indicator
+        if not na(prevPivotLow_price) and not na(prevPivotLowInd_val)
+            if curr_low[pivotRight] < prevPivotLow_price and main_value[pivotRight] > prevPivotLowInd_val
+                line.new(prevPivotLow_bar, prevPivotLowInd_val, bar_index[pivotRight], main_value[pivotRight], color=bullishDivColor, width=bullishLineWidth)
