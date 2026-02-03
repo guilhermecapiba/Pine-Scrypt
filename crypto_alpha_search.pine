@@ -157,7 +157,8 @@ if barstate.islast
 // -----------------------------------------------------------------------------
 // 5. DISPLAY (TABELA)
 // -----------------------------------------------------------------------------
-var table panel = table.new(position = position.top_right, columns = 2, rows = 4, border_width = 1, border_color = #333)
+// Simplificação radical do table.new para evitar erros de sintaxe com argumentos nomeados
+var table panel = table.new(position.top_right, 2, 4)
 
 if barstate.islast
     // Header
