@@ -1,0 +1,270 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Capiba
+
+//@version=5
+indicator("Capiba Liquidity Mapper", shorttitle="Capiba Liquidity", overlay=true, max_boxes_count=500)
+
+// --- Inputs ---
+grp_sett = "Settings"
+grp_vis = "Visuals"
+grp_dash = "Probability Dashboard"
+
+lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
+lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
+zoneType  = input.string("ATR", "Zone Height Calculation", options=["ATR", "Percent"], group=grp_sett, tooltip="Method to determine the vertical size of the liquidity zone.")
+atrLen    = input.int(14, "ATR Length", minval=1, group=grp_sett)
+atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
+pctSize   = input.float(0.5, "Zone % Size", minval=0.01, step=0.1, group=grp_sett, tooltip="Height as % of price (if Type is Percent).")
+
+colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
+colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
+
+showDash     = input.bool(true, "Show Dashboard", group=grp_dash)
+dashPos      = input.string(position.top_right, "Position", options=[position.top_right, position.top_left, position.bottom_right, position.bottom_left], group=grp_dash)
+probLen      = input.int(14, "Analysis Lookback", minval=1, group=grp_dash, tooltip="Lookback for RSI and MFI calculations to determine bias.")
+
+// --- Arrays to track ACTIVE zones ---
+var box[] activeBearBoxes = array.new_box()
+var box[] activeBullBoxes = array.new_box()
+
+// Parallel arrays to track Volume Scores (since we can't reliably get_text from boxes)
+var float[] activeBearScores = array.new_float()
+var float[] activeBullScores = array.new_float()
+
+// Helper: Calculate Volume Score (0-50)
+// High Relative Volume at pivot creation = High Score
+volMA = ta.sma(volume, 50)
+relVol = volume / volMA
+// Cap relVol at 3.0 for normalization (3x average volume is huge)
+volScore = math.min(relVol, 3.0) / 3.0 * 50
+
+// --- Probability & Targets Logic ---
+// We use MFI (Money Flow Index) to incorporate Volume and RSI for Momentum
+mfiVal = ta.mfi(close, probLen)
+rsiVal = ta.rsi(close, probLen)
+
+// Heuristic Probability:
+// Higher MFI+RSI = Bullish Bias (Likely to go UP to Buy-side Liquidity)
+// Lower MFI+RSI = Bearish Bias (Likely to go DOWN to Sell-side Liquidity)
+// We normalize to 0-100 scale.
+bullScore = (mfiVal + rsiVal) / 2
+bearScore = 100 - bullScore
+
+// --- Find Nearest Targets ---
+// We iterate active boxes to find the closest ones to current price
+var float nearestBearPrice = na
+var float nearestBullPrice = na
+var float distBear = na
+var float distBull = na
+
+if barstate.islast and showDash
+    // Reset
+    nearestBearPrice := na
+    nearestBullPrice := na
+    float minDistUp = 1000000.0
+    float minDistDown = 1000000.0
+
+    // Check Bear Boxes (Targets Above)
+    if array.size(activeBearBoxes) > 0
+        for i = 0 to array.size(activeBearBoxes) - 1
+            b = array.get(activeBearBoxes, i)
+            // Bear boxes are Resistance/Liquidity Above. We care about the BOTTOM of the box (entry point)
+            bLevel = box.get_bottom(b)
+            if bLevel > close
+                d = bLevel - close
+                if d < minDistUp
+                    minDistUp := d
+                    nearestBearPrice := bLevel
+
+    // Check Bull Boxes (Targets Below)
+    if array.size(activeBullBoxes) > 0
+        for i = 0 to array.size(activeBullBoxes) - 1
+            b = array.get(activeBullBoxes, i)
+            // Bull boxes are Support/Liquidity Below. We care about the TOP of the box (entry point)
+            bLevel = box.get_top(b)
+            if bLevel < close
+                d = close - bLevel
+                if d < minDistDown
+                    minDistDown := d
+                    nearestBullPrice := bLevel
+
+    // Calculate % Distances
+    distBear := not na(nearestBearPrice) ? ((nearestBearPrice - close) / close) * 100 : na
+    distBull := not na(nearestBullPrice) ? ((close - nearestBullPrice) / close) * 100 : na
+
+    // --- Draw Dashboard ---
+    var tbl = table.new(dashPos, 2, 4, bgcolor=color.new(color.black, 50), border_width=1)
+
+    // Header
+    string biasLabel = "NEUTRAL"
+    color biasColor = color.white
+
+    if bullScore > 60
+        biasLabel := "BULL"
+        biasColor := color.green
+    else if bullScore < 40
+        biasLabel := "BEAR"
+        biasColor := color.red
+
+    table.cell(tbl, 0, 0, "Liquidity Bias", text_color=color.white, bgcolor=color.new(color.blue, 60), text_size=size.small, width=12)
+    table.cell(tbl, 1, 0, str.tostring(bullScore, "#.0") + "% " + biasLabel, text_color=biasColor, bgcolor=color.new(color.black, 30), text_size=size.small, width=10)
+
+    // Upper Target
+    table.cell(tbl, 0, 1, "Next Bear Liq", text_color=color.red, text_size=size.small, text_halign=text.align_left)
+    txtUp = not na(nearestBearPrice) ? str.tostring(nearestBearPrice, format.mintick) + " (+" + str.tostring(distBear, "#.00") + "%)" : "None"
+    table.cell(tbl, 1, 1, txtUp, text_color=color.white, text_size=size.small)
+
+    // Lower Target
+    table.cell(tbl, 0, 2, "Next Bull Liq", text_color=color.green, text_size=size.small, text_halign=text.align_left)
+    txtDown = not na(nearestBullPrice) ? str.tostring(nearestBullPrice, format.mintick) + " (-" + str.tostring(distBull, "#.00") + "%)" : "None"
+    table.cell(tbl, 1, 2, txtDown, text_color=color.white, text_size=size.small)
+
+    // Momentum Status
+    biasTxt = bullScore > 60 ? "Strong Bull Flow" : bullScore < 40 ? "Strong Bear Flow" : "Neutral / Ranging"
+    biasCol = bullScore > 60 ? color.green : bullScore < 40 ? color.red : color.gray
+    table.cell(tbl, 0, 3, "Flow Status", text_color=color.white, text_size=size.small, text_halign=text.align_left)
+    table.cell(tbl, 1, 3, biasTxt, text_color=biasCol, text_size=size.small)
+
+// --- Calculations ---
+// Detect Pivots
+ph = ta.pivothigh(high, lenLeft, lenRight)
+pl = ta.pivotlow(low, lenLeft, lenRight)
+
+// Calculate Zone Height (at the moment of detection)
+atrVal = ta.atr(atrLen)
+// We need the value from 'lenRight' bars ago because that's when the pivot occurred
+currentZoneHeight = zoneType == "ATR" ? atrVal : close * (pctSize / 100)
+// Note: We will access this with [lenRight] index when creating the box
+
+// --- Logic: Create Zones ---
+
+// 1. New Pivot High (Liquidity above Highs -> Shorts' Stops)
+if not na(ph)
+    // The pivot point was 'lenRight' bars ago
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = ph
+
+    // Determine Box Coordinates
+    // Box starts at Pivot High and extends UPWARDS (covering the stop loss area)
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+
+    top = pivotPrice + zh
+    bottom = pivotPrice
+
+    // Calculate Static Strength (Volume at Pivot)
+    // We access volume from 'lenRight' bars ago
+    vScore = volScore[lenRight]
+
+    // Create Box
+    b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
+                 border_color=na, bgcolor=colBear)
+
+    array.push(activeBearBoxes, b)
+    array.push(activeBearScores, vScore)
+
+// 2. New Pivot Low (Liquidity below Lows -> Longs' Stops)
+if not na(pl)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = pl
+
+    // Box starts at Pivot Low and extends DOWNWARDS
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+
+    top = pivotPrice
+    bottom = pivotPrice - zh
+
+    // Calculate Static Strength
+    vScore = volScore[lenRight]
+
+    b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom,
+                 border_color=na, bgcolor=colBull)
+
+    array.push(activeBullBoxes, b)
+    array.push(activeBullScores, vScore)
+
+// --- Logic: Manage Zones (Extend & Mitigate) ---
+
+// Process Bear Zones (Highs)
+if array.size(activeBearBoxes) > 0
+    // Loop backwards to allow removal
+    for i = array.size(activeBearBoxes) - 1 to 0
+        b = array.get(activeBearBoxes, i)
+
+        // Check if price has mitigated this zone
+        // Mitigation condition: High price touches the bottom of the zone (the pivot level)
+        // Since it's a resistance zone/buy stops, if price goes ABOVE the pivot level, stops are triggered.
+        bBottom = box.get_bottom(b)
+
+        if high > bBottom
+            // Mitigated!
+            // Apply final visual state (Gray, 10% opacity, no border)
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            // Stop extending (remove from active array)
+            array.remove(activeBearBoxes, i)
+            array.remove(activeBearScores, i)
+        else
+            // Not mitigated yet, extend the zone to the right
+            box.set_right(b, bar_index + 5)
+
+            // --- Update Strength Visualization ---
+            // 1. Age Score (0-50): Older = Stronger. Max strength at 200 bars.
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+
+            // 2. Retrieve Volume Score from Parallel Array
+            vScore = array.get(activeBearScores, i)
+
+            // 3. Total Attractiveness (0-100)
+            totalScore = ageScore + vScore
+
+            // 4. Update Opacity: Stronger = More Opaque (Lower transp)
+            // Base transp 80 (Weak) -> Target transp 30 (Strong)
+            // Map 0-100 score to 80-30 transp
+            transp = 80 - (totalScore / 100 * 50)
+            box.set_bgcolor(b, color.new(color.red, transp))
+
+            // 5. Border for "Golden Zones" (>75 Score)
+            if totalScore > 75
+                box.set_border_color(b, color.red)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
+// Process Bull Zones (Lows)
+if array.size(activeBullBoxes) > 0
+    for i = array.size(activeBullBoxes) - 1 to 0
+        b = array.get(activeBullBoxes, i)
+
+        // Mitigation condition: Low price touches the top of the zone (the pivot level)
+        bTop = box.get_top(b)
+
+        if low < bTop
+            // Mitigated!
+            // Apply final visual state (Gray, 10% opacity, no border)
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBullBoxes, i)
+            array.remove(activeBullScores, i)
+        else
+            box.set_right(b, bar_index + 5)
+
+            // --- Update Strength Visualization ---
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+
+            // 2. Retrieve Volume Score from Parallel Array
+            vScore = array.get(activeBullScores, i)
+
+            // 3. Total Attractiveness (0-100)
+            totalScore = ageScore + vScore
+
+            transp = 80 - (totalScore / 100 * 50)
+            box.set_bgcolor(b, color.new(color.green, transp))
+
+            if totalScore > 75
+                box.set_border_color(b, color.green)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
