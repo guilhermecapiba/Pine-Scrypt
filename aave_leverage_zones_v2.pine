@@ -106,13 +106,14 @@ macd_signal = input.int(72, "Signal Length", group = groupMACD)
 
 // Conditions
 // Bearish Cross: MACD < Signal AND Price > 1.1x STH-RP
+// Check sth_rp > 0 to avoid false signals if input is missing
 bearish_cross = ta.crossunder(macdLine, signalLine)
-in_sell_zone = close > l_11 // Above 1.1x
+in_sell_zone = (sth_rp > 0) and (close > l_11) // Above 1.1x
 
 // Bullish Cross: MACD > Signal AND Price < 0.9x STH-RP
 bullish_cross = ta.crossover(macdLine, signalLine)
-in_buy_zone = close < l_09 // Below 0.9x
+in_buy_zone = (sth_rp > 0) and (close < l_09) // Below 0.9x
 
 // Visuals
-plotshape(bearish_cross and in_sell_zone, "Bearish Signal", shape.arrowdown, location.abovebar, color.red, size=size.small, title="Bearish MACD Cross")
-plotshape(bullish_cross and in_buy_zone, "Bullish Signal", shape.arrowup, location.belowbar, color.green, size=size.small, title="Bullish MACD Cross")
+plotshape(bearish_cross and in_sell_zone, "Bearish Signal", shape.arrowdown, location.abovebar, color.red, size=size.normal, title="Bearish MACD Cross")
+plotshape(bullish_cross and in_buy_zone, "Bullish Signal", shape.arrowup, location.belowbar, color.green, size=size.normal, title="Bullish MACD Cross")
