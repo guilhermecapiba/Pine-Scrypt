@@ -3,7 +3,7 @@ indicator("Estratégia Aave: Zonas de Alavancagem (Simples)", overlay = true)
 
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
-sth_rp = input.float(0.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
+sth_rp = input.float(50000.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
 
 // 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
 // EMA Branca: 72 períodos (3 dias)
@@ -101,19 +101,72 @@ if barstate.islast
 
     // Labels for AAVE Health Factor (size.large approx 14, style=upper_right means top-right of label is anchored, putting label down-left)
     // 0.51x STH-RP
-    label.new(bar_index + 10, l_051, "LIQUIDAÇÃO AAVE (Health Factor 1,0) - PERIGO REAL", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_051, size=size.large)
+    label.new(bar_index + 60, l_051, "LIQUIDAÇÃO AAVE (Health Factor 1,0) - PERIGO REAL", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_051, size=size.large)
 
     // 0.6x STH-RP
-    label.new(bar_index + 10, l_06, "AAVE 1,20 Health factor - 100% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_06, size=size.large)
+    label.new(bar_index + 60, l_06, "AAVE 1,20 Health factor - 100% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_06, size=size.large)
 
     // 0.7x STH-RP
-    label.new(bar_index + 10, l_07, "AAVE 1,40 Health factor - 90% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07, size=size.large)
+    label.new(bar_index + 60, l_07, "AAVE 1,40 Health factor - 90% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07, size=size.large)
 
     // 0.8x STH-RP
-    label.new(bar_index + 10, l_08, "AAVE 1,60 Health factor - 75% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08, size=size.large)
+    label.new(bar_index + 60, l_08, "AAVE 1,60 Health factor - 75% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08, size=size.large)
 
     // 0.9x STH-RP
-    label.new(bar_index + 10, l_09, "AAVE 1,80 Health factor - 60% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_09, size=size.large)
+    label.new(bar_index + 60, l_09, "AAVE 1,80 Health factor - 60% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_09, size=size.large)
 
     // 1.0x STH-RP (Base)
-    label.new(bar_index + 10, l_10, "Short-Term Holder Realized Price - 50% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10, size=size.large)
+    label.new(bar_index + 60, l_10, "Short-Term Holder Realized Price - 50% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10, size=size.large)
+
+// 5. Alerts (Once per day per line on touch)
+// Logic: Use varip to track last alert day to prevent multiple alerts per day, but allow intra-bar alerts (at touch).
+
+varip int d_051 = 0
+if (low <= l_051 and high >= l_051) and (dayofmonth(time) != d_051)
+    alert("Bitcoin tocando a linha de 0,51% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_051 := dayofmonth(time)
+
+varip int d_06 = 0
+if (low <= l_06 and high >= l_06) and (dayofmonth(time) != d_06)
+    alert("Bitcoin tocando a linha de 0,60% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_06 := dayofmonth(time)
+
+varip int d_07 = 0
+if (low <= l_07 and high >= l_07) and (dayofmonth(time) != d_07)
+    alert("Bitcoin tocando a linha de 0,70% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_07 := dayofmonth(time)
+
+varip int d_08 = 0
+if (low <= l_08 and high >= l_08) and (dayofmonth(time) != d_08)
+    alert("Bitcoin tocando a linha de 0,80% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_08 := dayofmonth(time)
+
+varip int d_09 = 0
+if (low <= l_09 and high >= l_09) and (dayofmonth(time) != d_09)
+    alert("Bitcoin tocando a linha de 0,90% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_09 := dayofmonth(time)
+
+varip int d_10 = 0
+if (low <= l_10 and high >= l_10) and (dayofmonth(time) != d_10)
+    alert("Bitcoin tocando a linha de 1,00% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_10 := dayofmonth(time)
+
+varip int d_11 = 0
+if (low <= l_11 and high >= l_11) and (dayofmonth(time) != d_11)
+    alert("Bitcoin tocando a linha de 1,10% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_11 := dayofmonth(time)
+
+varip int d_12 = 0
+if (low <= l_12 and high >= l_12) and (dayofmonth(time) != d_12)
+    alert("Bitcoin tocando a linha de 1,20% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_12 := dayofmonth(time)
+
+varip int d_13 = 0
+if (low <= l_13 and high >= l_13) and (dayofmonth(time) != d_13)
+    alert("Bitcoin tocando a linha de 1,30% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_13 := dayofmonth(time)
+
+varip int d_14 = 0
+if (low <= l_14 and high >= l_14) and (dayofmonth(time) != d_14)
+    alert("Bitcoin tocando a linha de 1,40% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_14 := dayofmonth(time)
