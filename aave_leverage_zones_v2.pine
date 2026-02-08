@@ -58,9 +58,9 @@ p_13 = plot(l_13, "1.3x STH-RP", color = c_13, linewidth=1, trackprice=true)
 p_14 = plot(l_14, "1.4x STH-RP", color = c_14, linewidth=1, trackprice=true)
 
 // Fill Zones
-// No Trade Zone (0.9 - 1.1) - Transparent (0% Opacity)
-fill(p_09, p_10, color = color.new(color.gray, 100), title="No Trade Buy Side (0.9-1.0)")
-fill(p_10, p_11, color = color.new(color.gray, 100), title="No Trade Sell Side (1.0-1.1)")
+// No Trade Zone (0.9 - 1.1) - Faint (5% Opacity / 95% Transparency)
+fill(p_09, p_10, color = color.new(color.gray, 95), title="No Trade Buy Side (0.9-1.0)")
+fill(p_10, p_11, color = color.new(color.gray, 95), title="No Trade Sell Side (1.0-1.1)")
 
 // Compression/Decompression (0.8-0.9 & 1.1-1.2) - Weak (10-15% Opacity -> 85-90 Transp)
 fill(p_08, p_09, color = color.new(color.green, 85), title="Weak Buy Zone (0.8-0.9)")
