@@ -1,5 +1,5 @@
 //@version=5
-indicator("Estratégia Aave: Zonas de Alavancagem v2", overlay = true)
+indicator("Estratégia Aave: Zonas de Alavancagem (Simples/Final)", overlay = true)
 
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
@@ -92,28 +92,3 @@ if barstate.islast
     draw_extended_line(l_12, c_12, 1)
     draw_extended_line(l_13, c_13, 1)
     draw_extended_line(l_14, c_14, 1)
-
-
-// 5. MACD Strategy Signals (v2)
-// Inputs
-groupMACD = "MACD Settings (Daily Fixed)"
-macd_fast = input.int(7, "Fast Length", group = groupMACD)
-macd_slow = input.int(14, "Slow Length", group = groupMACD)
-macd_signal = input.int(3, "Signal Length", group = groupMACD)
-
-// Calculation (Daily Data)
-[macdLine, signalLine, _] = request.security(syminfo.tickerid, "D", ta.macd(hlc3, macd_fast, macd_slow, macd_signal))
-
-// Conditions
-// Bearish Cross: MACD < Signal AND Price > 1.1x STH-RP
-// Check sth_rp > 0 to avoid false signals if input is missing
-bearish_cross = ta.crossunder(macdLine, signalLine)
-in_sell_zone = (sth_rp > 0) and (close > l_11) // Above 1.1x
-
-// Bullish Cross: MACD > Signal AND Price < 0.9x STH-RP
-bullish_cross = ta.crossover(macdLine, signalLine)
-in_buy_zone = (sth_rp > 0) and (close < l_09) // Below 0.9x
-
-// Visuals
-plotshape(bearish_cross and in_sell_zone, "Bearish Signal", shape.arrowdown, location.abovebar, color.red, size=size.large, title="Bearish MACD Cross")
-plotshape(bullish_cross and in_buy_zone, "Bullish Signal", shape.arrowup, location.belowbar, color.green, size=size.large, title="Bullish MACD Cross")
