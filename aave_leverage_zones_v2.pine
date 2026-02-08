@@ -1,0 +1,118 @@
+//@version=5
+indicator("Estratégia Aave: Zonas de Alavancagem v2", overlay = true)
+
+// 1. Inputs Manuais (On-chain)
+groupOnChain = "Dados On-chain Diários"
+sth_rp = input.float(0.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
+
+// 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
+// EMA Branca: 72 períodos (3 dias)
+// EMA Amarela: 168 períodos (7 dias)
+// EMA Abóbora: 336 períodos (14 dias)
+// EMA Vermelha: 672 períodos (28 dias)
+
+ema72 = request.security(syminfo.tickerid, "60", ta.ema(close, 72))
+ema168 = request.security(syminfo.tickerid, "60", ta.ema(close, 168))
+ema336 = request.security(syminfo.tickerid, "60", ta.ema(close, 336))
+ema672 = request.security(syminfo.tickerid, "60", ta.ema(close, 672))
+
+plot(ema72, "EMA 72 (3d)", color = color.white, linewidth = 2)
+plot(ema168, "EMA 168 (7d)", color = color.yellow, linewidth = 2)
+plot(ema336, "EMA 336 (14d)", color = #ff9800, linewidth = 2) // Abóbora/Orange
+plot(ema672, "EMA 672 (28d)", color = color.red, linewidth = 2)
+
+// 3. Horizontal STH-RP Zones (Multipliers)
+// Levels
+l_06 = sth_rp * 0.6
+l_07 = sth_rp * 0.7
+l_08 = sth_rp * 0.8
+l_09 = sth_rp * 0.9
+l_10 = sth_rp * 1.0
+l_11 = sth_rp * 1.1
+l_12 = sth_rp * 1.2
+l_13 = sth_rp * 1.3
+l_14 = sth_rp * 1.4
+
+// Colors
+c_06 = color.new(color.green, 50)
+c_07 = color.new(color.green, 60)
+c_08 = color.new(color.green, 70)
+c_09 = color.new(color.green, 80)
+c_10 = color.new(color.white, 0)
+c_11 = color.new(color.red, 80)
+c_12 = color.new(color.red, 70)
+c_13 = color.new(color.red, 60)
+c_14 = color.new(color.red, 50)
+
+// Plot Levels with trackprice=true for main lines
+p_10 = plot(l_10, "1.0x STH-RP (Base)", color = c_10, linewidth=3, trackprice=true)
+
+p_06 = plot(l_06, "0.6x STH-RP", color = c_06, linewidth=1, trackprice=true)
+p_07 = plot(l_07, "0.7x STH-RP", color = c_07, linewidth=1, trackprice=true)
+p_08 = plot(l_08, "0.8x STH-RP", color = c_08, linewidth=1, trackprice=true)
+p_09 = plot(l_09, "0.9x STH-RP", color = c_09, linewidth=1, trackprice=true)
+
+p_11 = plot(l_11, "1.1x STH-RP", color = c_11, linewidth=1, trackprice=true)
+p_12 = plot(l_12, "1.2x STH-RP", color = c_12, linewidth=1, trackprice=true)
+p_13 = plot(l_13, "1.3x STH-RP", color = c_13, linewidth=1, trackprice=true)
+p_14 = plot(l_14, "1.4x STH-RP", color = c_14, linewidth=1, trackprice=true)
+
+// Fill Zones
+// No Trade Zone (0.9 - 1.1) - Removed/Transparent
+// fill(p_09, p_10, color = color.new(color.gray, 100), title="No Trade Buy Side (0.9-1.0)")
+// fill(p_10, p_11, color = color.new(color.gray, 100), title="No Trade Sell Side (1.0-1.1)")
+
+// Compression/Decompression (0.8-0.9 & 1.1-1.2) - Weak (10-15% Opacity -> 85-90 Transp)
+fill(p_08, p_09, color = color.new(color.green, 85), title="Weak Buy Zone (0.8-0.9)")
+fill(p_11, p_12, color = color.new(color.red, 85), title="Weak Sell Zone (1.1-1.2)")
+
+// Leverage Start (0.7-0.8 & 1.2-1.3) - Medium (20-30% Opacity -> 70-80 Transp)
+fill(p_07, p_08, color = color.new(color.green, 75), title="Medium Buy Zone (0.7-0.8)")
+fill(p_12, p_13, color = color.new(color.red, 75), title="Medium Sell Zone (1.2-1.3)")
+
+// Severe Leverage (0.6-0.7 & 1.3-1.4) - Strong (40-50% Opacity -> 50-60 Transp)
+fill(p_06, p_07, color = color.new(color.green, 60), title="Strong Buy Zone (0.6-0.7)")
+fill(p_13, p_14, color = color.new(color.red, 60), title="Strong Sell Zone (1.3-1.4)")
+
+// 4. Infinite Extension Lines (Right Side)
+// Function to draw lines
+draw_extended_line(price, col, width) =>
+    line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
+
+if barstate.islast
+    // Draw Main Extended Lines (on top of plots to ensure visibility into future)
+    draw_extended_line(l_10, c_10, 3)
+
+    draw_extended_line(l_06, c_06, 1)
+    draw_extended_line(l_07, c_07, 1)
+    draw_extended_line(l_08, c_08, 1)
+    draw_extended_line(l_09, c_09, 1)
+
+    draw_extended_line(l_11, c_11, 1)
+    draw_extended_line(l_12, c_12, 1)
+    draw_extended_line(l_13, c_13, 1)
+    draw_extended_line(l_14, c_14, 1)
+
+
+// 5. MACD Strategy Signals (v2)
+// Inputs
+groupMACD = "MACD Settings (1H Fixed)"
+macd_fast = input.int(168, "Fast Length", group = groupMACD)
+macd_slow = input.int(336, "Slow Length", group = groupMACD)
+macd_signal = input.int(72, "Signal Length", group = groupMACD)
+
+// Calculation (1H Data)
+[macdLine, signalLine, _] = request.security(syminfo.tickerid, "60", ta.macd(hlc3, macd_fast, macd_slow, macd_signal))
+
+// Conditions
+// Bearish Cross: MACD < Signal AND Price > 1.1x STH-RP
+bearish_cross = ta.crossunder(macdLine, signalLine)
+in_sell_zone = close > l_11 // Above 1.1x
+
+// Bullish Cross: MACD > Signal AND Price < 0.9x STH-RP
+bullish_cross = ta.crossover(macdLine, signalLine)
+in_buy_zone = close < l_09 // Below 0.9x
+
+// Visuals
+plotshape(bearish_cross and in_sell_zone, "Bearish Signal", shape.arrowdown, location.abovebar, color.red, size=size.small, title="Bearish MACD Cross")
+plotshape(bullish_cross and in_buy_zone, "Bullish Signal", shape.arrowup, location.belowbar, color.green, size=size.small, title="Bullish MACD Cross")
