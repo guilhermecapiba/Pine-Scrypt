@@ -4,7 +4,16 @@ indicator("Estratégia Aave: Zonas de Alavancagem", overlay = true)
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
 sth_rp = input.float(0.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
-mvrv_sth_input = input.float(0.0, "MVRV STH (Input para Referência)", group = groupOnChain)
+mvrv_z_score_input = input.float(0.0, "MVRV Z-Score (Input para Referência)", group = groupOnChain)
+
+// New Inputs for Cycle References
+groupCycle = "Opcional: Topos de Ciclo (Referências)"
+pi_cycle_top_price = input.float(0.0, "Pi Cycle Top Price (Referência de Topo)", group = groupCycle)
+puell_multiple_input = input.float(0.0, "Puell Multiple (Referência de Topo)", group = groupCycle)
+
+// Discount Factor Input
+discount_factor = input.float(1.0, "Fator de Desconto STH-RP (Default 1.0)", minval=0.1, step=0.1, group = groupOnChain)
+
 
 // 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
 // EMA Branca: 72 períodos (3 dias)
@@ -50,13 +59,13 @@ arsi = den == 0 ? 50 : (num / den * 50 + 50)
 
 // 4. Lógica de Coloração de Fundo (Zonas de Ação)
 // Graduações de VERDE (Alavancagem/Compra)
-// Preço < STH-RP.
+// Preço < STH-RP * discount_factor.
 // Preço > as EMA (Branca, amarela e abobora) -> Uptrend but discounted
 // RSI v2 > 20
 // Logic: "Quanto mais descontado... maior a força".
 
 is_uptrend = close > ema72 and close > ema168 and close > ema336
-is_discounted = close < sth_rp
+is_discounted = close < sth_rp * discount_factor
 rsi_ok = arsi > 20
 
 // Green Logic
@@ -65,9 +74,9 @@ bg_color = color(na)
 if is_uptrend and is_discounted and rsi_ok
     // Calculate discount depth
     // Strong: < 0.8 * STH_RP
-    if close < 0.8 * sth_rp
+    if close < 0.8 * sth_rp * discount_factor
         bg_color := color.new(color.green, 40) // Strong Buy
-    else if close < 0.9 * sth_rp
+    else if close < 0.9 * sth_rp * discount_factor
         bg_color := color.new(color.green, 60) // Medium Buy
     else
         bg_color := color.new(color.green, 80) // Weak Buy
@@ -78,14 +87,23 @@ else
     // Tendencia de baixa (protection) -> close < ema72 (Branca)
 
     // Red Logic Priorities:
+    // 0. Extreme Cycle Top (MVRV Z > 7 OR Price > Pi Cycle Top) - if set
     // 1. Extreme Overvaluation (> 1.4x)
     // 2. Overvaluation (> 1.2x)
     // 3. Trend Break (< EMA72) - Protection
     // 4. Overheated (RSI > 80 and > EMA72)
+    // 5. High Puell Multiple (> 4) - if set
 
-    if close > 1.4 * sth_rp
+    is_cycle_top = (mvrv_z_score_input > 7 and mvrv_z_score_input > 0) or (pi_cycle_top_price > 0 and close > pi_cycle_top_price)
+    is_puell_top = (puell_multiple_input > 4 and puell_multiple_input > 0)
+
+    if is_cycle_top
+        bg_color := color.new(color.maroon, 20) // Cycle Top Sell
+    else if close > 1.4 * sth_rp * discount_factor
         bg_color := color.new(color.red, 40) // Extreme Sell
-    else if close > 1.2 * sth_rp
+    else if is_puell_top
+        bg_color := color.new(color.red, 50) // Puell Sell
+    else if close > 1.2 * sth_rp * discount_factor
         bg_color := color.new(color.red, 60) // Strong Sell
     else if close < ema72
         bg_color := color.new(color.red, 80) // Protection Sell
