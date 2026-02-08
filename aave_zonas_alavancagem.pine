@@ -93,5 +93,18 @@ if barstate.islast
     draw_extended_line(l_13, c_13, 2)
     draw_extended_line(l_14, c_14, 2)
 
-    // Label for 0.6x STH-RP
-    label.new(bar_index + 10, l_06, "AAVE 1,2 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_left, textcolor=c_06, size=size.normal)
+    // Labels for AAVE Health Factor (size.large approx 14, style=upper_right means top-right of label is anchored, putting label down-left)
+    // 0.6x STH-RP
+    label.new(bar_index + 10, l_06, "AAVE 1,20 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_06, size=size.large)
+
+    // 0.7x STH-RP
+    label.new(bar_index + 10, l_07, "AAVE 1,40 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07, size=size.large)
+
+    // 0.8x STH-RP
+    label.new(bar_index + 10, l_08, "AAVE 1,60 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08, size=size.large)
+
+    // 0.9x STH-RP
+    label.new(bar_index + 10, l_09, "AAVE 1,80 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_09, size=size.large)
+
+    // 1.0x STH-RP (Base)
+    label.new(bar_index + 10, l_10, "Short-Term Holder Realized Price", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10, size=size.large)
