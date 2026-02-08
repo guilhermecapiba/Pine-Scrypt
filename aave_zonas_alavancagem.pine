@@ -23,6 +23,7 @@ plot(ema672, "EMA 672 (28d)", color = color.red, linewidth = 2)
 
 // 3. Horizontal STH-RP Zones (Multipliers)
 // Levels
+l_051 = sth_rp * 0.51
 l_06 = sth_rp * 0.6
 l_07 = sth_rp * 0.7
 l_08 = sth_rp * 0.8
@@ -34,6 +35,7 @@ l_13 = sth_rp * 1.3
 l_14 = sth_rp * 1.4
 
 // Colors
+c_051 = color.new(color.red, 0)
 c_06 = color.new(color.green, 50)
 c_07 = color.new(color.green, 60)
 c_08 = color.new(color.green, 70)
@@ -46,6 +48,8 @@ c_14 = color.new(color.red, 50)
 
 // Plot Levels with trackprice=true for main lines
 p_10 = plot(l_10, "1.0x STH-RP (Base)", color = c_10, linewidth=3, trackprice=true)
+
+p_051 = plot(l_051, "0.51x STH-RP (Liquidation)", color = c_051, linewidth=4, trackprice=true)
 
 p_06 = plot(l_06, "0.6x STH-RP", color = c_06, linewidth=2, trackprice=true)
 p_07 = plot(l_07, "0.7x STH-RP", color = c_07, linewidth=2, trackprice=true)
@@ -83,6 +87,8 @@ if barstate.islast
     // Draw Main Extended Lines (on top of plots to ensure visibility into future)
     draw_extended_line(l_10, c_10, 3)
 
+    draw_extended_line(l_051, c_051, 4)
+
     draw_extended_line(l_06, c_06, 2)
     draw_extended_line(l_07, c_07, 2)
     draw_extended_line(l_08, c_08, 2)
@@ -94,17 +100,20 @@ if barstate.islast
     draw_extended_line(l_14, c_14, 2)
 
     // Labels for AAVE Health Factor (size.large approx 14, style=upper_right means top-right of label is anchored, putting label down-left)
+    // 0.51x STH-RP
+    label.new(bar_index + 10, l_051, "LIQUIDAÇÃO AAVE (Health Factor 1,0) - PERIGO REAL", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_051, size=size.large)
+
     // 0.6x STH-RP
-    label.new(bar_index + 10, l_06, "AAVE 1,20 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_06, size=size.large)
+    label.new(bar_index + 10, l_06, "AAVE 1,20 Health factor - 100% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_06, size=size.large)
 
     // 0.7x STH-RP
-    label.new(bar_index + 10, l_07, "AAVE 1,40 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07, size=size.large)
+    label.new(bar_index + 10, l_07, "AAVE 1,40 Health factor - 90% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07, size=size.large)
 
     // 0.8x STH-RP
-    label.new(bar_index + 10, l_08, "AAVE 1,60 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08, size=size.large)
+    label.new(bar_index + 10, l_08, "AAVE 1,60 Health factor - 75% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08, size=size.large)
 
     // 0.9x STH-RP
-    label.new(bar_index + 10, l_09, "AAVE 1,80 Health factor", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_09, size=size.large)
+    label.new(bar_index + 10, l_09, "AAVE 1,80 Health factor - 60% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_09, size=size.large)
 
     // 1.0x STH-RP (Base)
-    label.new(bar_index + 10, l_10, "Short-Term Holder Realized Price", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10, size=size.large)
+    label.new(bar_index + 10, l_10, "Short-Term Holder Realized Price - 50% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10, size=size.large)
