@@ -1,19 +1,9 @@
 //@version=5
-indicator("Estratégia Aave: Zonas de Alavancagem", overlay = true)
+indicator("Estratégia Aave: Zonas de Alavancagem (Simples)", overlay = true)
 
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
 sth_rp = input.float(0.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
-mvrv_z_score_input = input.float(0.0, "MVRV Z-Score (Linha Laranja/Orange Line)", tooltip="Insira o valor da Linha Laranja (Z-Score) do gráfico do Bitcoin Magazine Pro.", group = groupOnChain)
-
-// New Inputs for Cycle References
-groupCycle = "Opcional: Topos de Ciclo (Referências)"
-show_pi_cycle = input.bool(true, "Mostrar Pi Cycle Top (111DMA & 350DMA x 2)", group = groupCycle)
-puell_multiple_input = input.float(0.0, "Puell Multiple (Referência de Topo)", group = groupCycle)
-
-// Discount Factor Input
-discount_factor = input.float(1.0, "Fator de Desconto STH-RP (Default 1.0)", minval=0.1, step=0.1, group = groupOnChain)
-
 
 // 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
 // EMA Branca: 72 períodos (3 dias)
@@ -31,66 +21,35 @@ plot(ema168, "EMA 168 (7d)", color = color.yellow, linewidth = 2)
 plot(ema336, "EMA 336 (14d)", color = #ff9800, linewidth = 2) // Abóbora/Orange
 plot(ema672, "EMA 672 (28d)", color = color.red, linewidth = 2)
 
-// 3. Pi Cycle Top Calculation (Automated)
-// 111 DMA (Daily)
-sma111_d = request.security(syminfo.tickerid, "D", ta.sma(close, 111))
-// 350 DMA x 2 (Daily)
-sma350_d = request.security(syminfo.tickerid, "D", ta.sma(close, 350))
-pi_cycle_high_band = sma350_d * 2
+// 3. Horizontal STH-RP Zones (Multipliers)
+// Levels
+l_07 = sth_rp * 0.7
+l_08 = sth_rp * 0.8
+l_09 = sth_rp * 0.9
+l_10 = sth_rp * 1.0
+l_11 = sth_rp * 1.1
+l_12 = sth_rp * 1.2
+l_13 = sth_rp * 1.3
+l_14 = sth_rp * 1.4 // Theoretical max for fill
 
-// Plot Pi Cycle
-plot(show_pi_cycle ? sma111_d : na, "Pi Cycle 111DMA", color = color.orange, linewidth = 1, style = plot.style_circles)
-plot(show_pi_cycle ? pi_cycle_high_band : na, "Pi Cycle 350DMA x 2", color = color.red, linewidth = 1, style = plot.style_cross)
+// Plot Levels (Invisible or Faint)
+p_07 = plot(l_07, "0.7x STH-RP", color = color.new(color.green, 90))
+p_08 = plot(l_08, "0.8x STH-RP", color = color.new(color.green, 80))
+p_09 = plot(l_09, "0.9x STH-RP", color = color.new(color.green, 70))
+p_10 = plot(l_10, "1.0x STH-RP", color = color.gray, linewidth=2, style=plot.style_circles)
+p_11 = plot(l_11, "1.1x STH-RP", color = color.new(color.red, 70))
+p_12 = plot(l_12, "1.2x STH-RP", color = color.new(color.red, 80))
+p_13 = plot(l_13, "1.3x STH-RP", color = color.new(color.red, 90))
+p_14 = plot(l_14, "1.4x STH-RP", color = color.new(color.red, 95))
 
-// 4. Lógica de Coloração de Fundo (Zonas de Ação)
-// Graduações de VERDE (Alavancagem/Compra)
-// Preço < STH-RP * discount_factor.
-// Preço > as EMA (Branca, amarela e abobora) -> Uptrend but discounted
-// Logic: "Quanto mais descontado... maior a força".
+// Fill Zones
+// Buy Zones (Green)
+fill(p_07, p_08, color = color.new(color.green, 40), title="Strong Buy Zone (0.7-0.8)")
+fill(p_08, p_09, color = color.new(color.green, 60), title="Medium Buy Zone (0.8-0.9)")
+fill(p_09, p_10, color = color.new(color.green, 80), title="Weak Buy Zone (0.9-1.0)")
 
-is_uptrend = close > ema72 and close > ema168 and close > ema336
-is_discounted = close < sth_rp * discount_factor
-
-// Green Logic
-bg_color = color(na)
-
-if is_uptrend and is_discounted
-    // Calculate discount depth
-    // Strong: < 0.8 * STH_RP
-    if close < 0.8 * sth_rp * discount_factor
-        bg_color := color.new(color.green, 40) // Strong Buy
-    else if close < 0.9 * sth_rp * discount_factor
-        bg_color := color.new(color.green, 60) // Medium Buy
-    else
-        bg_color := color.new(color.green, 80) // Weak Buy
-else
-    // VERMELHO (Desalavancagem/Venda)
-    // Preço > 1.2x ou 1.4x o STH RP
-    // Tendencia de baixa (protection) -> close < ema72 (Branca)
-
-    // Red Logic Priorities:
-    // 0. Extreme Cycle Top (MVRV Z > 7 OR Pi Cycle Cross/Break)
-    // 1. Extreme Overvaluation (> 1.4x)
-    // 2. Overvaluation (> 1.2x)
-    // 3. Trend Break (< EMA72) - Protection
-    // 4. High Puell Multiple (> 4) - if set
-
-    // Pi Cycle condition: Close above the 350DMA*2 OR 111DMA crosses/above 350DMA*2
-    is_pi_cycle_top = (close > pi_cycle_high_band) or (sma111_d > pi_cycle_high_band)
-
-    is_cycle_top = (mvrv_z_score_input > 7 and mvrv_z_score_input > 0) or is_pi_cycle_top
-    is_puell_top = (puell_multiple_input > 4 and puell_multiple_input > 0)
-
-    if is_cycle_top
-        bg_color := color.new(#800000, 20) // Cycle Top Sell
-    else if close > 1.4 * sth_rp * discount_factor
-        bg_color := color.new(color.red, 40) // Extreme Sell
-    else if is_puell_top
-        bg_color := color.new(color.red, 50) // Puell Sell
-    else if close > 1.2 * sth_rp * discount_factor
-        bg_color := color.new(color.red, 60) // Strong Sell
-    else if close < ema72
-        bg_color := color.new(color.red, 80) // Protection Sell
-
-// Apply background color
-bgcolor(bg_color)
+// Sell Zones (Red)
+fill(p_10, p_11, color = color.new(color.red, 90), title="Weak Sell Zone (1.0-1.1)")
+fill(p_11, p_12, color = color.new(color.red, 70), title="Medium Sell Zone (1.1-1.2)")
+fill(p_12, p_13, color = color.new(color.red, 50), title="Strong Sell Zone (1.2-1.3)")
+fill(p_13, p_14, color = color.new(color.red, 30), title="Extreme Sell Zone (1.3-1.4)")
