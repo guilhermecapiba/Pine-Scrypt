@@ -1,5 +1,5 @@
 //@version=5
-indicator("Estratégia Aave: Zonas de Alavancagem (Simples)", overlay = true)
+indicator("Estratégia Aave: Zonas de Alavancagem (ALARMES)", overlay = true)
 
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
@@ -46,20 +46,20 @@ c_12 = color.new(color.red, 70)
 c_13 = color.new(color.red, 60)
 c_14 = color.new(color.red, 50)
 
-// Plot Levels with trackprice=true for main lines
-p_10 = plot(l_10, "1.0x STH-RP (Base)", color = c_10, linewidth=3, trackprice=true)
+// Plot Levels with trackprice=true removed (to avoid duplicate labels)
+p_10 = plot(l_10, "1.0x STH-RP (Base)", color = c_10, linewidth=3)
 
-p_051 = plot(l_051, "0.51x STH-RP (Liquidation)", color = c_051, linewidth=4, trackprice=true)
+p_051 = plot(l_051, "0.51x STH-RP (Liquidation)", color = c_051, linewidth=4)
 
-p_06 = plot(l_06, "0.6x STH-RP", color = c_06, linewidth=2, trackprice=true)
-p_07 = plot(l_07, "0.7x STH-RP", color = c_07, linewidth=2, trackprice=true)
-p_08 = plot(l_08, "0.8x STH-RP", color = c_08, linewidth=2, trackprice=true)
-p_09 = plot(l_09, "0.9x STH-RP", color = c_09, linewidth=2, trackprice=true)
+p_06 = plot(l_06, "0.6x STH-RP", color = c_06, linewidth=2)
+p_07 = plot(l_07, "0.7x STH-RP", color = c_07, linewidth=2)
+p_08 = plot(l_08, "0.8x STH-RP", color = c_08, linewidth=2)
+p_09 = plot(l_09, "0.9x STH-RP", color = c_09, linewidth=2)
 
-p_11 = plot(l_11, "1.1x STH-RP", color = c_11, linewidth=2, trackprice=true)
-p_12 = plot(l_12, "1.2x STH-RP", color = c_12, linewidth=2, trackprice=true)
-p_13 = plot(l_13, "1.3x STH-RP", color = c_13, linewidth=2, trackprice=true)
-p_14 = plot(l_14, "1.4x STH-RP", color = c_14, linewidth=2, trackprice=true)
+p_11 = plot(l_11, "1.1x STH-RP", color = c_11, linewidth=2)
+p_12 = plot(l_12, "1.2x STH-RP", color = c_12, linewidth=2)
+p_13 = plot(l_13, "1.3x STH-RP", color = c_13, linewidth=2)
+p_14 = plot(l_14, "1.4x STH-RP", color = c_14, linewidth=2)
 
 // Fill Zones
 // No Trade Zone (0.9 - 1.1) - Extremely Faint / Transparent
