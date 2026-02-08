@@ -96,13 +96,13 @@ if barstate.islast
 
 // 5. MACD Strategy Signals (v2)
 // Inputs
-groupMACD = "MACD Settings (1H Fixed)"
-macd_fast = input.int(168, "Fast Length", group = groupMACD)
-macd_slow = input.int(336, "Slow Length", group = groupMACD)
-macd_signal = input.int(72, "Signal Length", group = groupMACD)
+groupMACD = "MACD Settings (Daily Fixed)"
+macd_fast = input.int(7, "Fast Length", group = groupMACD)
+macd_slow = input.int(14, "Slow Length", group = groupMACD)
+macd_signal = input.int(3, "Signal Length", group = groupMACD)
 
-// Calculation (1H Data)
-[macdLine, signalLine, _] = request.security(syminfo.tickerid, "60", ta.macd(hlc3, macd_fast, macd_slow, macd_signal))
+// Calculation (Daily Data)
+[macdLine, signalLine, _] = request.security(syminfo.tickerid, "D", ta.macd(hlc3, macd_fast, macd_slow, macd_signal))
 
 // Conditions
 // Bearish Cross: MACD < Signal AND Price > 1.1x STH-RP
@@ -115,5 +115,5 @@ bullish_cross = ta.crossover(macdLine, signalLine)
 in_buy_zone = (sth_rp > 0) and (close < l_09) // Below 0.9x
 
 // Visuals
-plotshape(bearish_cross and in_sell_zone, "Bearish Signal", shape.arrowdown, location.abovebar, color.red, size=size.normal, title="Bearish MACD Cross")
-plotshape(bullish_cross and in_buy_zone, "Bullish Signal", shape.arrowup, location.belowbar, color.green, size=size.normal, title="Bullish MACD Cross")
+plotshape(bearish_cross and in_sell_zone, "Bearish Signal", shape.arrowdown, location.abovebar, color.red, size=size.large, title="Bearish MACD Cross")
+plotshape(bullish_cross and in_buy_zone, "Bullish Signal", shape.arrowup, location.belowbar, color.green, size=size.large, title="Bullish MACD Cross")
