@@ -1,14 +1,14 @@
-//@version=6
+//@version=5
 indicator("Estratégia Aave: Zonas de Alavancagem", overlay = true)
 
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
 sth_rp = input.float(0.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
-mvrv_z_score_input = input.float(0.0, "MVRV Z-Score (Input para Referência)", group = groupOnChain)
+mvrv_z_score_input = input.float(0.0, "MVRV Z-Score (Linha Laranja/Orange Line)", tooltip="Insira o valor da Linha Laranja (Z-Score) do gráfico do Bitcoin Magazine Pro.", group = groupOnChain)
 
 // New Inputs for Cycle References
 groupCycle = "Opcional: Topos de Ciclo (Referências)"
-pi_cycle_top_price = input.float(0.0, "Pi Cycle Top Price (Referência de Topo)", group = groupCycle)
+show_pi_cycle = input.bool(true, "Mostrar Pi Cycle Top (111DMA & 350DMA x 2)", group = groupCycle)
 puell_multiple_input = input.float(0.0, "Puell Multiple (Referência de Topo)", group = groupCycle)
 
 // Discount Factor Input
@@ -31,47 +31,30 @@ plot(ema168, "EMA 168 (7d)", color = color.yellow, linewidth = 2)
 plot(ema336, "EMA 336 (14d)", color = #ff9800, linewidth = 2) // Abóbora/Orange
 plot(ema672, "EMA 672 (28d)", color = color.red, linewidth = 2)
 
-// 3. Indicador Nativo (RSI v2)
-// Calcule um RSI v2 de 14 períodos EMA HLC3 .
-// RSI Logic from provided code:
-length = 14
-src = hlc3
-// Function ma
-ma(x, len, maType)=>
-    switch maType
-        'EMA' => ta.ema(x, len)
-        'SMA' => ta.sma(x, len)
-        'RMA' => ta.rma(x, len)
-        'TMA' => ta.sma(ta.sma(x, math.ceil(len/2)), math.floor(len/2)+1)
+// 3. Pi Cycle Top Calculation (Automated)
+// 111 DMA (Daily)
+sma111_d = request.security(syminfo.tickerid, "D", ta.sma(close, 111))
+// 350 DMA x 2 (Daily)
+sma350_d = request.security(syminfo.tickerid, "D", ta.sma(close, 350))
+pi_cycle_high_band = sma350_d * 2
 
-// RSI Logic
-upper = ta.highest(src, length)
-lower = ta.lowest(src, length)
-r = upper - lower
-
-d = src - src[1]
-diff = upper > upper[1] ? r : lower < lower[1] ? -r : d
-
-// smoType1 is RMA by default in provided code
-num = ma(diff, length, 'RMA')
-den = ma(math.abs(diff), length, 'RMA')
-arsi = den == 0 ? 50 : (num / den * 50 + 50)
+// Plot Pi Cycle
+plot(show_pi_cycle ? sma111_d : na, "Pi Cycle 111DMA", color = color.orange, linewidth = 1, style = plot.style_circles)
+plot(show_pi_cycle ? pi_cycle_high_band : na, "Pi Cycle 350DMA x 2", color = color.red, linewidth = 1, style = plot.style_cross)
 
 // 4. Lógica de Coloração de Fundo (Zonas de Ação)
 // Graduações de VERDE (Alavancagem/Compra)
 // Preço < STH-RP * discount_factor.
 // Preço > as EMA (Branca, amarela e abobora) -> Uptrend but discounted
-// RSI v2 > 20
 // Logic: "Quanto mais descontado... maior a força".
 
 is_uptrend = close > ema72 and close > ema168 and close > ema336
 is_discounted = close < sth_rp * discount_factor
-rsi_ok = arsi > 20
 
 // Green Logic
 bg_color = color(na)
 
-if is_uptrend and is_discounted and rsi_ok
+if is_uptrend and is_discounted
     // Calculate discount depth
     // Strong: < 0.8 * STH_RP
     if close < 0.8 * sth_rp * discount_factor
@@ -83,22 +66,23 @@ if is_uptrend and is_discounted and rsi_ok
 else
     // VERMELHO (Desalavancagem/Venda)
     // Preço > 1.2x ou 1.4x o STH RP
-    // RSI muito alto e preço muito acima das médias -> Implied "Overheated"
     // Tendencia de baixa (protection) -> close < ema72 (Branca)
 
     // Red Logic Priorities:
-    // 0. Extreme Cycle Top (MVRV Z > 7 OR Price > Pi Cycle Top) - if set
+    // 0. Extreme Cycle Top (MVRV Z > 7 OR Pi Cycle Cross/Break)
     // 1. Extreme Overvaluation (> 1.4x)
     // 2. Overvaluation (> 1.2x)
     // 3. Trend Break (< EMA72) - Protection
-    // 4. Overheated (RSI > 80 and > EMA72)
-    // 5. High Puell Multiple (> 4) - if set
+    // 4. High Puell Multiple (> 4) - if set
 
-    is_cycle_top = (mvrv_z_score_input > 7 and mvrv_z_score_input > 0) or (pi_cycle_top_price > 0 and close > pi_cycle_top_price)
+    // Pi Cycle condition: Close above the 350DMA*2 OR 111DMA crosses/above 350DMA*2
+    is_pi_cycle_top = (close > pi_cycle_high_band) or (sma111_d > pi_cycle_high_band)
+
+    is_cycle_top = (mvrv_z_score_input > 7 and mvrv_z_score_input > 0) or is_pi_cycle_top
     is_puell_top = (puell_multiple_input > 4 and puell_multiple_input > 0)
 
     if is_cycle_top
-        bg_color := color.new(color.maroon, 20) // Cycle Top Sell
+        bg_color := color.new(#800000, 20) // Cycle Top Sell
     else if close > 1.4 * sth_rp * discount_factor
         bg_color := color.new(color.red, 40) // Extreme Sell
     else if is_puell_top
@@ -107,8 +91,6 @@ else
         bg_color := color.new(color.red, 60) // Strong Sell
     else if close < ema72
         bg_color := color.new(color.red, 80) // Protection Sell
-    else if arsi > 80 and close > ema72
-        bg_color := color.new(color.red, 70) // Warning / Overheated
 
 // Apply background color
 bgcolor(bg_color)
