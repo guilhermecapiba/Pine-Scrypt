@@ -23,6 +23,7 @@ plot(ema672, "EMA 672 (28d)", color = color.red, linewidth = 2)
 
 // 3. Horizontal STH-RP Zones (Multipliers)
 // Levels
+l_06 = sth_rp * 0.6
 l_07 = sth_rp * 0.7
 l_08 = sth_rp * 0.8
 l_09 = sth_rp * 0.9
@@ -30,26 +31,36 @@ l_10 = sth_rp * 1.0
 l_11 = sth_rp * 1.1
 l_12 = sth_rp * 1.2
 l_13 = sth_rp * 1.3
-l_14 = sth_rp * 1.4 // Theoretical max for fill
+l_14 = sth_rp * 1.4
 
-// Plot Levels (Invisible or Faint)
-p_07 = plot(l_07, "0.7x STH-RP", color = color.new(color.green, 90))
-p_08 = plot(l_08, "0.8x STH-RP", color = color.new(color.green, 80))
-p_09 = plot(l_09, "0.9x STH-RP", color = color.new(color.green, 70))
-p_10 = plot(l_10, "1.0x STH-RP", color = color.gray, linewidth=2, style=plot.style_circles)
-p_11 = plot(l_11, "1.1x STH-RP", color = color.new(color.red, 70))
-p_12 = plot(l_12, "1.2x STH-RP", color = color.new(color.red, 80))
-p_13 = plot(l_13, "1.3x STH-RP", color = color.new(color.red, 90))
-p_14 = plot(l_14, "1.4x STH-RP", color = color.new(color.red, 95))
+// Plot Levels
+// STH-RP (1.0) is White, Width 3, 100% Opacity
+p_10 = plot(l_10, "1.0x STH-RP (Base)", color = color.new(color.white, 0), linewidth=3)
+
+// Other Levels (Width 1, Faint/Matching Zone Color)
+p_06 = plot(l_06, "0.6x STH-RP", color = color.new(color.green, 50), linewidth=1)
+p_07 = plot(l_07, "0.7x STH-RP", color = color.new(color.green, 60), linewidth=1)
+p_08 = plot(l_08, "0.8x STH-RP", color = color.new(color.green, 70), linewidth=1)
+p_09 = plot(l_09, "0.9x STH-RP", color = color.new(color.green, 80), linewidth=1)
+
+p_11 = plot(l_11, "1.1x STH-RP", color = color.new(color.red, 80), linewidth=1)
+p_12 = plot(l_12, "1.2x STH-RP", color = color.new(color.red, 70), linewidth=1)
+p_13 = plot(l_13, "1.3x STH-RP", color = color.new(color.red, 60), linewidth=1)
+p_14 = plot(l_14, "1.4x STH-RP", color = color.new(color.red, 50), linewidth=1)
 
 // Fill Zones
-// Buy Zones (Green)
-fill(p_07, p_08, color = color.new(color.green, 40), title="Strong Buy Zone (0.7-0.8)")
-fill(p_08, p_09, color = color.new(color.green, 60), title="Medium Buy Zone (0.8-0.9)")
-fill(p_09, p_10, color = color.new(color.green, 80), title="Weak Buy Zone (0.9-1.0)")
+// No Trade Zone (0.9 - 1.1) - Extremely Faint / Transparent
+fill(p_09, p_10, color = color.new(color.gray, 95), title="No Trade Buy Side (0.9-1.0)")
+fill(p_10, p_11, color = color.new(color.gray, 95), title="No Trade Sell Side (1.0-1.1)")
 
-// Sell Zones (Red)
-fill(p_10, p_11, color = color.new(color.red, 90), title="Weak Sell Zone (1.0-1.1)")
-fill(p_11, p_12, color = color.new(color.red, 70), title="Medium Sell Zone (1.1-1.2)")
-fill(p_12, p_13, color = color.new(color.red, 50), title="Strong Sell Zone (1.2-1.3)")
-fill(p_13, p_14, color = color.new(color.red, 30), title="Extreme Sell Zone (1.3-1.4)")
+// Compression/Decompression (0.8-0.9 & 1.1-1.2) - Weak (10-15% Opacity -> 85-90 Transp)
+fill(p_08, p_09, color = color.new(color.green, 85), title="Weak Buy Zone (0.8-0.9)")
+fill(p_11, p_12, color = color.new(color.red, 85), title="Weak Sell Zone (1.1-1.2)")
+
+// Leverage Start (0.7-0.8 & 1.2-1.3) - Medium (20-30% Opacity -> 70-80 Transp)
+fill(p_07, p_08, color = color.new(color.green, 75), title="Medium Buy Zone (0.7-0.8)")
+fill(p_12, p_13, color = color.new(color.red, 75), title="Medium Sell Zone (1.2-1.3)")
+
+// Severe Leverage (0.6-0.7 & 1.3-1.4) - Strong (40-50% Opacity -> 50-60 Transp)
+fill(p_06, p_07, color = color.new(color.green, 60), title="Strong Buy Zone (0.6-0.7)")
+fill(p_13, p_14, color = color.new(color.red, 60), title="Strong Sell Zone (1.3-1.4)")
