@@ -1,0 +1,95 @@
+//@version=5
+indicator("Capiba Crypto Domination Flow", shorttitle="Capiba Crypto Dom Flow", overlay=false)
+
+// -----------------------------------------------------------------------------
+// 1. INPUTS DE CÁLCULO
+// -----------------------------------------------------------------------------
+grp_calc = "Configuração do Fluxo"
+len      = input.int(20, "Período de Análise (Média)", minval=5, group=grp_calc)
+smooth   = input.int(8, "Suavização Gaussiana", minval=1, group=grp_calc)
+
+// -----------------------------------------------------------------------------
+// 2. INPUTS DE ESTILO E CORES (Default Ajustado)
+// -----------------------------------------------------------------------------
+grp_vis = "Visualização de Linhas"
+col_flow   = input.color(color.white, "Cor Domination Flow", group=grp_vis, inline="1")
+wid_flow   = input.int(2, "", minval=1, group=grp_vis, inline="1")
+
+col_signal = input.color(#2196f3, "Cor Signal Line (Azul)", group=grp_vis, inline="2")
+wid_signal = input.int(1, "", minval=1, group=grp_vis, inline="2")
+
+col_ema20  = input.color(color.yellow, "Cor EMA 20 (Amarela)", group=grp_vis, inline="3")
+wid_ema20  = input.int(2, "", minval=1, group=grp_vis, inline="3")
+
+col_ema200 = input.color(#795548, "Cor EMA 200 (Marrom)", group=grp_vis, inline="4")
+wid_ema200 = input.int(2, "", minval=1, group=grp_vis, inline="4")
+
+grp_style = "Zonas de Exaustão (OB/OS)"
+obValue   = input.float(80, 'Limite Superior (OB)', inline = 'ob', group = grp_style)
+obAreaCss = input(color.new(#00c853, 70), 'Cor Alta', inline = 'ob', group = grp_style)
+osValue   = input.float(20, 'Limite Inferior (OS)', inline = 'os', group = grp_style)
+osAreaCss = input(color.new(#ff1744, 70), 'Cor Baixa', inline = 'os', group = grp_style)
+
+// -----------------------------------------------------------------------------
+// 3. BUSCA DE DADOS E CÁLCULO Z-SCORE
+// -----------------------------------------------------------------------------
+// Dynamic Ticker Construction
+dom_ticker = "CRYPTOCAP:" + syminfo.basecurrency + ".D"
+
+crypto_d = request.security(dom_ticker, timeframe.period, close)
+usdt_d   = request.security("CRYPTOCAP:USDT.D", timeframe.period, close)
+usdc_d   = request.security("CRYPTOCAP:USDC.D", timeframe.period, close)
+stable_d = usdt_d + usdc_d
+ratio    = stable_d != 0 ? crypto_d / stable_d : 0
+
+mean       = ta.sma(ratio, len)
+stdDev     = ta.stdev(ratio, len)
+zScore     = stdDev != 0 ? (ratio - mean) / stdDev : 0
+normalized = 100 / (1 + math.exp(-zScore))
+
+domFlow = ta.ema(normalized, smooth)
+signal  = ta.ema(domFlow, 5)
+ema20   = ta.ema(domFlow, 20)
+ema200  = ta.ema(domFlow, 200)
+
+// -----------------------------------------------------------------------------
+// 4. PLOTAGEM
+// -----------------------------------------------------------------------------
+plot_up  = plot(obValue, color = na, editable = false)
+plot_avg = plot(50, color = na, editable = false)
+plot_dn  = plot(osValue, color = na, editable = false)
+
+// Plots das Linhas com os novos defaults
+plot_flow = plot(domFlow, "Domination Flow", color=col_flow, linewidth=wid_flow)
+plot(signal, "Signal Line", color=col_signal, linewidth=wid_signal)
+plot(ema20, "EMA 20", color=col_ema20, linewidth=wid_ema20)
+plot(ema200, "EMA 200", color=col_ema200, linewidth=wid_ema200)
+
+// --- Coloração Dinâmica (Fills) ---
+fill(plot_flow, plot_up, domFlow > obValue ? obAreaCss : na, title="Excesso Crypto")
+fill(plot_dn, plot_flow, domFlow < osValue ? osAreaCss : na, title="Excesso Stables")
+
+fill(plot_flow, plot_avg, obValue, 50, obAreaCss, color.new(chart.bg_color, 100))
+fill(plot_avg, plot_flow, 50, osValue, color.new(chart.bg_color, 100), osAreaCss)
+
+// Linhas Horizontais Ajustadas (Midline cinza 50% opacidade)
+hline(obValue, 'OB Line', color=color.new(obAreaCss, 30))
+hline(50, 'Midline', color=color.new(color.gray, 50), linewidth=1)
+hline(osValue, 'OS Line', color=color.new(osAreaCss, 30))
+
+// -----------------------------------------------------------------------------
+// 5. DIVERGÊNCIAS (ALTA E BAIXA)
+// -----------------------------------------------------------------------------
+lookbackLeft  = 5
+lookbackRight = 5
+
+ph = ta.pivothigh(domFlow, lookbackLeft, lookbackRight)
+pl = ta.pivotlow(domFlow, lookbackLeft, lookbackRight)
+
+// Divergência de Alta (BULL): Preço faz mínima menor, DomFlow faz mínima maior
+bullDiv = low[lookbackRight] < ta.valuewhen(not na(pl), low[lookbackRight], 1) and domFlow[lookbackRight] > ta.valuewhen(not na(pl), domFlow[lookbackRight], 1)
+plotshape(pl ? domFlow[lookbackRight] : na, "Bull Div", shape.triangleup, location.absolute, color.green, size=size.small, offset=-lookbackRight, text="DIV BULL")
+
+// Divergência de Baixa (BEAR): Preço faz máxima maior, DomFlow faz máxima menor
+bearDiv = high[lookbackRight] > ta.valuewhen(not na(ph), high[lookbackRight], 1) and domFlow[lookbackRight] < ta.valuewhen(not na(ph), domFlow[lookbackRight], 1)
+plotshape(ph ? domFlow[lookbackRight] : na, "Bear Div", shape.triangledown, location.absolute, color.red, size=size.small, offset=-lookbackRight, text="DIV BEAR")
