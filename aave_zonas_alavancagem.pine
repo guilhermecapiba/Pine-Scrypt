@@ -1,0 +1,172 @@
+//@version=5
+indicator("Estratégia Aave: Zonas de Alavancagem (ALARMES)", overlay = true)
+
+// 1. Inputs Manuais (On-chain)
+groupOnChain = "Dados On-chain Diários"
+sth_rp = input.float(50000.0, "STH-RP (Short-Term Holder Realized Price)", group = groupOnChain)
+
+// 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
+// EMA Branca: 72 períodos (3 dias)
+// EMA Amarela: 168 períodos (7 dias)
+// EMA Abóbora: 336 períodos (14 dias)
+// EMA Vermelha: 672 períodos (28 dias)
+
+ema72 = request.security(syminfo.tickerid, "60", ta.ema(close, 72))
+ema168 = request.security(syminfo.tickerid, "60", ta.ema(close, 168))
+ema336 = request.security(syminfo.tickerid, "60", ta.ema(close, 336))
+ema672 = request.security(syminfo.tickerid, "60", ta.ema(close, 672))
+
+plot(ema72, "EMA 72 (3d)", color = color.white, linewidth = 2)
+plot(ema168, "EMA 168 (7d)", color = color.yellow, linewidth = 2)
+plot(ema336, "EMA 336 (14d)", color = #ff9800, linewidth = 2) // Abóbora/Orange
+plot(ema672, "EMA 672 (28d)", color = color.red, linewidth = 2)
+
+// 3. Horizontal STH-RP Zones (Multipliers)
+// Levels
+l_051 = sth_rp * 0.51
+l_06 = sth_rp * 0.6
+l_07 = sth_rp * 0.7
+l_08 = sth_rp * 0.8
+l_09 = sth_rp * 0.9
+l_10 = sth_rp * 1.0
+l_11 = sth_rp * 1.1
+l_12 = sth_rp * 1.2
+l_13 = sth_rp * 1.3
+l_14 = sth_rp * 1.4
+
+// Colors
+c_051 = color.new(color.red, 0)
+c_06 = color.new(color.green, 50)
+c_07 = color.new(color.green, 60)
+c_08 = color.new(color.green, 70)
+c_09 = color.new(color.green, 80)
+c_10 = color.new(color.white, 0)
+c_11 = color.new(color.red, 80)
+c_12 = color.new(color.red, 70)
+c_13 = color.new(color.red, 60)
+c_14 = color.new(color.red, 50)
+
+// Plot Levels with trackprice=true removed (to avoid duplicate labels)
+p_10 = plot(l_10, "1.0x STH-RP (Base)", color = c_10, linewidth=3)
+
+p_051 = plot(l_051, "0.51x STH-RP (Liquidation)", color = c_051, linewidth=4)
+
+p_06 = plot(l_06, "0.6x STH-RP", color = c_06, linewidth=2)
+p_07 = plot(l_07, "0.7x STH-RP", color = c_07, linewidth=2)
+p_08 = plot(l_08, "0.8x STH-RP", color = c_08, linewidth=2)
+p_09 = plot(l_09, "0.9x STH-RP", color = c_09, linewidth=2)
+
+p_11 = plot(l_11, "1.1x STH-RP", color = c_11, linewidth=2)
+p_12 = plot(l_12, "1.2x STH-RP", color = c_12, linewidth=2)
+p_13 = plot(l_13, "1.3x STH-RP", color = c_13, linewidth=2)
+p_14 = plot(l_14, "1.4x STH-RP", color = c_14, linewidth=2)
+
+// Fill Zones
+// No Trade Zone (0.9 - 1.1) - Extremely Faint / Transparent
+fill(p_09, p_10, color = color.new(color.gray, 95), title="No Trade Buy Side (0.9-1.0)")
+fill(p_10, p_11, color = color.new(color.gray, 95), title="No Trade Sell Side (1.0-1.1)")
+
+// Compression/Decompression (0.8-0.9 & 1.1-1.2) - Weak (10-15% Opacity -> 85-90 Transp)
+fill(p_08, p_09, color = color.new(color.green, 85), title="Weak Buy Zone (0.8-0.9)")
+fill(p_11, p_12, color = color.new(color.red, 85), title="Weak Sell Zone (1.1-1.2)")
+
+// Leverage Start (0.7-0.8 & 1.2-1.3) - Medium (20-30% Opacity -> 70-80 Transp)
+fill(p_07, p_08, color = color.new(color.green, 75), title="Medium Buy Zone (0.7-0.8)")
+fill(p_12, p_13, color = color.new(color.red, 75), title="Medium Sell Zone (1.2-1.3)")
+
+// Severe Leverage (0.6-0.7 & 1.3-1.4) - Strong (40-50% Opacity -> 50-60 Transp)
+fill(p_06, p_07, color = color.new(color.green, 60), title="Strong Buy Zone (0.6-0.7)")
+fill(p_13, p_14, color = color.new(color.red, 60), title="Strong Sell Zone (1.3-1.4)")
+
+// 4. Infinite Extension Lines (Right Side)
+// Function to draw lines
+draw_extended_line(price, col, width) =>
+    line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
+
+if barstate.islast
+    // Draw Main Extended Lines (on top of plots to ensure visibility into future)
+    draw_extended_line(l_10, c_10, 3)
+
+    draw_extended_line(l_051, c_051, 4)
+
+    draw_extended_line(l_06, c_06, 2)
+    draw_extended_line(l_07, c_07, 2)
+    draw_extended_line(l_08, c_08, 2)
+    draw_extended_line(l_09, c_09, 2)
+
+    draw_extended_line(l_11, c_11, 2)
+    draw_extended_line(l_12, c_12, 2)
+    draw_extended_line(l_13, c_13, 2)
+    draw_extended_line(l_14, c_14, 2)
+
+    // Labels for AAVE Health Factor (size.large approx 14, style=upper_right means top-right of label is anchored, putting label down-left)
+    // 0.51x STH-RP
+    label.new(bar_index + 60, l_051, "LIQUIDAÇÃO AAVE (Health Factor 1,0) - PERIGO REAL", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_051, size=size.large)
+
+    // 0.6x STH-RP
+    label.new(bar_index + 60, l_06, "AAVE 1,20 Health factor - 100% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_06, size=size.large)
+
+    // 0.7x STH-RP
+    label.new(bar_index + 60, l_07, "AAVE 1,40 Health factor - 90% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07, size=size.large)
+
+    // 0.8x STH-RP
+    label.new(bar_index + 60, l_08, "AAVE 1,60 Health factor - 75% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08, size=size.large)
+
+    // 0.9x STH-RP
+    label.new(bar_index + 60, l_09, "AAVE 1,80 Health factor - 60% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_09, size=size.large)
+
+    // 1.0x STH-RP (Base)
+    label.new(bar_index + 60, l_10, "Short-Term Holder Realized Price - 50% BTC", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10, size=size.large)
+
+// 5. Alerts (Once per day per line on touch)
+// Logic: Use varip to track last alert day to prevent multiple alerts per day, but allow intra-bar alerts (at touch).
+
+varip int d_051 = 0
+if (low <= l_051 and high >= l_051) and (dayofmonth(time) != d_051)
+    alert("Bitcoin tocando a linha de 0,51% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_051 := dayofmonth(time)
+
+varip int d_06 = 0
+if (low <= l_06 and high >= l_06) and (dayofmonth(time) != d_06)
+    alert("Bitcoin tocando a linha de 0,60% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_06 := dayofmonth(time)
+
+varip int d_07 = 0
+if (low <= l_07 and high >= l_07) and (dayofmonth(time) != d_07)
+    alert("Bitcoin tocando a linha de 0,70% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_07 := dayofmonth(time)
+
+varip int d_08 = 0
+if (low <= l_08 and high >= l_08) and (dayofmonth(time) != d_08)
+    alert("Bitcoin tocando a linha de 0,80% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_08 := dayofmonth(time)
+
+varip int d_09 = 0
+if (low <= l_09 and high >= l_09) and (dayofmonth(time) != d_09)
+    alert("Bitcoin tocando a linha de 0,90% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_09 := dayofmonth(time)
+
+varip int d_10 = 0
+if (low <= l_10 and high >= l_10) and (dayofmonth(time) != d_10)
+    alert("Bitcoin tocando a linha de 1,00% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_10 := dayofmonth(time)
+
+varip int d_11 = 0
+if (low <= l_11 and high >= l_11) and (dayofmonth(time) != d_11)
+    alert("Bitcoin tocando a linha de 1,10% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_11 := dayofmonth(time)
+
+varip int d_12 = 0
+if (low <= l_12 and high >= l_12) and (dayofmonth(time) != d_12)
+    alert("Bitcoin tocando a linha de 1,20% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_12 := dayofmonth(time)
+
+varip int d_13 = 0
+if (low <= l_13 and high >= l_13) and (dayofmonth(time) != d_13)
+    alert("Bitcoin tocando a linha de 1,30% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_13 := dayofmonth(time)
+
+varip int d_14 = 0
+if (low <= l_14 and high >= l_14) and (dayofmonth(time) != d_14)
+    alert("Bitcoin tocando a linha de 1,40% do Short-Term Holder Realized Price", alert.freq_once_per_bar)
+    d_14 := dayofmonth(time)
