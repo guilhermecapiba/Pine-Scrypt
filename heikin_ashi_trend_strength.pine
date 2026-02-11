@@ -66,29 +66,29 @@ int catRedBall = getSizeCategory(ratioBallRed)
 
 // --- Plotting Shapes ---
 
-// Green Arrow (Up)
-plotshape(isGreenArrow and catGreenArrow == 0, style=shape.arrowup, location=location.belowbar, color=color_up, size=size.tiny, title="Seta Alta (Tiny)")
-plotshape(isGreenArrow and catGreenArrow == 1, style=shape.arrowup, location=location.belowbar, color=color_up, size=size.small, title="Seta Alta (Small)")
-plotshape(isGreenArrow and catGreenArrow == 2, style=shape.arrowup, location=location.belowbar, color=color_up, size=size.normal, title="Seta Alta (Normal)")
-plotshape(isGreenArrow and catGreenArrow == 3, style=shape.arrowup, location=location.belowbar, color=color_up, size=size.large, title="Seta Alta (Large)")
-plotshape(isGreenArrow and catGreenArrow == 4, style=shape.arrowup, location=location.belowbar, color=color_up, size=size.huge, title="Seta Alta (Huge)")
+// Green Triangle (Up)
+// Tiny (cat=0) is suppressed
+plotshape(isGreenArrow and catGreenArrow == 1, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.small, title="Triângulo Alta (Small)")
+plotshape(isGreenArrow and catGreenArrow == 2, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.normal, title="Triângulo Alta (Normal)")
+plotshape(isGreenArrow and catGreenArrow == 3, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.large, title="Triângulo Alta (Large)")
+plotshape(isGreenArrow and catGreenArrow == 4, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.huge, title="Triângulo Alta (Huge)")
 
-// Red Arrow (Down)
-plotshape(isRedArrow and catRedArrow == 0, style=shape.arrowdown, location=location.abovebar, color=color_down, size=size.tiny, title="Seta Baixa (Tiny)")
-plotshape(isRedArrow and catRedArrow == 1, style=shape.arrowdown, location=location.abovebar, color=color_down, size=size.small, title="Seta Baixa (Small)")
-plotshape(isRedArrow and catRedArrow == 2, style=shape.arrowdown, location=location.abovebar, color=color_down, size=size.normal, title="Seta Baixa (Normal)")
-plotshape(isRedArrow and catRedArrow == 3, style=shape.arrowdown, location=location.abovebar, color=color_down, size=size.large, title="Seta Baixa (Large)")
-plotshape(isRedArrow and catRedArrow == 4, style=shape.arrowdown, location=location.abovebar, color=color_down, size=size.huge, title="Seta Baixa (Huge)")
+// Red Triangle (Down)
+// Tiny (cat=0) is suppressed
+plotshape(isRedArrow and catRedArrow == 1, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.small, title="Triângulo Baixa (Small)")
+plotshape(isRedArrow and catRedArrow == 2, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.normal, title="Triângulo Baixa (Normal)")
+plotshape(isRedArrow and catRedArrow == 3, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.large, title="Triângulo Baixa (Large)")
+plotshape(isRedArrow and catRedArrow == 4, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.huge, title="Triângulo Baixa (Huge)")
 
 // Green Ball (Indecision Up)
-plotshape(isGreenBall and catGreenBall == 0, style=shape.circle, location=location.belowbar, color=color_up, size=size.tiny, title="Bola Alta (Tiny)")
+// Tiny (cat=0) is suppressed
 plotshape(isGreenBall and catGreenBall == 1, style=shape.circle, location=location.belowbar, color=color_up, size=size.small, title="Bola Alta (Small)")
 plotshape(isGreenBall and catGreenBall == 2, style=shape.circle, location=location.belowbar, color=color_up, size=size.normal, title="Bola Alta (Normal)")
 plotshape(isGreenBall and catGreenBall == 3, style=shape.circle, location=location.belowbar, color=color_up, size=size.large, title="Bola Alta (Large)")
 plotshape(isGreenBall and catGreenBall == 4, style=shape.circle, location=location.belowbar, color=color_up, size=size.huge, title="Bola Alta (Huge)")
 
 // Red Ball (Indecision Down)
-plotshape(isRedBall and catRedBall == 0, style=shape.circle, location=location.abovebar, color=color_down, size=size.tiny, title="Bola Baixa (Tiny)")
+// Tiny (cat=0) is suppressed
 plotshape(isRedBall and catRedBall == 1, style=shape.circle, location=location.abovebar, color=color_down, size=size.small, title="Bola Baixa (Small)")
 plotshape(isRedBall and catRedBall == 2, style=shape.circle, location=location.abovebar, color=color_down, size=size.normal, title="Bola Baixa (Normal)")
 plotshape(isRedBall and catRedBall == 3, style=shape.circle, location=location.abovebar, color=color_down, size=size.large, title="Bola Baixa (Large)")
