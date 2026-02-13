@@ -10,13 +10,15 @@ ltf2_input  = input.timeframe("60", "Tempo Gráfico Menor 2", group=grp_tf)
 htf_input   = input.timeframe("D", "Tempo Gráfico Maior (Confluência)", group=grp_tf)
 
 grp_filter  = "Filtro de Tendência"
-use_filter  = input.bool(false, "Habilitar Filtro EMA?", group=grp_filter)
-ema_len     = input.int(9, "Comprimento EMA", minval=1, group=grp_filter)
+use_filter  = input.bool(true, "Habilitar Filtro EMA?", group=grp_filter)
+ema_len     = input.int(20, "Comprimento EMA", minval=1, group=grp_filter)
 
 grp_style   = "Estilo e Sensibilidade"
 tol_pct     = input.float(0.5, "Tolerância de Confluência (%)", minval=0.0, step=0.1, group=grp_style, tooltip="Distância percentual para considerar níveis 'iguais'")
 show_lines  = input.bool(true, "Mostrar Linhas S/R Dinâmicas (Atual)", group=grp_style)
-line_count  = input.int(5, "Máx. Linhas S/R", minval=1, maxval=20, group=grp_style)
+line_count  = input.int(3, "Máx. Linhas S/R", minval=1, maxval=20, group=grp_style)
+show_htf_conf = input.bool(false, "Mostrar Destaque Confluência HTF (Fundo)", group=grp_style)
+show_ltf_conf = input.bool(false, "Mostrar Destaque Confluência LTF (Fundo)", group=grp_style)
 
 // -----------------------------------------------------------------------------
 // FUNCTIONS
@@ -33,77 +35,15 @@ get_fractal_data() =>
     // EMA Filter Logic (if enabled)
     float ema_val = ta.ema(close, ema_len)
     if use_filter
-        // For Up Fractal (Bearish Reversal signal usually), we want to sell?
-        // Wait, standard fractal usage:
-        // Up Fractal (Peak) is a resistance. Down Fractal (Valley) is support.
-        // Bill Williams: Break of Up Fractal is Buy.
-        // Prompt says: "A buy or sell fractal should only be highlighted if price is above EMA x"
-        // Usually: Buy signal (Break of Up Fractal) requires Trend Up.
-        // Or: Up Fractal (Resistance) forms in Downtrend?
-        // Let's assume standard "Trend Following" filter:
-        // Show Up Fractal (Potential Resistance/Sell point?) only if Trend is Down?
-        // OR: Show Up Fractal only if Price > EMA?
-        // "A buy or sell fractal".
-        // Let's assume:
-        // Up Fractal = Peak. Often used as "Sell" signal in mean reversion or "Breakout Buy" level.
-        // Down Fractal = Valley. Often "Buy" signal in mean reversion or "Breakout Sell" level.
-        // Prompt is ambiguous: "Um fractal de compra ou venda..."
-        // Typically:
-        // Up Fractal marks a High. If price breaks it, it's a Buy.
-        // Down Fractal marks a Low. If price breaks it, it's a Sell.
-        // But the prompt says "highlight the fractal".
-        // Let's implement:
-        // Up Fractal (Peak) valid if close > EMA (Uptrend context) -> Likely a pullback high in uptrend?
-        // Actually, usually you want to see Fractals *with* the trend.
-        // Up Fractal (Resistance) is relevant in Uptrend to mark breakout level.
-        // Down Fractal (Support) is relevant in Downtrend to mark breakout level.
-        // Let's stick to the prompt's literal text: "Fractal de compra ou venda... se o preço estiver acima da EMA".
-        // Let's assume:
-        // Up Fractal (Buy Fractal context? No, Up is Bearish usually).
-        // Let's use generic "Filter":
-        // If Price > EMA, only show Up Fractals? Or only Down?
-        // Let's assume: Show ALL if filter is OFF.
-        // If filter ON:
-        // Show Up Fractal only if high[2] > ema_val? Or close > ema_val?
-        // "Price above EMA".
-        // I will implement:
-        // Valid Up Fractal = Raw Up Fractal AND (not use_filter or close[2] > ema_val)
-        // Valid Down Fractal = Raw Down Fractal AND (not use_filter or close[2] > ema_val)
-        // Wait, if Price > EMA, we are in Uptrend. We want to see Upper Fractals (Targets) and Lower Fractals (Stops).
-        // The prompt says "A buy or sell fractal... only if price is above EMA".
-        // This implies: If Price > EMA, show BOTH? Or show only Buy Fractals?
-        // "A buy or sell fractal ... highlighted if price is above EMA"
-        // This sounds like "Only show fractals when trend is Up".
-        // I will implement:
-        // Up Fractal valid if (not use_filter or close[2] > ema_val)
-        // Down Fractal valid if (not use_filter or close[2] > ema_val)
-        // Only showing fractals in uptrend? That seems limiting.
-        // Maybe "Buy Fractal (Down Fractal, normally)" only if > EMA. "Sell Fractal (Up Fractal)" only if < EMA.
-        // That makes sense for trend following entries on pullbacks.
-        // Down Fractal (Low) is a "Buy" setup (if price breaks up? or keeps support?).
-        // Let's stick to:
-        // Down Fractal (Valley) -> "Buy" setup. Show if close > EMA.
-        // Up Fractal (Peak) -> "Sell" setup. Show if close < EMA.
-        if use_filter
-            bool trend_up = close[2] > ema_val
-            // If Trend Up, we look for Buy setups (Down Fractals)?
-            // Or we look for Up Fractals to break?
-            // Let's implement the "Pullback" logic which is common.
-            // Trend Up -> Show Down Fractals (Support).
-            // Trend Down -> Show Up Fractals (Resistance).
-            // However, the prompt says "A buy OR sell fractal... if price is ABOVE EMA".
-            // This phrasing "Price above EMA" applies to *both*?
-            // "Um fractal de compra ou venda só deve ser destacado se o preço estiver acima da EMA"
-            // This literally means: Only show fractals if Price > EMA.
-            // This would hide all fractals in a downtrend. That seems wrong.
-            // Maybe it means: "Buy Fractal if > EMA, Sell Fractal if < EMA".
-            // I will assume the latter as it's standard trading logic.
-            // Down Fractal (Valley) = Buy Signal context. Show if close > EMA.
-            // Up Fractal (Peak) = Sell Signal context. Show if close < EMA.
-            if trend_up
-                up := false // Hide Sell signals in Uptrend
-            else
-                down := false // Hide Buy signals in Downtrend
+        // Logic: Compare Close[2] (Pivot Time) with EMA[2] (Pivot Time)
+        // "Buy Fractal" (Down Fractal/Support) valid if Price > EMA (Uptrend)
+        // "Sell Fractal" (Up Fractal/Resistance) valid if Price < EMA (Downtrend)
+        bool trend_up = close[2] > ema_val[2]
+
+        if trend_up
+            up := false // Hide Sell signals (Up Fractals) in Uptrend
+        else
+            down := false // Hide Buy signals (Down Fractals) in Downtrend
 
     [up, down, high[2], low[2]]
 
@@ -141,6 +81,8 @@ col_ltf1_up  = color.new(color.maroon, 30)
 col_ltf1_down= color.new(color.lime, 30)
 col_ltf2_up  = color.new(color.orange, 50)
 col_ltf2_down= color.new(color.teal, 50)
+col_htf_up   = color.new(color.purple, 20)
+col_htf_down = color.new(color.fuchsia, 20)
 
 // Shapes
 // Note: Fractals confirm 2 bars ago. We plot at `bar_index - 2`.
@@ -187,23 +129,28 @@ plotshape(ltf1_down and not cur_down, "Fractal Baixa (TF Menor 1)", shape.triang
 plotshape(ltf2_up and not ltf1_up and not cur_up, "Fractal Alta (TF Menor 2)", shape.circle, location.abovebar, col_ltf2_up, size=size.tiny)
 plotshape(ltf2_down and not ltf1_down and not cur_down, "Fractal Baixa (TF Menor 2)", shape.circle, location.belowbar, col_ltf2_down, size=size.tiny)
 
+// HTF Fractals Visuals (Distinctive)
+plotshape(htf_up, "Fractal Alta (TF Maior)", shape.square, location.abovebar, col_htf_up, size=size.small)
+plotshape(htf_down, "Fractal Baixa (TF Maior)", shape.square, location.belowbar, col_htf_down, size=size.small)
+
 // -----------------------------------------------------------------------------
-// DYNAMIC S/R LINES (Current TF)
+// DYNAMIC S/R LINES (Chosen Higher TF)
 // -----------------------------------------------------------------------------
 var line[] up_lines = array.new_line()
 var line[] down_lines = array.new_line()
 
-if cur_up
-    // Create new line at the Fractal High (high[2])
-    l = line.new(bar_index - 2, high[2], bar_index, high[2], color=col_cur_up, width=1, style=line.style_solid)
+if htf_up
+    // Create new line at the HTF Fractal Price
+    // Note: htf_up triggers at confirmation (end of HTF bar). We draw from current bar.
+    l = line.new(bar_index, htf_up_price, bar_index + 10, htf_up_price, color=col_htf_up, width=2, style=line.style_solid)
     array.push(up_lines, l)
     // Maintain limit
     if array.size(up_lines) > line_count
         line.delete(array.shift(up_lines))
 
-if cur_down
-    // Create new line at Fractal Low (low[2])
-    l = line.new(bar_index - 2, low[2], bar_index, low[2], color=col_cur_down, width=1, style=line.style_solid)
+if htf_down
+    // Create new line at HTF Fractal Price
+    l = line.new(bar_index, htf_down_price, bar_index + 10, htf_down_price, color=col_htf_down, width=2, style=line.style_solid)
     array.push(down_lines, l)
     // Maintain limit
     if array.size(down_lines) > line_count
@@ -283,5 +230,5 @@ if is_confluence_ltf_down
     alert("Confluência Fractal de Alta (Atual + TF Menor) em " + str.tostring(low[2]), alert.freq_once_per_bar_close)
 
 // Visualise Confluence (Optional - small background highlight?)
-bgcolor(is_confluence_htf_up or is_confluence_htf_down ? color.new(color.yellow, 80) : na, title="HTF Confluence Highlight")
-bgcolor(is_confluence_ltf_up or is_confluence_ltf_down ? color.new(color.blue, 90) : na, title="LTF Confluence Highlight")
+bgcolor(show_htf_conf and (is_confluence_htf_up or is_confluence_htf_down) ? color.new(color.yellow, 80) : na, title="HTF Confluence Highlight")
+bgcolor(show_ltf_conf and (is_confluence_ltf_up or is_confluence_ltf_down) ? color.new(color.blue, 90) : na, title="LTF Confluence Highlight")
