@@ -45,19 +45,22 @@ var pivot internalLow   = pivot.new(na,na,false)
 var trend swingTrend    = trend.new(0)
 var trend internalTrend = trend.new(0)
 
+var int swingLegState = 0
+var int internalLegState = 0
+
 //---------------------------------------------------------------------------------------------------------------------}
 // HELPER FUNCTIONS
 //---------------------------------------------------------------------------------------------------------------------{
 
-leg(int size) =>
-    var leg     = 0
-    newLegHigh  = high[size] > ta.highest( size)
-    newLegLow   = low[size]  < ta.lowest(  size)
+calculateLeg(int size, int prevState) =>
+    int nextState = prevState
+    newLegHigh  = high[size] > ta.highest(size)
+    newLegLow   = low[size]  < ta.lowest(size)
     if newLegHigh
-        leg := BEARISH_LEG
+        nextState := BEARISH_LEG
     else if newLegLow
-        leg := BULLISH_LEG
-    leg
+        nextState := BULLISH_LEG
+    nextState
 
 startOfNewLeg(int leg)      => ta.change(leg) != 0
 startOfBearishLeg(int leg)  => ta.change(leg) == -1
@@ -69,7 +72,14 @@ startOfBullishLeg(int leg)  => ta.change(leg) == +1
 
 // Function to calculate structure points (Highs/Lows)
 getCurrentStructure(int size, bool internal) =>
-    currentLeg = leg(size)
+    int prevState = internal ? internalLegState : swingLegState
+    int currentLeg = calculateLeg(size, prevState)
+
+    if internal
+        internalLegState := currentLeg
+    else
+        swingLegState := currentLeg
+
     newPivot   = startOfNewLeg(currentLeg)
     pivotLow   = startOfBullishLeg(currentLeg)
 
@@ -109,14 +119,24 @@ updateTrend(false) // Update Swing Trend
 updateTrend(true)  // Update Internal Trend
 
 //---------------------------------------------------------------------------------------------------------------------}
-// VISUALIZATION (COLORING ONLY)
+// VISUALIZATION (COLORING & SIGNALS)
 //---------------------------------------------------------------------------------------------------------------------{
+
+bool isBullConfluence = swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
+bool isBearConfluence = swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
 
 color finalColor = na
 
-if swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
+if isBullConfluence
     finalColor := colorBull
-else if swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
+else if isBearConfluence
     finalColor := colorBear
 
 barcolor(finalColor)
+
+// Signals for Confluence Start
+bool bullStart = isBullConfluence and not isBullConfluence[1]
+bool bearStart = isBearConfluence and not isBearConfluence[1]
+
+plotshape(bullStart, "Bullish Confluence Start", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white)
+plotshape(bearStart, "Bearish Confluence Start", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white)
