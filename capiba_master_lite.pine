@@ -75,11 +75,6 @@ getCurrentStructure(int size, bool internal) =>
     int prevState = internal ? internalLegState : swingLegState
     int currentLeg = calculateLeg(size, prevState)
 
-    if internal
-        internalLegState := currentLeg
-    else
-        swingLegState := currentLeg
-
     newPivot   = startOfNewLeg(currentLeg)
     pivotLow   = startOfBullishLeg(currentLeg)
 
@@ -94,6 +89,8 @@ getCurrentStructure(int size, bool internal) =>
             p_ivot.lastLevel    := p_ivot.currentLevel
             p_ivot.currentLevel := high[size]
             p_ivot.crossed      := false
+
+    currentLeg
 
 // Function to update Trend Bias based on Breakouts
 updateTrend(bool internal) =>
@@ -112,8 +109,8 @@ updateTrend(bool internal) =>
         t_rend.bias       := BEARISH
 
 // Execution
-getCurrentStructure(swingsLengthInput, false) // Calculate Swing Pts
-getCurrentStructure(internalLengthInput, true) // Calculate Internal Pts
+swingLegState := getCurrentStructure(swingsLengthInput, false) // Calculate Swing Pts
+internalLegState := getCurrentStructure(internalLengthInput, true) // Calculate Internal Pts
 
 updateTrend(false) // Update Swing Trend
 updateTrend(true)  // Update Internal Trend
