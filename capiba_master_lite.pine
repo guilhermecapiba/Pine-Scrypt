@@ -139,11 +139,14 @@ plotshape(bullStart, "Bullish Confluence Start", shape.labelup, location.belowba
 plotshape(bearStart, "Bearish Confluence Start", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white)
 
 // Individual Trend Signals
-bool swingBullStart = swingTrend.bias == BULLISH and swingTrend.bias[1] != BULLISH
-bool swingBearStart = swingTrend.bias == BEARISH and swingTrend.bias[1] != BEARISH
+int swingBias = swingTrend.bias
+int internalBias = internalTrend.bias
 
-bool internalBullStart = internalTrend.bias == BULLISH and internalTrend.bias[1] != BULLISH
-bool internalBearStart = internalTrend.bias == BEARISH and internalTrend.bias[1] != BEARISH
+bool swingBullStart = swingBias == BULLISH and swingBias[1] != BULLISH
+bool swingBearStart = swingBias == BEARISH and swingBias[1] != BEARISH
+
+bool internalBullStart = internalBias == BULLISH and internalBias[1] != BULLISH
+bool internalBearStart = internalBias == BEARISH and internalBias[1] != BEARISH
 
 plotshape(swingBullStart, "Swing Bullish Start", shape.triangleup, location.belowbar, color.blue, 0, "SWING BULL", color.white)
 plotshape(swingBearStart, "Swing Bearish Start", shape.triangledown, location.abovebar, color.yellow, 0, "SWING BEAR", color.white)
