@@ -1,5 +1,5 @@
 //@version=6
-indicator("Capiba Master Indicator", shorttitle="CapibaMas", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+indicator("Capiba Master Indicator", shorttitle="CapibaMas", overlay=true, max_boxes_count=50, max_lines_count=50, max_labels_count=50)
 
 //---------------------------------------------------------------------------------------------------------------------}
 // INPUTS
@@ -420,7 +420,8 @@ findOrderBlocks() =>
         boxBtm = max[1]
         boxTop = min[1]
         boxLoc = time[1]
-        for i = 1 to (bar_index - top.x) - 1
+        lookback = math.min((bar_index - top.x) - 1, 200) // Limit lookback
+        for i = 1 to lookback
             boxBtm := math.min(min[i], boxBtm)
             boxTop := boxBtm == min[i] ? max[i] : boxTop
             boxLoc := boxBtm == min[i] ? time[i] : boxLoc
@@ -441,7 +442,8 @@ findOrderBlocks() =>
         boxBtm = min[1]
         boxTop = max[1]
         boxLoc = time[1]
-        for i = 1 to (bar_index - btm.x) - 1
+        lookback = math.min((bar_index - btm.x) - 1, 200) // Limit lookback
+        for i = 1 to lookback
             boxTop := math.max(max[i], boxTop)
             boxBtm := boxTop == max[i] ? min[i] : boxBtm
             boxLoc := boxTop == max[i] ? time[i] : boxLoc
@@ -534,7 +536,9 @@ handleOrderBlocksFinal() =>
     if combineOBs
         combineOBsFunc()
     if allOrderBlocksList.size() > 0
-        for i = 0 to allOrderBlocksList.size() - 1
+        // Limit rendering to the last 10 combined OBs to reduce clutter/load
+        renderLimit = math.min(allOrderBlocksList.size(), 10)
+        for i = 0 to renderLimit - 1
             curOB = allOrderBlocksList.get(i)
             if isOBValid(curOB.info)
                 renderOrderBlock(curOB)
