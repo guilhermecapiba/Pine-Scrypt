@@ -195,7 +195,7 @@ var array<fairValueGap> fairValueGaps = array.new<fairValueGap>()
 var trailingExtremes trailing       = trailingExtremes.new()
 varip int currentBarIndex           = bar_index
 varip int lastBarIndex              = bar_index
-var int last_bar_time               = time
+var int prevBarTime                 = time
 alerts currentAlerts                = alerts.new()
 
 // --- FLUX VARS ---
@@ -293,10 +293,10 @@ drawFairValueGaps() =>
     bearishFairValueGap = currentHigh < last2Low and lastClose < last2Low and -barDeltaPercent > threshold and newTimeframe
     if bullishFairValueGap and showFairValueGapsInput
         currentAlerts.bullishFairValueGap := true
-        fairValueGaps.unshift(fairValueGap.new(currentLow,last2High,BULLISH,fairValueGapBox(lastTime,currentTime,currentLow,math.avg(currentLow,last2High),fairValueGapsBullColorInput),fairValueGapBox(lastTime,currentTime,math.avg(currentLow,last2High),last2High,fairValueGapBullishColorInput)))
+        fairValueGaps.unshift(fairValueGap.new(currentLow,last2High,BULLISH,fairValueGapBox(lastTime,currentTime,currentLow,math.avg(currentLow,last2High),fairValueGapsBullColorInput),fairValueGapBox(lastTime,currentTime,math.avg(currentLow,last2High),last2High,fairValueGapsBullColorInput)))
     if bearishFairValueGap and showFairValueGapsInput
         currentAlerts.bearishFairValueGap := true
-        fairValueGaps.unshift(fairValueGap.new(currentHigh,last2Low,BEARISH,fairValueGapBox(lastTime,currentTime,currentHigh,math.avg(currentHigh,last2Low),fairValueGapsBearColorInput),fairValueGapBox(lastTime,currentTime,math.avg(currentHigh,last2Low),last2Low,fairValueGapBearishColorInput)))
+        fairValueGaps.unshift(fairValueGap.new(currentHigh,last2Low,BEARISH,fairValueGapBox(lastTime,currentTime,currentHigh,math.avg(currentHigh,last2Low),fairValueGapsBearColorInput),fairValueGapBox(lastTime,currentTime,math.avg(currentHigh,last2Low),last2Low,fairValueGapsBearColorInput)))
 
 updateTrailingExtremes() =>
     trailing.top            := math.max(high,trailing.top)
@@ -949,15 +949,14 @@ if showFairValueGapsInput
 // VISUALIZATION & COLORING
 //---------------------------------------------------------------------------------------------------------------------{
 
+color finalCandleColor = na
 if showTrendInput
-    color candleColor = na
     if swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
-        candleColor := color.green
+        finalCandleColor := color.green
     else if swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
-        candleColor := color.red
+        finalCandleColor := color.red
 
-    // If not matching, it remains na (no color / lateralization)
-    barcolor(candleColor)
+barcolor(finalCandleColor)
 
 // Update Vars
 lastBarIndex    := currentBarIndex
