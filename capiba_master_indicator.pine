@@ -1,5 +1,5 @@
-//@version=5
-indicator("Capiba Master Indicator", shorttitle="Capiba Master", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+//@version=6
+indicator("Capiba Master Indicator", shorttitle="CapibaMas", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
 
 //---------------------------------------------------------------------------------------------------------------------}
 // INPUTS
@@ -195,6 +195,7 @@ var array<fairValueGap> fairValueGaps = array.new<fairValueGap>()
 var trailingExtremes trailing       = trailingExtremes.new()
 varip int currentBarIndex           = bar_index
 varip int lastBarIndex              = bar_index
+var int last_bar_time               = time
 alerts currentAlerts                = alerts.new()
 
 // --- FLUX VARS ---
@@ -254,7 +255,16 @@ drawEqualHighLow(pivot p_ivot, float level, int size, bool equalHigh) =>
         labelStyle  := label.style_label_down
     // Simplified drawing for now to save space
 
-drawStructure(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+drawStructureInternal(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+    var line l_ine      = line.new(na,na,na,na,xloc = xloc.bar_time)
+    var label l_abel    = label.new(na,na)
+    if modeInput == PRESENT
+        l_ine.delete()
+        l_abel.delete()
+    l_ine   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
+    l_abel  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize)
+
+drawStructureSwing(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
     var line l_ine      = line.new(na,na,na,na,xloc = xloc.bar_time)
     var label l_abel    = label.new(na,na)
     if modeInput == PRESENT
@@ -615,7 +625,10 @@ displayStructure(bool internal = false) =>
         t_rend.bias     := BULLISH
         displayCondition = internal ? showInternalsInput : showStructureInput
         if displayCondition
-            drawStructure(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            if internal
+                drawStructureInternal(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            else
+                drawStructureSwing(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
 
     p_ivot          := internal ? internalLow : swingLow
     extraCondition  := internal ? internalLow.currentLevel != swingLow.currentLevel and bearishBar : true
@@ -633,7 +646,10 @@ displayStructure(bool internal = false) =>
         t_rend.bias := BEARISH
         displayCondition = internal ? showInternalsInput : showStructureInput
         if displayCondition
-            drawStructure(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            if internal
+                drawStructureInternal(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            else
+                drawStructureSwing(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
 
 // Execute Structure Logic
 getCurrentStructure(swingsLengthInput, false, false) // Swing
