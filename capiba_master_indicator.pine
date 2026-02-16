@@ -452,7 +452,7 @@ findOrderBlocks() =>
         obSize = math.abs(newOrderBlockInfo.top - newOrderBlockInfo.bottom)
         if obSize <= atrVal * maxATRMult
             bearishOrderBlocksList.unshift(newOrderBlockInfo)
-             if bearishOrderBlocksList.size() > 10
+            if bearishOrderBlocksList.size() > 10
                 bearishOrderBlocksList.pop()
     true
 
