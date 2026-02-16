@@ -1,0 +1,122 @@
+//@version=6
+indicator("Capiba Master Lite", shorttitle="CapibaLite", overlay=true)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// INPUTS
+//---------------------------------------------------------------------------------------------------------------------{
+
+grp_struct = "Structure Settings"
+swingsLengthInput = input.int(50, "Swing Structure Length", group = grp_struct, minval = 10)
+internalLengthInput = input.int(5, "Internal Structure Length", group = grp_struct, minval = 1)
+
+// Colors
+colorBull = input.color(color.green, "Bullish Color", group = "Visuals")
+colorBear = input.color(color.red, "Bearish Color", group = "Visuals")
+
+// Constants
+BULLISH_LEG = 1
+BEARISH_LEG = 0
+BULLISH = 1
+BEARISH = -1
+BOS = "BOS"
+CHOCH = "CHoCH"
+
+//---------------------------------------------------------------------------------------------------------------------}
+// TYPES
+//---------------------------------------------------------------------------------------------------------------------{
+
+type trend
+    int bias
+
+type pivot
+    float currentLevel
+    float lastLevel
+    bool crossed
+
+//---------------------------------------------------------------------------------------------------------------------}
+// GLOBAL VARIABLES
+//---------------------------------------------------------------------------------------------------------------------{
+
+var pivot swingHigh     = pivot.new(na,na,false)
+var pivot swingLow      = pivot.new(na,na,false)
+var pivot internalHigh  = pivot.new(na,na,false)
+var pivot internalLow   = pivot.new(na,na,false)
+
+var trend swingTrend    = trend.new(0)
+var trend internalTrend = trend.new(0)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// HELPER FUNCTIONS
+//---------------------------------------------------------------------------------------------------------------------{
+
+leg(int size) =>
+    var leg     = 0
+    newLegHigh  = high[size] > ta.highest( size)
+    newLegLow   = low[size]  < ta.lowest(  size)
+    if newLegHigh
+        leg := BEARISH_LEG
+    else if newLegLow
+        leg := BULLISH_LEG
+    leg
+
+startOfNewLeg(int leg)      => ta.change(leg) != 0
+startOfBearishLeg(int leg)  => ta.change(leg) == -1
+startOfBullishLeg(int leg)  => ta.change(leg) == +1
+
+//---------------------------------------------------------------------------------------------------------------------}
+// CORE LOGIC
+//---------------------------------------------------------------------------------------------------------------------{
+
+// Function to calculate structure points (Highs/Lows)
+getCurrentStructure(int size, bool internal) =>
+    currentLeg = leg(size)
+    newPivot   = startOfNewLeg(currentLeg)
+    pivotLow   = startOfBullishLeg(currentLeg)
+
+    if newPivot
+        if pivotLow
+            pivot p_ivot = internal ? internalLow : swingLow
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := low[size]
+            p_ivot.crossed      := false
+        else
+            pivot p_ivot = internal ? internalHigh : swingHigh
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := high[size]
+            p_ivot.crossed      := false
+
+// Function to update Trend Bias based on Breakouts
+updateTrend(bool internal) =>
+    pivot p_ivotHigh = internal ? internalHigh : swingHigh
+    pivot p_ivotLow  = internal ? internalLow : swingLow
+    trend t_rend     = internal ? internalTrend : swingTrend
+
+    // Check for Bullish Break (Price crosses above High Pivot)
+    if ta.crossover(close, p_ivotHigh.currentLevel) and not p_ivotHigh.crossed
+        p_ivotHigh.crossed := true
+        t_rend.bias        := BULLISH
+
+    // Check for Bearish Break (Price crosses below Low Pivot)
+    if ta.crossunder(close, p_ivotLow.currentLevel) and not p_ivotLow.crossed
+        p_ivotLow.crossed := true
+        t_rend.bias       := BEARISH
+
+// Execution
+getCurrentStructure(swingsLengthInput, false) // Calculate Swing Pts
+getCurrentStructure(internalLengthInput, true) // Calculate Internal Pts
+
+updateTrend(false) // Update Swing Trend
+updateTrend(true)  // Update Internal Trend
+
+//---------------------------------------------------------------------------------------------------------------------}
+// VISUALIZATION (COLORING ONLY)
+//---------------------------------------------------------------------------------------------------------------------{
+
+color finalColor = na
+
+if swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
+    finalColor := colorBull
+else if swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
+    finalColor := colorBear
+
+barcolor(finalColor)
