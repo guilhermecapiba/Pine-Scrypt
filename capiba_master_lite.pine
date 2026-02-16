@@ -137,3 +137,16 @@ bool bearStart = isBearConfluence and not isBearConfluence[1]
 
 plotshape(bullStart, "Bullish Confluence Start", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white)
 plotshape(bearStart, "Bearish Confluence Start", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white)
+
+// Individual Trend Signals
+bool swingBullStart = swingTrend.bias == BULLISH and swingTrend.bias[1] != BULLISH
+bool swingBearStart = swingTrend.bias == BEARISH and swingTrend.bias[1] != BEARISH
+
+bool internalBullStart = internalTrend.bias == BULLISH and internalTrend.bias[1] != BULLISH
+bool internalBearStart = internalTrend.bias == BEARISH and internalTrend.bias[1] != BEARISH
+
+plotshape(swingBullStart, "Swing Bullish Start", shape.triangleup, location.belowbar, color.blue, 0, "SWING BULL", color.white)
+plotshape(swingBearStart, "Swing Bearish Start", shape.triangledown, location.abovebar, color.yellow, 0, "SWING BEAR", color.white)
+
+plotshape(internalBullStart, "Internal Bullish Start", shape.triangleup, location.belowbar, color.blue, 0, "INT BULL", color.white)
+plotshape(internalBearStart, "Internal Bearish Start", shape.triangledown, location.abovebar, color.yellow, 0, "INT BEAR", color.white)
