@@ -86,6 +86,7 @@ plotshape(cruzamentoBaixa, title="Cruzamento Baixa RSI Momentum", location=locat
 // 1. Inputs Manuais (On-chain)
 groupOnChain = "Dados On-chain Diários"
 rp = input.float(30000.0, "Realized Price (RP)", group = groupOnChain)
+showNeutralZone = input.bool(false, "Mostrar Zona Neutra (Cinza)", group = groupOnChain)
 
 // 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
 ema216 = request.security(syminfo.tickerid, "60", ta.ema(close, 216))
@@ -100,7 +101,7 @@ plot(ema4000, "EMA 4000 (200d)", color = color.red, linewidth = 6)
 
 // 3. Horizontal RP Zones (Multipliers)
 // Levels
-l_08  = rp * 0.8
+l_07  = rp * 0.7
 l_085 = rp * 0.85
 l_10  = rp * 1.0
 l_13  = rp * 1.3
@@ -114,13 +115,13 @@ l_34  = rp * 3.4
 l_37  = rp * 3.7
 
 // Colors
-c_08  = color.new(#8A0303, 0)   // Vermelho sangue
+c_07  = color.new(#8A0303, 0)   // Vermelho sangue
 c_085 = color.new(#568203, 0)   // Verde abacate
 c_10  = color.new(color.white, 0)
 c_13  = color.new(color.green, 0)
 c_16  = color.new(color.green, 0)
-c_19  = color.new(color.gray, 0)
-c_22  = color.new(color.gray, 0)
+c_19  = color.new(color.green, 0)
+c_22  = color.new(color.red, 0)
 c_25  = color.new(color.red, 0)
 c_28  = color.new(color.red, 0)
 c_31  = color.new(color.red, 0)
@@ -128,7 +129,7 @@ c_34  = color.new(color.red, 0)
 c_37  = color.new(#8A0303, 0)
 
 // Plot Levels with trackprice=false
-p_08  = plot(l_08,  "0.8x RP", color = c_08, linewidth=6, trackprice=false)
+p_07  = plot(l_07,  "0.7x RP", color = c_07, linewidth=6, trackprice=false)
 p_085 = plot(l_085, "0.85x RP", color = c_085, linewidth=2, trackprice=false)
 p_10  = plot(l_10,  "1.0x RP", color = c_10, linewidth=6, trackprice=false)
 p_13  = plot(l_13,  "1.3x RP", color = c_13, linewidth=2, trackprice=false)
@@ -146,7 +147,7 @@ f_085_10 = color.new(#568203, 70) // 85 to 10
 f_10_13  = color.new(color.green, 80) // 10 to 13
 f_13_16  = color.new(color.green, 85) // 13 to 16
 f_16_19  = color.new(color.green, 90) // 16 to 19
-f_19_22  = color.new(color.gray, 90)  // 19 to 22
+f_19_22  = showNeutralZone ? color.new(color.gray, 90) : na  // 19 to 22
 f_22_25  = color.new(color.red, 90)   // 22 to 25
 f_25_28  = color.new(color.red, 80)   // 25 to 28
 f_28_31  = color.new(color.red, 70)   // 28 to 31
@@ -169,7 +170,7 @@ draw_extended_line(price, col, width) =>
     line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
 
 if barstate.islast
-    draw_extended_line(l_08,  c_08,  6)
+    draw_extended_line(l_07,  c_07,  6)
     draw_extended_line(l_085, c_085, 2)
     draw_extended_line(l_10,  c_10,  6)
     draw_extended_line(l_13,  c_13,  2)
@@ -182,7 +183,7 @@ if barstate.islast
     draw_extended_line(l_34,  c_34,  2)
     draw_extended_line(l_37,  c_37,  2)
 
-    label.new(bar_index + 60, l_08,  "80% do Realized Price - LIQUIDAÇÃO AAVE (HF 1,0) - LINHA DE COLAPSO", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_08,  size=size.large)
+    label.new(bar_index + 60, l_07,  "70% do Realized Price - LIQUIDAÇÃO AAVE  - LINHA DE COLAPSO - BALANCED PRICE", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07,  size=size.large)
     label.new(bar_index + 60, l_085, "85% do Realized Price - FAIXA DE COMPRA AGRESSIVA (HF 1,25)", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_085, size=size.large)
     label.new(bar_index + 60, l_10,  "Realized Price - (HF 1,25)", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10,  size=size.large)
     label.new(bar_index + 60, l_13,  "130% do Realized Price - FAIXA DE ACUMULAÇÃO", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_13,  size=size.large)
