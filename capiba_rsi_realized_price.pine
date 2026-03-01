@@ -1,0 +1,197 @@
+// @version=5
+indicator("Capiba RSI + Realized Price e EMAs", overlay=true)
+
+// ==========================================
+// PARTE 1: RSI & COLORAÇÃO
+// ==========================================
+
+// === CONSTANTES DE CORES ===
+// Cores para Coloração de Candles
+color corSobrecompra = color.new(#2962FF, 0)
+color corSobrevenda  = color.new(#FFD600, 0)
+color corCandleAlta  = color.new(color.lime, 0)
+color corCandleBaixa = color.new(color.red, 0)
+
+// Cores para Sinais de Cruzamento
+color corSinalAlta  = color.new(color.green, 0)
+color corSinalBaixa = color.new(color.red, 0)
+
+
+// === PARÂMETROS DO RSI ULTIMATE ===
+string groupRSI = "1. Parâmetros do RSI Ultimate"
+rsiLength      = input.int(14, title="Período RSI", minval=2, group=groupRSI)
+rsiMethod      = input.string("EMA", title="Método de Suavização RSI", options=["EMA", "SMA", "RMA", "TMA"], group=groupRSI)
+rsiSrc         = input.source(hlc3, title="Fonte do RSI", group=groupRSI)
+rsiOversold    = input.float(35, title="Nível Sobrevendido", group=groupRSI)
+rsiOverbought  = input.float(65, title="Nível Sobrecomprado", group=groupRSI)
+momentumLength = input.int(14, title="Período Momentum EMA", minval=1, group=groupRSI)
+// NOVO: tipo de MA para o momentum do RSI
+rsiMomentumType = input.string("EMA", title="Tipo de MA do Momentum do RSI", options=["EMA", "SMA", "RMA", "TMA", "VWMA"], group=groupRSI)
+
+// === FUNÇÃO DE MÉDIA FLEXÍVEL ===
+getMA(src, len, tipo) =>
+    switch tipo
+        "EMA"  => ta.ema(src, len)
+        "SMA"  => ta.sma(src, len)
+        "HMA"  => ta.hma(src, len)
+        "RMA"  => ta.rma(src, len)
+        "TMA"  => ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
+        "VWMA" => ta.vwma(src, len)
+        => na
+
+// === CÁLCULO DO RSI ULTIMATE ===
+upper = ta.highest(rsiSrc, rsiLength)
+lower = ta.lowest(rsiSrc, rsiLength)
+rangeDelta = upper - lower
+delta = rsiSrc - rsiSrc[1]
+
+diff = upper > upper[1] ? rangeDelta :
+       lower < lower[1] ? -rangeDelta :
+       delta
+
+num = getMA(diff, rsiLength, rsiMethod)
+den = getMA(math.abs(diff), rsiLength, rsiMethod)
+
+rsiUltimate = den == 0 ? 50 : num / den * 50 + 50
+
+// USANDO A FUNÇÃO getMA PARA CALCULAR O MOMENTUM DO RSI (opção selecionável)
+rsiMomentum = getMA(rsiUltimate, momentumLength, rsiMomentumType)
+
+// === LÓGICA DE COLORAÇÃO DOS CANDLES ===
+// Regras: abaixo de 20 -> amarela; abaixo de 50 -> vermelha; >=50 -> verde; acima de 80 -> azul
+corAzul     = rsiUltimate > rsiOverbought
+corAmarela  = rsiUltimate < rsiOversold
+corVerde    = rsiUltimate >= 50
+corVermelha = rsiUltimate < 50 and not corAmarela
+
+// Aplicando precedência correta: azul (acima de 80), verde (>=50), amarela (<20), vermelha (entre 20 e 50)
+corDoCandle = corAzul ? corSobrecompra :
+              corVerde ? corCandleAlta :
+              corAmarela ? corSobrevenda :
+              corCandleBaixa
+
+barcolor(corDoCandle)
+
+// === SINAIS VISUAIS DE CRUZAMENTO RSI COM NÍVEL 50 ===
+cruzamentoAlta  = ta.crossover(rsiUltimate, rsiMomentum)
+cruzamentoBaixa = ta.crossunder(rsiUltimate, rsiMomentum)
+
+plotshape(cruzamentoAlta,  title="Cruzamento Alta RSI Momentum",  location=location.belowbar, color=corSinalAlta, style=shape.triangleup, size=size.normal)
+plotshape(cruzamentoBaixa, title="Cruzamento Baixa RSI Momentum", location=location.abovebar, color=corSinalBaixa, style=shape.triangledown, size=size.normal)
+
+// ==========================================
+// PARTE 2: REALIZED PRICE & EMAs
+// ==========================================
+
+// 1. Inputs Manuais (On-chain)
+groupOnChain = "Dados On-chain Diários"
+rp = input.float(30000.0, "Realized Price (RP)", group = groupOnChain)
+showNeutralZone = input.bool(false, "Mostrar Zona Neutra (Cinza)", group = groupOnChain)
+
+// 2. Médias Móveis Automáticas (fixos no Gráfico de 1H)
+ema216 = request.security(syminfo.tickerid, "60", ta.ema(close, 216))
+ema480 = request.security(syminfo.tickerid, "60", ta.ema(close, 480))
+ema2160 = request.security(syminfo.tickerid, "60", ta.ema(close, 2160))
+ema4000 = request.security(syminfo.tickerid, "60", ta.ema(close, 4000))
+
+plot(ema216, "EMA 216 (9d)", color = color.white, linewidth = 3)
+plot(ema480, "EMA 480 (20d)", color = color.yellow, linewidth = 4)
+plot(ema2160, "EMA 2160 (90d)", color = #ff9800, linewidth = 5) // Abóbora/Orange
+plot(ema4000, "EMA 4000 (200d)", color = color.red, linewidth = 6)
+
+// 3. Horizontal RP Zones (Multipliers)
+// Levels
+l_07  = rp * 0.7
+l_085 = rp * 0.85
+l_10  = rp * 1.0
+l_13  = rp * 1.3
+l_16  = rp * 1.6
+l_19  = rp * 1.9
+l_22  = rp * 2.2
+l_25  = rp * 2.5
+l_28  = rp * 2.8
+l_31  = rp * 3.1
+l_34  = rp * 3.4
+l_37  = rp * 3.7
+
+// Colors
+c_07  = color.new(#8A0303, 0)   // Vermelho sangue
+c_085 = color.new(#568203, 0)   // Verde abacate
+c_10  = color.new(color.white, 0)
+c_13  = color.new(color.green, 0)
+c_16  = color.new(color.green, 0)
+c_19  = color.new(color.green, 0)
+c_22  = color.new(color.red, 0)
+c_25  = color.new(color.red, 0)
+c_28  = color.new(color.red, 0)
+c_31  = color.new(color.red, 0)
+c_34  = color.new(color.red, 0)
+c_37  = color.new(#8A0303, 0)
+
+// Plot Levels with trackprice=false
+p_07  = plot(l_07,  "0.7x RP", color = c_07, linewidth=6, trackprice=false)
+p_085 = plot(l_085, "0.85x RP", color = c_085, linewidth=2, trackprice=false)
+p_10  = plot(l_10,  "1.0x RP", color = c_10, linewidth=6, trackprice=false)
+p_13  = plot(l_13,  "1.3x RP", color = c_13, linewidth=2, trackprice=false)
+p_16  = plot(l_16,  "1.6x RP", color = c_16, linewidth=2, trackprice=false)
+p_19  = plot(l_19,  "1.9x RP", color = c_19, linewidth=2, trackprice=false)
+p_22  = plot(l_22,  "2.2x RP", color = c_22, linewidth=2, trackprice=false)
+p_25  = plot(l_25,  "2.5x RP", color = c_25, linewidth=2, trackprice=false)
+p_28  = plot(l_28,  "2.8x RP", color = c_28, linewidth=2, trackprice=false)
+p_31  = plot(l_31,  "3.1x RP", color = c_31, linewidth=2, trackprice=false)
+p_34  = plot(l_34,  "3.4x RP", color = c_34, linewidth=2, trackprice=false)
+p_37  = plot(l_37,  "3.7x RP", color = c_37, linewidth=2, trackprice=false)
+
+// Fill Zones
+f_085_10 = color.new(#568203, 70) // 85 to 10
+f_10_13  = color.new(color.green, 80) // 10 to 13
+f_13_16  = color.new(color.green, 85) // 13 to 16
+f_16_19  = color.new(color.green, 90) // 16 to 19
+f_19_22  = showNeutralZone ? color.new(color.gray, 90) : na  // 19 to 22
+f_22_25  = color.new(color.red, 90)   // 22 to 25
+f_25_28  = color.new(color.red, 80)   // 25 to 28
+f_28_31  = color.new(color.red, 70)   // 28 to 31
+f_31_34  = color.new(color.red, 60)   // 31 to 34
+f_34_37  = color.new(color.red, 50)   // 34 to 37
+
+fill(p_085, p_10, color = f_085_10, title="Faixa Compra Agressiva (0.85-1.0)")
+fill(p_10,  p_13, color = f_10_13,  title="Faixa de Acumulação 1 (1.0-1.3)")
+fill(p_13,  p_16, color = f_13_16,  title="Faixa de Acumulação 2 (1.3-1.6)")
+fill(p_16,  p_19, color = f_16_19,  title="Faixa de Compras Parciais (1.6-1.9)")
+fill(p_19,  p_22, color = f_19_22,  title="Trading Zone (1.9-2.2)")
+fill(p_22,  p_25, color = f_22_25,  title="Faixa de Venda 1 (2.2-2.5)")
+fill(p_25,  p_28, color = f_25_28,  title="Faixa de Venda 2 (2.5-2.8)")
+fill(p_28,  p_31, color = f_28_31,  title="Faixa de Venda 3 (2.8-3.1)")
+fill(p_31,  p_34, color = f_31_34,  title="Faixa de Venda 4 (3.1-3.4)")
+fill(p_34,  p_37, color = f_34_37,  title="Faixa de Venda 5 (3.4-3.7)")
+
+// 4. Infinite Extension Lines & Labels (Right Side)
+draw_extended_line(price, col, width) =>
+    line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
+
+if barstate.islast
+    draw_extended_line(l_07,  c_07,  6)
+    draw_extended_line(l_085, c_085, 2)
+    draw_extended_line(l_10,  c_10,  6)
+    draw_extended_line(l_13,  c_13,  2)
+    draw_extended_line(l_16,  c_16,  2)
+    draw_extended_line(l_19,  c_19,  2)
+    draw_extended_line(l_22,  c_22,  2)
+    draw_extended_line(l_25,  c_25,  2)
+    draw_extended_line(l_28,  c_28,  2)
+    draw_extended_line(l_31,  c_31,  2)
+    draw_extended_line(l_34,  c_34,  2)
+    draw_extended_line(l_37,  c_37,  2)
+
+    label.new(bar_index + 60, l_07,  "70% do Realized Price - LIQUIDAÇÃO AAVE  - LINHA DE COLAPSO - BALANCED PRICE", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07,  size=size.large)
+    label.new(bar_index + 60, l_085, "85% do Realized Price - FAIXA DE COMPRA AGRESSIVA (HF 1,25)", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_085, size=size.large)
+    label.new(bar_index + 60, l_10,  "Realized Price - (HF 1,25)", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10,  size=size.large)
+    label.new(bar_index + 60, l_13,  "130% do Realized Price - FAIXA DE ACUMULAÇÃO", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_13,  size=size.large)
+    label.new(bar_index + 60, l_16,  "160% do Realized Price - FAIXA DE ACUMULAÇÃO", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_16,  size=size.large)
+    label.new(bar_index + 60, l_19,  "190% do Realized Price - FAIXA DE COMPRAS PARCIAIS", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_19,  size=size.large)
+    label.new(bar_index + 60, l_22,  "220% do Realized Price - ZONA NEUTRA / INÍCIO DE VENDA", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_22,  size=size.large)
+    label.new(bar_index + 60, l_25,  "250% do Realized Price - FAIXA DE VENDA 1", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_25,  size=size.large)
+    label.new(bar_index + 60, l_28,  "280% do Realized Price - FAIXA DE VENDA 2", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_28,  size=size.large)
+    label.new(bar_index + 60, l_31,  "310% do Realized Price - FAIXA DE VENDA 3", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_31,  size=size.large)
+    label.new(bar_index + 60, l_34,  "340% do Realized Price - FAIXA DE VENDA 4", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_34,  size=size.large)
+    label.new(bar_index + 60, l_37,  "370% do Realized Price - FAIXA DE VENDA 5", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_37,  size=size.large)
