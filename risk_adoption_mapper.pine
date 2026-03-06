@@ -1,0 +1,69 @@
+//@version=6
+indicator("risk adoption mapper", overlay=false)
+
+// Configuração dos ativos com customização
+sym_hyg    = input.symbol("HYG", title="Ativo 1 (HYG)")
+sym_ndx    = input.symbol("NDX", title="Ativo 2 (NDX)")
+sym_us2000 = input.symbol("US2000", title="Ativo 3 (US2000)")
+sym_dxy    = input.symbol("DXY", title="Ativo 4 (DXY)")
+
+// Configuração do período da EMA
+ema_rsi_len = input.int(20, title="Períodos da EMA da Risk Line")
+
+// Função para obter dados de cada ativo
+get_data() =>
+    c = close
+    e20 = ta.ema(c, 20)
+    e200 = ta.ema(c, 200)
+    [c, e20, e200]
+
+// Obtendo dados de cada ativo
+[c_hyg, e20_hyg, e200_hyg]       = request.security(sym_hyg, timeframe.period, get_data())
+[c_ndx, e20_ndx, e200_ndx]       = request.security(sym_ndx, timeframe.period, get_data())
+[c_us2000, e20_us2000, e200_us2000] = request.security(sym_us2000, timeframe.period, get_data())
+[c_dxy, e20_dxy, e200_dxy]       = request.security(sym_dxy, timeframe.period, get_data())
+
+// Função de pontuação para ativos de risco (HYG, NDX, US2000)
+calc_score(c, e20, e200) =>
+    score = 0.0
+    if not na(c) and not na(e20) and not na(e200)
+        if c > e20
+            score += 1.0
+        if c > e200
+            score += 1.0
+        if c > e20 and c > e200
+            score += 0.5
+    score
+
+// Função de pontuação invertida para o DXY
+calc_dxy_score(c, e20, e200) =>
+    score = 0.0
+    if not na(c) and not na(e20) and not na(e200)
+        if c < e20
+            score += 1.0
+        if c < e200
+            score += 1.5
+    score
+
+// Calculando pontuação de cada ativo
+score_hyg    = calc_score(c_hyg, e20_hyg, e200_hyg)
+score_ndx    = calc_score(c_ndx, e20_ndx, e200_ndx)
+score_us2000 = calc_score(c_us2000, e20_us2000, e200_us2000)
+score_dxy    = calc_dxy_score(c_dxy, e20_dxy, e200_dxy)
+
+// Pontuação Total (Max 10 pontos) multiplicada por 10 (Escala 0 a 100)
+total_score = (score_hyg + score_ndx + score_us2000 + score_dxy) * 10
+
+// Calculando a EMA da Risk Line
+ema_risk = ta.ema(total_score, ema_rsi_len)
+
+// Linhas de referência (Visual RSI)
+hline(100, title="Max", color=color.gray, linestyle=hline.style_dashed)
+hline(80, title="Overbought", color=color.gray, linestyle=hline.style_dotted)
+hline(50, title="Midline", color=color.gray, linestyle=hline.style_solid)
+hline(20, title="Oversold", color=color.gray, linestyle=hline.style_dotted)
+hline(0, title="Min", color=color.gray, linestyle=hline.style_dashed)
+
+// Plotando a Risk Line (roxa) e a EMA (amarela)
+plot(total_score, title="risk line", color=color.purple, linewidth=2)
+plot(ema_risk, title="EMA", color=color.yellow, linewidth=2)
