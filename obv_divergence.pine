@@ -1,0 +1,135 @@
+//@version=5
+indicator("OBV com Divergências [Capiba]", shorttitle="OBV Div", overlay=false, format=format.volume)
+
+// ============================================================================
+// 1. CÁLCULO OBV (BASE)
+// ============================================================================
+var float obv = 0.0
+if close > close[1]
+    obv += volume
+else if close < close[1]
+    obv -= volume
+
+// Plot da linha OBV
+plot(obv, title="OBV", color=color.blue, linewidth=2)
+
+// Média Móvel no OBV
+ma_type = input.string("EMA", title="Tipo de MA", options=["SMA", "EMA", "RMA", "WMA"], group="Configurações MA")
+ma_len = input.int(20, title="Período MA", group="Configurações MA")
+ma_color = input.color(color.orange, title="Cor da MA", group="Configurações MA")
+ma_width = input.int(1, title="Espessura MA", minval=1, maxval=4, group="Configurações MA")
+
+float ma_val = switch ma_type
+    "SMA" => ta.sma(obv, ma_len)
+    "EMA" => ta.ema(obv, ma_len)
+    "RMA" => ta.rma(obv, ma_len)
+    "WMA" => ta.wma(obv, ma_len)
+
+plot(ma_val, title="OBV MA", color=ma_color, linewidth=ma_width)
+
+// ============================================================================
+// 2. DETECÇÃO DE PIVÔS (AMBOS: Preço E OBV)
+// ============================================================================
+int prd = 5
+
+float price_ph = ta.pivothigh(high, prd, prd)
+float price_pl = ta.pivotlow(low, prd, prd)
+
+float obv_ph = ta.pivothigh(obv, prd, prd)
+float obv_pl = ta.pivotlow(obv, prd, prd)
+
+bool is_price_ph = not na(price_ph)
+bool is_price_pl = not na(price_pl)
+bool is_obv_ph = not na(obv_ph)
+bool is_obv_pl = not na(obv_pl)
+
+// ============================================================================
+// 3. LÓGICA DIVERGÊNCIA (ÚLTIMOS 10 PIVÔS)
+// ============================================================================
+var float[] ph_obv_arr = array.new_float(0)
+var float[] ph_price_arr = array.new_float(0)
+var int[] ph_bar_arr = array.new_int(0)
+
+var float[] pl_obv_arr = array.new_float(0)
+var float[] pl_price_arr = array.new_float(0)
+var int[] pl_bar_arr = array.new_int(0)
+
+bool bull_div = false
+bool bear_div = false
+float div_obv_val_bull = na
+float div_obv_val_bear = na
+
+// DIVERGÊNCIA DE BAIXA (🔴)
+// Preço: Higher High (HH), OBV: Lower High (LH)
+if is_price_ph and is_obv_ph
+    float current_price = high[prd]
+    float current_obv = obv[prd]
+
+    int len = array.size(ph_obv_arr)
+    if len > 0
+        int check_len = math.min(len, 10)
+        for i = 0 to check_len - 1
+            float past_price = array.get(ph_price_arr, len - 1 - i)
+            float past_obv = array.get(ph_obv_arr, len - 1 - i)
+
+            if current_price > past_price and current_obv < past_obv
+                bear_div := true
+                div_obv_val_bear := current_obv
+                break
+
+    array.push(ph_obv_arr, current_obv)
+    array.push(ph_price_arr, current_price)
+    array.push(ph_bar_arr, bar_index[prd])
+
+    if array.size(ph_obv_arr) > 10
+        array.shift(ph_obv_arr)
+        array.shift(ph_price_arr)
+        array.shift(ph_bar_arr)
+
+// DIVERGÊNCIA DE ALTA (🟢)
+// Preço: Lower Low (LL), OBV: Higher Low (HL)
+if is_price_pl and is_obv_pl
+    float current_price = low[prd]
+    float current_obv = obv[prd]
+
+    int len = array.size(pl_obv_arr)
+    if len > 0
+        int check_len = math.min(len, 10)
+        for i = 0 to check_len - 1
+            float past_price = array.get(pl_price_arr, len - 1 - i)
+            float past_obv = array.get(pl_obv_arr, len - 1 - i)
+
+            if current_price < past_price and current_obv > past_obv
+                bull_div := true
+                div_obv_val_bull := current_obv
+                break
+
+    array.push(pl_obv_arr, current_obv)
+    array.push(pl_price_arr, current_price)
+    array.push(pl_bar_arr, bar_index[prd])
+
+    if array.size(pl_obv_arr) > 10
+        array.shift(pl_obv_arr)
+        array.shift(pl_price_arr)
+        array.shift(pl_bar_arr)
+
+// ============================================================================
+// 4. CRITÉRIOS VISUAIS OBRIGATÓRIOS
+// ============================================================================
+// Plotar Formas - Símbolo Verde ▲ e Vermelho ▼ no valor OBV no pivô
+plotchar(bull_div ? div_obv_val_bull : na, char='▲', location=location.absolute, color=color.green, size=size.tiny, offset=-prd, title="Sinal Verde")
+plotchar(bear_div ? div_obv_val_bear : na, char='▼', location=location.absolute, color=color.red, size=size.tiny, offset=-prd, title="Sinal Vermelho")
+
+// Labels 'BULL DIV' e 'BEAR DIV'
+if bull_div
+    label.new(bar_index - prd, div_obv_val_bull, text="BULL DIV", color=color.new(color.green, 100), textcolor=color.green, style=label.style_label_up, size=size.normal)
+
+if bear_div
+    label.new(bar_index - prd, div_obv_val_bear, text="BEAR DIV", color=color.new(color.red, 100), textcolor=color.red, style=label.style_label_down, size=size.normal)
+
+// Alertas
+if bull_div
+    alert("OBV Bull Div", alert.freq_once_per_bar_close)
+
+if bear_div
+    alert("OBV Bear Div", alert.freq_once_per_bar_close)
