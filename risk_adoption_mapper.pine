@@ -1,0 +1,127 @@
+//@version=6
+indicator("risk adoption mapper", overlay=false)
+
+// Configuração do período da EMA
+ema_rsi_len = input.int(20, title="Períodos da EMA da Risk Line")
+
+// Função para obter dados de cada ativo
+get_data() =>
+    c = close
+    e20 = ta.ema(c, 20)
+    e200 = ta.ema(c, 200)
+    [c, e20, e200]
+
+// Símbolos diretos
+sym_hyg     = "AMEX:HYG"
+sym_spx     = "SPX"
+sym_ndx     = "NDX"
+sym_us2000  = "US2000"
+sym_silvau  = "TVC:SILVER/TVC:GOLD"
+sym_usdjpy  = "USDJPY"
+sym_liq     = "FRED:WALCL-FRED:WTREGEN-FRED:RRPONTSYD"
+sym_btcusd  = "INDEX:BTCUSD"
+sym_total2  = "TOTAL2ES"
+sym_mstrbtc = "NASDAQ:MSTR/INDEX:BTCUSD"
+sym_kre     = "AMEX:KRE"
+sym_audusd  = "OANDA:AUDUSD"
+
+// Símbolos invertidos
+sym_move    = "MOVE"
+sym_us10y   = "US10Y"
+sym_dxy     = "DXY"
+sym_eu10    = "EU10Y"
+sym_jp10    = "JP10Y"
+sym_gold    = "GOLD"
+sym_vix     = "CBOE:VIX"
+sym_btcd    = "CRYPTOCAP:BTC.D"
+
+// Obtendo dados de cada ativo direto
+[c_hyg, e20_hyg, e200_hyg]          = request.security(sym_hyg, timeframe.period, get_data())
+[c_spx, e20_spx, e200_spx]          = request.security(sym_spx, timeframe.period, get_data())
+[c_ndx, e20_ndx, e200_ndx]          = request.security(sym_ndx, timeframe.period, get_data())
+[c_us2000, e20_us2000, e200_us2000] = request.security(sym_us2000, timeframe.period, get_data())
+[c_silvau, e20_silvau, e200_silvau] = request.security(sym_silvau, timeframe.period, get_data())
+[c_usdjpy, e20_usdjpy, e200_usdjpy] = request.security(sym_usdjpy, timeframe.period, get_data())
+[c_liq, e20_liq, e200_liq]          = request.security(sym_liq, timeframe.period, get_data())
+[c_btcusd, e20_btcusd, e200_btcusd] = request.security(sym_btcusd, timeframe.period, get_data())
+[c_total2, e20_total2, e200_total2] = request.security(sym_total2, timeframe.period, get_data())
+[c_mstrbtc, e20_mstrbtc, e200_mstrbtc] = request.security(sym_mstrbtc, timeframe.period, get_data())
+[c_kre, e20_kre, e200_kre]          = request.security(sym_kre, timeframe.period, get_data())
+[c_audusd, e20_audusd, e200_audusd] = request.security(sym_audusd, timeframe.period, get_data())
+
+
+// Obtendo dados de cada ativo invertido
+[c_move, e20_move, e200_move]       = request.security(sym_move, timeframe.period, get_data())
+[c_us10y, e20_us10y, e200_us10y]    = request.security(sym_us10y, timeframe.period, get_data())
+[c_dxy, e20_dxy, e200_dxy]          = request.security(sym_dxy, timeframe.period, get_data())
+[c_eu10, e20_eu10, e200_eu10]       = request.security(sym_eu10, timeframe.period, get_data())
+[c_jp10, e20_jp10, e200_jp10]       = request.security(sym_jp10, timeframe.period, get_data())
+[c_gold, e20_gold, e200_gold]       = request.security(sym_gold, timeframe.period, get_data())
+[c_vix, e20_vix, e200_vix]          = request.security(sym_vix, timeframe.period, get_data())
+[c_btcd, e20_btcd, e200_btcd]       = request.security(sym_btcd, timeframe.period, get_data())
+
+// Função de pontuação direta (+0.5 acima EMA 20, +0.5 acima EMA 200)
+calc_score(c, e20, e200) =>
+    score = 0.0
+    if not na(c) and not na(e20) and not na(e200)
+        if c > e20
+            score += 0.5
+        if c > e200
+            score += 0.5
+    score
+
+// Função de pontuação invertida (+0.5 abaixo EMA 20, +0.5 abaixo EMA 200)
+calc_inv_score(c, e20, e200) =>
+    score = 0.0
+    if not na(c) and not na(e20) and not na(e200)
+        if c < e20
+            score += 0.5
+        if c < e200
+            score += 0.5
+    score
+
+// Calculando pontuação de cada ativo
+score_hyg    = calc_score(c_hyg, e20_hyg, e200_hyg)
+score_spx    = calc_score(c_spx, e20_spx, e200_spx)
+score_ndx    = calc_score(c_ndx, e20_ndx, e200_ndx)
+score_us2000 = calc_score(c_us2000, e20_us2000, e200_us2000)
+score_silvau = calc_score(c_silvau, e20_silvau, e200_silvau)
+score_usdjpy = calc_score(c_usdjpy, e20_usdjpy, e200_usdjpy)
+score_liq    = calc_score(c_liq, e20_liq, e200_liq)
+score_btcusd = calc_score(c_btcusd, e20_btcusd, e200_btcusd)
+score_total2 = calc_score(c_total2, e20_total2, e200_total2)
+score_mstrbtc = calc_score(c_mstrbtc, e20_mstrbtc, e200_mstrbtc)
+score_kre    = calc_score(c_kre, e20_kre, e200_kre)
+score_audusd = calc_score(c_audusd, e20_audusd, e200_audusd)
+
+score_move   = calc_inv_score(c_move, e20_move, e200_move)
+score_us10y  = calc_inv_score(c_us10y, e20_us10y, e200_us10y)
+score_dxy    = calc_inv_score(c_dxy, e20_dxy, e200_dxy)
+score_eu10   = calc_inv_score(c_eu10, e20_eu10, e200_eu10)
+score_jp10   = calc_inv_score(c_jp10, e20_jp10, e200_jp10)
+score_gold   = calc_inv_score(c_gold, e20_gold, e200_gold)
+score_vix    = calc_inv_score(c_vix, e20_vix, e200_vix)
+score_btcd   = calc_inv_score(c_btcd, e20_btcd, e200_btcd)
+
+// Somando pontuação total dos ativos diretos
+score_diretos = score_hyg + score_spx + score_ndx + score_us2000 + score_silvau + score_usdjpy + score_liq + score_btcusd + score_total2 + score_mstrbtc + score_kre + score_audusd
+
+// Somando pontuação total dos ativos invertidos
+score_invertidos = score_move + score_us10y + score_dxy + score_eu10 + score_jp10 + score_gold + score_vix + score_btcd
+
+// Pontuação Total (Max 20 pontos) multiplicada por 5 (Escala 0 a 100)
+total_score = (score_diretos + score_invertidos) * 5
+
+// Calculando a EMA da Risk Line
+ema_risk = ta.ema(total_score, ema_rsi_len)
+
+// Linhas de referência (Visual RSI)
+hline(100, title="Max", color=color.gray, linestyle=hline.style_dashed)
+hline(80, title="Overbought", color=color.gray, linestyle=hline.style_dotted)
+hline(50, title="Midline", color=color.gray, linestyle=hline.style_solid)
+hline(20, title="Oversold", color=color.gray, linestyle=hline.style_dotted)
+hline(0, title="Min", color=color.gray, linestyle=hline.style_dashed)
+
+// Plotando a Risk Line (roxa) e a EMA (amarela)
+plot(total_score, title="risk line", color=color.purple, linewidth=2)
+plot(ema_risk, title="EMA", color=color.yellow, linewidth=2)
