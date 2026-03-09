@@ -1,0 +1,982 @@
+//@version=6
+indicator("Capiba Master Indicator", shorttitle="CapibaMas", overlay=true, max_boxes_count=50, max_lines_count=50, max_labels_count=50)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// INPUTS
+//---------------------------------------------------------------------------------------------------------------------{
+
+// --- GROUPS ---
+grp_struct    = "Market Structure (LuxAlgo)"
+grp_liq       = "Liquidity Zones (Mapper)"
+grp_ob        = "Order Blocks (Flux Charts)"
+grp_fvg       = "Fair Value Gaps (LuxAlgo)"
+grp_vis       = "Visuals & Colors"
+grp_sig       = "Entry Signals"
+
+// --- MARKET STRUCTURE INPUTS ---
+modeInput                       = input.string("Present", "Mode", group = grp_struct, options = ["Historical", "Present"], tooltip = "Allows to display historical Structure or only the recent ones")
+styleInput                      = input.string("Colored", "Style", group = grp_struct, options = ["Colored", "Monochrome"], tooltip = "Indicator color theme")
+showTrendInput                  = input.bool(true, "Color Candles by Trend", group = grp_struct, tooltip = "Color candles based on Swing and Internal Trend confluence")
+showInternalsInput              = input.bool(true, "Show Internal Structure", group = grp_struct)
+showStructureInput              = input.bool(true, "Show Swing Structure", group = grp_struct)
+showSwingsInput                 = input.bool(false, "Show Swing Points", group = grp_struct)
+swingsLengthInput               = input.int(50, "Swing Length", group = grp_struct, minval = 10)
+showHighLowSwingsInput          = input.bool(true, "Show Strong/Weak High/Low", group = grp_struct)
+
+// --- LIQUIDITY ZONES INPUTS ---
+lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_liq)
+lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_liq)
+zoneType  = input.string("ATR", "Zone Height Calculation", options=["ATR", "Percent"], group=grp_liq)
+atrLen    = input.int(20, "ATR Length", minval=1, group=grp_liq)
+atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_liq)
+pctSize   = input.float(0.5, "Zone % Size", minval=0.01, step=0.1, group=grp_liq)
+mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_liq)
+mergeThresh    = input.float(0.1, "Cluster Merge Threshold (%)", step=0.05, group=grp_liq)
+absorbVolMult  = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_liq)
+showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_liq)
+
+// --- ORDER BLOCKS INPUTS ---
+OBsEnabled = input.bool(true, "Show Order Blocks", group=grp_ob)
+orderBlockVolumetricInfo = input.bool(true, "Show Volumetric Info", group=grp_ob)
+obEndMethod = input.string("Wick", "Zone Invalidation", options = ["Wick", "Close"], group=grp_ob)
+combineOBs = input.bool(true, "Combine Zones", group=grp_ob)
+maxATRMult = input.float(3.5, "Max ATR Multiplier", group=grp_ob)
+obSwingLength = input.int(10, 'Swing Length', minval = 3, group=grp_ob)
+zoneCount = input.string("Low", 'Zone Count', options = ["High", "Medium", "Low", "One"], group=grp_ob)
+extendZonesBy = input.int(15, "Extend Zones", group=grp_ob, minval = 1, maxval = 30)
+
+// --- FAIR VALUE GAPS INPUTS ---
+showFairValueGapsInput          = input.bool(true, "Show Fair Value Gaps", group = grp_fvg)
+fairValueGapsThresholdInput     = input.bool(true, "Auto Threshold", group = grp_fvg)
+fairValueGapsTimeframeInput     = input.timeframe('', "Timeframe", group = grp_fvg)
+fairValueGapsExtendInput        = input.int(9, "Extend FVG", group = grp_fvg, minval = 0)
+
+// --- ENTRY SIGNALS INPUTS ---
+showSignals = input.bool(true, "Show Entry Signals (Liquidity)", group=grp_sig)
+reqRejection = input.bool(true, "Require Candle Color Rejection", group=grp_sig)
+showSignalHistory = input.bool(true, "Keep Signal History", group=grp_sig)
+signalSize    = input.string("Small", "Signal Label Size", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_sig)
+
+// --- VISUALS INPUTS ---
+// Colors
+colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
+bullOrderBlockColor = input.color(color.new(#089981, 80), "Bullish OB", group=grp_vis)
+bearOrderBlockColor = input.color(color.new(#f23646, 80), "Bearish OB", group=grp_vis)
+fairValueGapsBullColorInput     = input.color(color.new(#00ff68, 70), "Bullish FVG", group = grp_vis)
+fairValueGapsBearColorInput     = input.color(color.new(#ff0008, 70), "Bearish FVG", group = grp_vis)
+colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
+colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
+textColor = input.color(color.new(color.white, 20), "Text Color", group=grp_vis)
+
+swingBullColorInput             = input.color(#089981, "Swing Bullish Color", group = grp_vis)
+swingBearColorInput             = input.color(#F23645, "Swing Bearish Color", group = grp_vis)
+internalBullColorInput          = input.color(#089981, "Internal Bullish Color", group = grp_vis)
+internalBearColorInput          = input.color(#F23645, "Internal Bearish Color", group = grp_vis)
+
+// Helper for Size
+getSize(s) =>
+    switch s
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Normal" => size.normal
+        "Large" => size.large
+        "Huge" => size.huge
+        => size.small
+lblSize = getSize(signalSize)
+
+// Constants
+BULLISH_LEG = 1
+BEARISH_LEG = 0
+BULLISH = 1
+BEARISH = -1
+HISTORICAL = "Historical"
+PRESENT = "Present"
+COLORED = "Colored"
+MONOCHROME = "Monochrome"
+ALL = "All"
+BOS = "BOS"
+CHOCH = "CHoCH"
+
+//---------------------------------------------------------------------------------------------------------------------}
+// TYPES
+//---------------------------------------------------------------------------------------------------------------------{
+
+// --- LUXALGO TYPES ---
+type alerts
+    bool internalBullishBOS         = false
+    bool internalBearishBOS         = false
+    bool internalBullishCHoCH       = false
+    bool internalBearishCHoCH       = false
+    bool swingBullishBOS            = false
+    bool swingBearishBOS            = false
+    bool swingBullishCHoCH          = false
+    bool swingBearishCHoCH          = false
+    bool bullishFairValueGap        = false
+    bool bearishFairValueGap        = false
+
+type trailingExtremes
+    float top
+    float bottom
+    int barTime
+    int barIndex
+    int lastTopTime
+    int lastBottomTime
+
+type fairValueGap
+    float top
+    float bottom
+    int bias
+    box topBox
+    box bottomBox
+
+type trend
+    int bias
+
+type pivot
+    float currentLevel
+    float lastLevel
+    bool crossed
+    int barTime     = time
+    int barIndex    = bar_index
+
+// --- FLUX CHARTS TYPES ---
+type orderBlockInfo
+    float top
+    float bottom
+    float obVolume
+    string obType
+    int startTime
+    float bbVolume
+    float obLowVolume
+    float obHighVolume
+    bool breaker
+    int breakTime
+    string timeframeStr
+    bool disabled = false
+    string combinedTimeframesStr = na
+    bool combined = false
+
+type orderBlock
+    orderBlockInfo info
+    bool isRendered = false
+    box orderBox = na
+    box orderBoxText = na
+    box orderBoxPositive = na
+    box orderBoxNegative = na
+    line orderSeperator = na
+    line orderTextSeperator = na
+
+type timeframeInfo
+    int index = na
+    string timeframeStr = na
+    bool isEnabled = false
+    orderBlockInfo[] bullishOrderBlocksList = na
+    orderBlockInfo[] bearishOrderBlocksList = na
+
+type obSwing
+    int x = na
+    float y = na
+    float swingVolume = na
+    bool crossed = false
+
+//---------------------------------------------------------------------------------------------------------------------}
+// GLOBAL VARIABLES
+//---------------------------------------------------------------------------------------------------------------------{
+
+// --- LUXALGO VARS ---
+var pivot swingHigh                 = pivot.new(na,na,false)
+var pivot swingLow                  = pivot.new(na,na,false)
+var pivot internalHigh              = pivot.new(na,na,false)
+var pivot internalLow               = pivot.new(na,na,false)
+var trend swingTrend                = trend.new(0)
+var trend internalTrend             = trend.new(0)
+var array<fairValueGap> fairValueGaps = array.new<fairValueGap>()
+var trailingExtremes trailing       = trailingExtremes.new()
+varip int currentBarIndex           = bar_index
+varip int lastBarIndex              = bar_index
+var int prevBarTime                 = time
+alerts currentAlerts                = alerts.new()
+
+// --- FLUX VARS ---
+var bullishOrderBlocksList = array.new<orderBlockInfo>(0)
+var bearishOrderBlocksList = array.new<orderBlockInfo>(0)
+var allOrderBlocksList = array.new<orderBlock>(0)
+
+// --- LIQUIDITY MAPPER VARS ---
+var box[] activeBearBoxes = array.new_box()
+var box[] activeBullBoxes = array.new_box()
+var float[] activeBearScores = array.new_float()
+var float[] activeBullScores = array.new_float()
+var int[]   activeBearTouches = array.new_int()
+var int[]   activeBullTouches = array.new_int()
+var label lastSweepLabel = na
+
+// Helper calc for Liquidity
+volMA = ta.sma(volume, 50)
+relVol = volume / volMA
+volScore = math.min(relVol, 3.0) / 3.0 * 50
+atrVal = ta.atr(atrLen)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// HELPER FUNCTIONS (LUXALGO)
+//---------------------------------------------------------------------------------------------------------------------{
+
+leg(int size) =>
+    var leg     = 0
+    newLegHigh  = high[size] > ta.highest( size)
+    newLegLow   = low[size]  < ta.lowest(  size)
+    if newLegHigh
+        leg := BEARISH_LEG
+    else if newLegLow
+        leg := BULLISH_LEG
+    leg
+
+startOfNewLeg(int leg)      => ta.change(leg) != 0
+startOfBearishLeg(int leg)  => ta.change(leg) == -1
+startOfBullishLeg(int leg)  => ta.change(leg) == +1
+
+drawLabel(int labelTime, float labelPrice, string tag, color labelColor, string labelStyle) =>
+    var label l_abel = na
+    if modeInput == PRESENT
+        l_abel.delete()
+    l_abel := label.new(chart.point.new(labelTime,na,labelPrice),tag,xloc.bar_time,color=color(na),textcolor=labelColor,style = labelStyle,size = size.small)
+
+drawEqualHighLow(pivot p_ivot, float level, int size, bool equalHigh) =>
+    // Implementation for Equal Highs/Lows if needed, keeping it simple or skipping if not primary request
+    // User goal 6 is MSS, goal 1 is Swing High/Low. Equal Highs/Lows is goal 3 (Liquidity)? No, goal 3 is Sweep.
+    // I will include basic support for it if inputs are enabled
+    string tag          = 'EQL'
+    color equalColor    = swingBullColorInput
+    string labelStyle   = label.style_label_up
+    if equalHigh
+        tag         := 'EQH'
+        equalColor  := swingBearColorInput
+        labelStyle  := label.style_label_down
+    // Simplified drawing for now to save space
+
+drawStructureInternal(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+    var line l_ine      = line.new(na,na,na,na,xloc = xloc.bar_time)
+    var label l_abel    = label.new(na,na)
+    if modeInput == PRESENT
+        l_ine.delete()
+        l_abel.delete()
+    l_ine   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
+    l_abel  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize)
+
+drawStructureSwing(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+    var line l_ine      = line.new(na,na,na,na,xloc = xloc.bar_time)
+    var label l_abel    = label.new(na,na)
+    if modeInput == PRESENT
+        l_ine.delete()
+        l_abel.delete()
+    l_ine   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
+    l_abel  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize)
+
+fairValueGapBox(leftTime,rightTime,topPrice,bottomPrice,boxColor) => box.new(chart.point.new(leftTime,na,topPrice),chart.point.new(rightTime + fairValueGapsExtendInput * (time-time[1]),na,bottomPrice), xloc=xloc.bar_time, border_color = boxColor, bgcolor = boxColor)
+
+deleteFairValueGaps() =>
+    if array.size(fairValueGaps) > 0
+        for i = array.size(fairValueGaps) - 1 to 0
+            eachFairValueGap = array.get(fairValueGaps, i)
+            if (low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH)
+                eachFairValueGap.topBox.delete()
+                eachFairValueGap.bottomBox.delete()
+                fairValueGaps.remove(i)
+
+drawFairValueGaps() =>
+    [lastClose, lastOpen, lastTime, currentHigh, currentLow, currentTime, last2High, last2Low] = request.security(syminfo.tickerid, fairValueGapsTimeframeInput, [close[1], open[1], time[1], high[0], low[0], time[0], high[2], low[2]],lookahead = barmerge.lookahead_on)
+    barDeltaPercent     = (lastClose - lastOpen) / (lastOpen * 100)
+    newTimeframe        = timeframe.change(fairValueGapsTimeframeInput)
+    threshold           = fairValueGapsThresholdInput ? ta.cum(math.abs(newTimeframe ? barDeltaPercent : 0)) / bar_index * 2 : 0
+    bullishFairValueGap = currentLow > last2High and lastClose > last2High and barDeltaPercent > threshold and newTimeframe
+    bearishFairValueGap = currentHigh < last2Low and lastClose < last2Low and -barDeltaPercent > threshold and newTimeframe
+    if bullishFairValueGap and showFairValueGapsInput
+        currentAlerts.bullishFairValueGap := true
+        fairValueGaps.unshift(fairValueGap.new(currentLow,last2High,BULLISH,fairValueGapBox(lastTime,currentTime,currentLow,math.avg(currentLow,last2High),fairValueGapsBullColorInput),fairValueGapBox(lastTime,currentTime,math.avg(currentLow,last2High),last2High,fairValueGapsBullColorInput)))
+    if bearishFairValueGap and showFairValueGapsInput
+        currentAlerts.bearishFairValueGap := true
+        fairValueGaps.unshift(fairValueGap.new(currentHigh,last2Low,BEARISH,fairValueGapBox(lastTime,currentTime,currentHigh,math.avg(currentHigh,last2Low),fairValueGapsBearColorInput),fairValueGapBox(lastTime,currentTime,math.avg(currentHigh,last2Low),last2Low,fairValueGapsBearColorInput)))
+
+updateTrailingExtremes() =>
+    trailing.top            := math.max(high,trailing.top)
+    trailing.lastTopTime    := trailing.top == high ? time : trailing.lastTopTime
+    trailing.bottom         := math.min(low,trailing.bottom)
+    trailing.lastBottomTime := trailing.bottom == low ? time : trailing.lastBottomTime
+
+drawHighLowSwings() =>
+    var line topLine        = line.new(na, na, na, na, color = swingBearColorInput, xloc = xloc.bar_time, width = 2)
+    var line bottomLine     = line.new(na, na, na, na, color = swingBullColorInput, xloc = xloc.bar_time, width = 2)
+    var label topLabel      = label.new(na, na, color=color(na), textcolor = swingBearColorInput, xloc = xloc.bar_time, style = label.style_label_down, size = size.tiny)
+    var label bottomLabel   = label.new(na, na, color=color(na), textcolor = swingBullColorInput, xloc = xloc.bar_time, style = label.style_label_up, size = size.tiny)
+    rightTimeBar            = last_bar_time + 20 * (time - time[1])
+    topLine.set_first_point(    chart.point.new(trailing.lastTopTime, na, trailing.top))
+    topLine.set_second_point(   chart.point.new(rightTimeBar, na, trailing.top))
+    topLabel.set_point(         chart.point.new(rightTimeBar, na, trailing.top))
+    topLabel.set_text(          swingTrend.bias == BEARISH ? 'Strong High' : 'Weak High')
+    bottomLine.set_first_point( chart.point.new(trailing.lastBottomTime, na, trailing.bottom))
+    bottomLine.set_second_point(chart.point.new(rightTimeBar, na, trailing.bottom))
+    bottomLabel.set_point(      chart.point.new(rightTimeBar, na, trailing.bottom))
+    bottomLabel.set_text(       swingTrend.bias == BULLISH ? 'Strong Low' : 'Weak Low')
+
+
+//---------------------------------------------------------------------------------------------------------------------}
+// HELPER FUNCTIONS (FLUX CHARTS - ORDER BLOCKS)
+//---------------------------------------------------------------------------------------------------------------------{
+
+createOrderBlock (orderBlockInfo orderBlockInfoF) =>
+    orderBlock newOrderBlock = orderBlock.new(orderBlockInfoF)
+    newOrderBlock
+
+safeDeleteOrderBlock (orderBlock orderBlockF) =>
+    orderBlockF.isRendered := false
+    box.delete(orderBlockF.orderBox)
+    box.delete(orderBlockF.orderBoxText)
+    box.delete(orderBlockF.orderBoxPositive)
+    box.delete(orderBlockF.orderBoxNegative)
+    line.delete(orderBlockF.orderSeperator)
+    line.delete(orderBlockF.orderTextSeperator)
+
+moveLine(_line, _x, _y, _x2) =>
+    line.set_xy1(_line, _x,  _y)
+    line.set_xy2(_line, _x2, _y)
+
+moveBox (_box, _topLeftX, _topLeftY, _bottomRightX, _bottomRightY) =>
+    box.set_lefttop(_box, _topLeftX, _topLeftY)
+    box.set_rightbottom(_box, _bottomRightX, _bottomRightY)
+
+colorWithTransparency (colorF, transparencyX) =>
+    color.new(colorF, color.t(colorF) * transparencyX)
+
+createOBBox (boxColor, transparencyX = 1.0, xlocType = xloc.bar_time) =>
+    box.new(na, na, na, na, text_size = size.normal, xloc = xlocType, extend = extend.none, bgcolor = colorWithTransparency(boxColor, transparencyX), text_color = textColor, text_halign = text.align_center, border_color = #00000000)
+
+formatTimeframeString (formatTimeframe) =>
+    timeframeF = formatTimeframe == "" ? timeframe.period : formatTimeframe
+    if str.contains(timeframeF, "D") or str.contains(timeframeF, "W") or str.contains(timeframeF, "S") or str.contains(timeframeF, "M")
+        timeframeF
+    else
+        seconds = timeframe.in_seconds(timeframeF)
+        if seconds >= 3600
+            hourCount = int(seconds / 3600)
+            str.tostring(hourCount) + " Hour" + (hourCount > 1 ? "s" : "")
+        else
+            timeframeF + " Min"
+
+renderOrderBlock (orderBlock ob) =>
+    orderBlockInfo info = ob.info
+    ob.isRendered := true
+    orderColor = ob.info.obType == "Bull" ? bullOrderBlockColor : bearOrderBlockColor
+    // Removed breaker logic check for simplicity, assuming we just show active ones or handle breakers via invalidation
+    if OBsEnabled
+        ob.orderBox := createOBBox(orderColor, 1.5)
+        if ob.info.combined
+            ob.orderBox.set_bgcolor(colorWithTransparency(orderColor, 1.1))
+        ob.orderBoxText := createOBBox(color.new(color.white, 100))
+        if orderBlockVolumetricInfo
+            ob.orderBoxPositive := createOBBox(bullOrderBlockColor)
+            ob.orderBoxNegative := createOBBox(bearOrderBlockColor)
+            ob.orderSeperator := line.new(na,na,na,na,xloc.bar_time,extend.none,textColor,line.style_dashed,1)
+            ob.orderTextSeperator := line.new(na,na,na,na,xloc.bar_time,extend.none,textColor,line.style_solid,1)
+
+        // Calculate Zone Size for Visuals
+        extendZonesByTime = extendZonesBy * timeframe.in_seconds(timeframe.period) * 1000
+        zoneSize = extendZonesByTime // Fixed extension for consistency or dynamic
+        if not na(info.breakTime)
+            zoneSize := (info.breakTime - info.startTime)
+
+        startX = info.startTime + zoneSize - zoneSize / 3 // simplified position
+        maxEndX = info.startTime + zoneSize
+
+        moveBox(ob.orderBox, info.startTime, info.top, info.startTime + zoneSize, info.bottom)
+        moveBox(ob.orderBoxText, info.startTime, info.top, startX, info.bottom)
+
+        percentage = int((math.min(info.obHighVolume, info.obLowVolume) / math.max(info.obHighVolume, info.obLowVolume)) * 100.0)
+        OBText = (na(ob.info.combinedTimeframesStr) ? formatTimeframeString(ob.info.timeframeStr) : ob.info.combinedTimeframesStr) + " OB"
+        box.set_text(ob.orderBoxText, (orderBlockVolumetricInfo ? str.tostring(ob.info.obVolume, format.volume) + " (" + str.tostring(percentage) + "%)\n" : "") + (ob.info.combined ? "[Combined]\n" : "") + OBText)
+
+findOBSwings(len) =>
+    var swingType = 0
+    var obSwing top = obSwing.new(na, na)
+    var obSwing bottom = obSwing.new(na, na)
+    upper = ta.highest(len)
+    lower = ta.lowest(len)
+    swingType := high[len] > upper ? 0 : low[len] < lower ? 1 : swingType
+    if swingType == 0 and swingType[1] != 0
+        top := obSwing.new(bar_index[len], high[len], volume[len])
+    if swingType == 1 and swingType[1] != 1
+        bottom := obSwing.new(bar_index[len], low[len], volume[len])
+    [top, bottom]
+
+findOrderBlocks() =>
+    [top, btm] = findOBSwings(obSwingLength)
+    useBody = false
+    max = useBody ? math.max(close, open) : high
+    min = useBody ? math.min(close, open) : low
+
+    // Bullish OB
+    if close > top.y and not top.crossed
+        top.crossed := true
+        boxBtm = max[1]
+        boxTop = min[1]
+        boxLoc = time[1]
+        lookback = math.min((bar_index - top.x) - 1, 200) // Limit lookback
+        for i = 1 to lookback
+            boxBtm := math.min(min[i], boxBtm)
+            boxTop := boxBtm == min[i] ? max[i] : boxTop
+            boxLoc := boxBtm == min[i] ? time[i] : boxLoc
+        newOrderBlockInfo = orderBlockInfo.new(boxTop, boxBtm, volume + volume[1] + volume[2], "Bull", boxLoc)
+        newOrderBlockInfo.obLowVolume := volume[2]
+        newOrderBlockInfo.obHighVolume := volume + volume[1]
+        newOrderBlockInfo.timeframeStr := timeframe.period
+        obSize = math.abs(newOrderBlockInfo.top - newOrderBlockInfo.bottom)
+        if obSize <= atrVal * maxATRMult
+            bullishOrderBlocksList.unshift(newOrderBlockInfo)
+            // Limit size
+            if bullishOrderBlocksList.size() > 10
+                bullishOrderBlocksList.pop()
+
+    // Bearish OB
+    if close < btm.y and not btm.crossed
+        btm.crossed := true
+        boxBtm = min[1]
+        boxTop = max[1]
+        boxLoc = time[1]
+        lookback = math.min((bar_index - btm.x) - 1, 200) // Limit lookback
+        for i = 1 to lookback
+            boxTop := math.max(max[i], boxTop)
+            boxBtm := boxTop == max[i] ? min[i] : boxBtm
+            boxLoc := boxTop == max[i] ? time[i] : boxLoc
+        newOrderBlockInfo = orderBlockInfo.new(boxTop, boxBtm, volume + volume[1] + volume[2], "Bear", boxLoc)
+        newOrderBlockInfo.obLowVolume := volume + volume[1]
+        newOrderBlockInfo.obHighVolume := volume[2]
+        newOrderBlockInfo.timeframeStr := timeframe.period
+        obSize = math.abs(newOrderBlockInfo.top - newOrderBlockInfo.bottom)
+        if obSize <= atrVal * maxATRMult
+            bearishOrderBlocksList.unshift(newOrderBlockInfo)
+            if bearishOrderBlocksList.size() > 10
+                bearishOrderBlocksList.pop()
+    true
+
+isOBValid (orderBlockInfo OBInfo) =>
+    valid = true
+    if OBInfo.disabled
+        valid := false
+    valid
+
+areaOfOB (orderBlockInfo OBInfoF) =>
+    float XA1 = OBInfoF.startTime
+    float XA2 = na(OBInfoF.breakTime) ? time + 1 : OBInfoF.breakTime
+    float YA1 = OBInfoF.top
+    float YA2 = OBInfoF.bottom
+    float edge1 = math.sqrt((XA2 - XA1) * (XA2 - XA1) + (YA2 - YA2) * (YA2 - YA2))
+    float edge2 = math.sqrt((XA2 - XA2) * (XA2 - XA2) + (YA2 - YA1) * (YA2 - YA1))
+    float totalArea = edge1 * edge2
+    totalArea
+
+doOBsTouch (orderBlockInfo OBInfo1, orderBlockInfo OBInfo2) =>
+    float XA1 = OBInfo1.startTime
+    float XA2 = na(OBInfo1.breakTime) ? time + 1 : OBInfo1.breakTime
+    float YA1 = OBInfo1.top
+    float YA2 = OBInfo1.bottom
+    float XB1 = OBInfo2.startTime
+    float XB2 = na(OBInfo2.breakTime) ? time + 1 : OBInfo2.breakTime
+    float YB1 = OBInfo2.top
+    float YB2 = OBInfo2.bottom
+    float intersectionArea = math.max(0, math.min(XA2, XB2) - math.max(XA1, XB1)) * math.max(0, math.min(YA1, YB1) - math.max(YA2, YB2))
+    float unionArea = areaOfOB(OBInfo1) + areaOfOB(OBInfo2) - intersectionArea
+    float overlapPercentage = (intersectionArea / unionArea) * 100.0
+    overlapPercentage > 0
+
+combineOBsFunc () =>
+    if allOrderBlocksList.size() > 0
+        lastCombinations = 999
+        while lastCombinations > 0
+            lastCombinations := 0
+            for i = 0 to allOrderBlocksList.size() - 1
+                curOB1 = allOrderBlocksList.get(i)
+                for j = 0 to allOrderBlocksList.size() - 1
+                    curOB2 = allOrderBlocksList.get(j)
+                    if i == j
+                        continue
+                    if not isOBValid(curOB1.info) or not isOBValid(curOB2.info)
+                        continue
+                    if curOB1.info.obType != curOB2.info.obType
+                        continue
+                    if doOBsTouch(curOB1.info, curOB2.info)
+                        curOB1.info.disabled := true
+                        curOB2.info.disabled := true
+                        orderBlock newOB = createOrderBlock(orderBlockInfo.new(math.max(curOB1.info.top, curOB2.info.top), math.min(curOB1.info.bottom, curOB2.info.bottom), curOB1.info.obVolume + curOB2.info.obVolume, curOB1.info.obType))
+                        newOB.info.startTime := math.min(curOB1.info.startTime, curOB2.info.startTime)
+                        newOB.info.breakTime := math.max(nz(curOB1.info.breakTime), nz(curOB2.info.breakTime))
+                        newOB.info.breakTime := newOB.info.breakTime == 0 ? na : newOB.info.breakTime
+                        newOB.info.timeframeStr := curOB1.info.timeframeStr
+                        newOB.info.obVolume := curOB1.info.obVolume + curOB2.info.obVolume
+                        newOB.info.obLowVolume := curOB1.info.obLowVolume + curOB2.info.obLowVolume
+                        newOB.info.obHighVolume := curOB1.info.obHighVolume + curOB2.info.obHighVolume
+                        newOB.info.bbVolume := nz(curOB1.info.bbVolume, 0) + nz(curOB2.info.bbVolume, 0)
+                        newOB.info.breaker := curOB1.info.breaker or curOB2.info.breaker
+                        newOB.info.combined := true
+                        allOrderBlocksList.unshift(newOB)
+                        lastCombinations += 1
+
+handleOrderBlocksFinal() =>
+    if allOrderBlocksList.size () > 0
+        for i = 0 to allOrderBlocksList.size() - 1
+            safeDeleteOrderBlock(allOrderBlocksList.get(i))
+    allOrderBlocksList.clear()
+    // Populate with Bullish
+    if bullishOrderBlocksList.size() > 0
+        for i = 0 to bullishOrderBlocksList.size() - 1
+            allOrderBlocksList.unshift(createOrderBlock(orderBlockInfo.copy(bullishOrderBlocksList.get(i))))
+    // Populate with Bearish
+    if bearishOrderBlocksList.size() > 0
+        for i = 0 to bearishOrderBlocksList.size() - 1
+            allOrderBlocksList.unshift(createOrderBlock(orderBlockInfo.copy(bearishOrderBlocksList.get(i))))
+    if combineOBs
+        combineOBsFunc()
+    if allOrderBlocksList.size() > 0
+        // Limit rendering to the last 10 combined OBs to reduce clutter/load
+        renderLimit = math.min(allOrderBlocksList.size(), 10)
+        for i = 0 to renderLimit - 1
+            curOB = allOrderBlocksList.get(i)
+            if isOBValid(curOB.info)
+                renderOrderBlock(curOB)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// MAIN LOGIC - MARKET STRUCTURE (LUXALGO)
+//---------------------------------------------------------------------------------------------------------------------{
+
+if showHighLowSwingsInput
+    updateTrailingExtremes()
+    drawHighLowSwings()
+
+// Calculate Swings
+// We use a function-like block or just inline logic inside a loop? LuxAlgo uses `getCurrentStructure`.
+// Wait, `getCurrentStructure` in LuxAlgo is a function. I missed copying it or decided to inline it?
+// Checking my previous step... I did NOT copy `getCurrentStructure` in the Helper Functions step.
+// I see `drawStructure` but not `getCurrentStructure` or `displayStructure`.
+// I need to add `getCurrentStructure` and `displayStructure` logic here or as functions.
+// I'll add them as functions first because they are complex.
+// Actually, I can just append them here as functions then call them.
+
+getCurrentStructure(int size, bool equalHighLow = false, bool internal = false) =>
+    currentLeg              = leg(size)
+    newPivot                = startOfNewLeg(currentLeg)
+    pivotLow                = startOfBullishLeg(currentLeg)
+    pivotHigh               = startOfBearishLeg(currentLeg)
+
+    if newPivot
+        if pivotLow
+            pivot p_ivot    = equalHighLow ? internalLow : internal ? internalLow : swingLow // Simplification: equalLow removed for brevity
+            // Note: LuxAlgo logic is complex here.
+            // Simplified for clarity:
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := low[size]
+            p_ivot.crossed      := false
+            p_ivot.barTime      := time[size]
+            p_ivot.barIndex     := bar_index[size]
+
+            if not equalHighLow and not internal
+                trailing.bottom         := p_ivot.currentLevel
+                trailing.barTime        := p_ivot.barTime
+                trailing.barIndex       := p_ivot.barIndex
+                trailing.lastBottomTime := p_ivot.barTime
+
+            if showSwingsInput and not internal and not equalHighLow
+                drawLabel(time[size], p_ivot.currentLevel, p_ivot.currentLevel < p_ivot.lastLevel ? 'LL' : 'HL', swingBullColorInput, label.style_label_up)
+        else
+            pivot p_ivot = equalHighLow ? internalHigh : internal ? internalHigh : swingHigh
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := high[size]
+            p_ivot.crossed      := false
+            p_ivot.barTime      := time[size]
+            p_ivot.barIndex     := bar_index[size]
+
+            if not equalHighLow and not internal
+                trailing.top            := p_ivot.currentLevel
+                trailing.barTime        := p_ivot.barTime
+                trailing.barIndex       := p_ivot.barIndex
+                trailing.lastTopTime    := p_ivot.barTime
+
+            if showSwingsInput and not internal and not equalHighLow
+                drawLabel(time[size], p_ivot.currentLevel, p_ivot.currentLevel > p_ivot.lastLevel ? 'HH' : 'LH', swingBearColorInput, label.style_label_down)
+
+displayStructure(bool internal = false) =>
+    var bullishBar = true
+    var bearishBar = true
+    // Filter Confluence Logic (Simplified)
+    bullishBar := high - math.max(close, open) > math.min(close, open - low)
+    bearishBar := high - math.max(close, open) < math.min(close, open - low)
+
+    pivot p_ivot    = internal ? internalHigh : swingHigh
+    trend t_rend    = internal ? internalTrend : swingTrend
+    lineStyle       = internal ? line.style_dashed : line.style_solid
+    labelSize       = internal ? size.small : size.small // Adjusted
+
+    extraCondition  = internal ? internalHigh.currentLevel != swingHigh.currentLevel and bullishBar : true
+    bullishColor    = internal ? internalBullColorInput : swingBullColorInput
+
+    if ta.crossover(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
+        string tag = t_rend.bias == BEARISH ? CHOCH : BOS
+        if internal
+            currentAlerts.internalBullishCHoCH  := tag == CHOCH
+            currentAlerts.internalBullishBOS    := tag == BOS
+        else
+            currentAlerts.swingBullishCHoCH     := tag == CHOCH
+            currentAlerts.swingBullishBOS       := tag == BOS
+        p_ivot.crossed  := true
+        t_rend.bias     := BULLISH
+        displayCondition = internal ? showInternalsInput : showStructureInput
+        if displayCondition
+            if internal
+                drawStructureInternal(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            else
+                drawStructureSwing(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+
+    p_ivot          := internal ? internalLow : swingLow
+    extraCondition  := internal ? internalLow.currentLevel != swingLow.currentLevel and bearishBar : true
+    bearishColor    = internal ? internalBearColorInput : swingBearColorInput
+
+    if ta.crossunder(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
+        string tag = t_rend.bias == BULLISH ? CHOCH : BOS
+        if internal
+            currentAlerts.internalBearishCHoCH  := tag == CHOCH
+            currentAlerts.internalBearishBOS    := tag == BOS
+        else
+            currentAlerts.swingBearishCHoCH     := tag == CHOCH
+            currentAlerts.swingBearishBOS       := tag == BOS
+        p_ivot.crossed := true
+        t_rend.bias := BEARISH
+        displayCondition = internal ? showInternalsInput : showStructureInput
+        if displayCondition
+            if internal
+                drawStructureInternal(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            else
+                drawStructureSwing(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+
+// Execute Structure Logic
+getCurrentStructure(swingsLengthInput, false, false) // Swing
+getCurrentStructure(5, false, true) // Internal
+displayStructure(true) // Internal Display
+displayStructure(false) // Swing Display
+
+
+//---------------------------------------------------------------------------------------------------------------------}
+// MAIN LOGIC - LIQUIDITY ZONES (MAPPER)
+//---------------------------------------------------------------------------------------------------------------------{
+
+ph = ta.pivothigh(high, lenLeft, lenRight)
+pl = ta.pivotlow(low, lenLeft, lenRight)
+
+currentZoneHeight = zoneType == "ATR" ? atrVal : close * (pctSize / 100)
+
+// Create Zones
+if not na(ph)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = ph
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+    top = pivotPrice + zh
+    bottom = pivotPrice
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBearBoxes) > 0
+        for i = 0 to array.size(activeBearBoxes) - 1
+            existingBox = array.get(activeBearBoxes, i)
+            eBottom = box.get_bottom(existingBox)
+            eTop    = box.get_top(existingBox)
+            distPct = math.abs(pivotPrice - eBottom) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(existingBox, newTop)
+                box.set_bottom(existingBox, newBottom)
+                currentScore = array.get(activeBearScores, i)
+                newScore = currentScore + (vScore * 0.5)
+                array.set(activeBearScores, i, math.min(newScore, 100))
+                break
+
+    if not merged
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBear)
+        array.push(activeBearBoxes, b)
+        array.push(activeBearScores, vScore)
+        array.push(activeBearTouches, 0)
+
+if not na(pl)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = pl
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+    top = pivotPrice
+    bottom = pivotPrice - zh
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBullBoxes) > 0
+        for i = 0 to array.size(activeBullBoxes) - 1
+            existingBox = array.get(activeBullBoxes, i)
+            eTop    = box.get_top(existingBox)
+            eBottom = box.get_bottom(existingBox)
+            distPct = math.abs(pivotPrice - eTop) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(existingBox, newTop)
+                box.set_bottom(existingBox, newBottom)
+                currentScore = array.get(activeBullScores, i)
+                newScore = currentScore + (vScore * 0.5)
+                array.set(activeBullScores, i, math.min(newScore, 100))
+                break
+
+    if not merged
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBull)
+        array.push(activeBullBoxes, b)
+        array.push(activeBullScores, vScore)
+        array.push(activeBullTouches, 0)
+
+// Manage Zones (Bear)
+if array.size(activeBearBoxes) > 0
+    for i = array.size(activeBearBoxes) - 1 to 0
+        b = array.get(activeBearBoxes, i)
+        bBottom = box.get_bottom(b)
+
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close > bBottom
+        else
+            mitigated := high > bBottom
+
+        bool isSweep = false
+        if not (close > bBottom) and (high > bBottom)
+            isSweep := true
+            if showSweepArea
+                box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50))
+
+        bool absorbed = false
+        if mitigateMethod == "Close" and not mitigated and high > bBottom
+            if volume > (volMA * absorbVolMult)
+                absorbed := true
+            tCount = array.get(activeBearTouches, i)
+            array.set(activeBearTouches, i, tCount + 1)
+
+        if mitigated
+            if mitigateMethod == "Wick" and close < bBottom
+                string txt = "SWEEP"
+                bool isSignal = false
+                if showSignals
+                    if (reqRejection and close < open) or (not reqRejection)
+                        txt := "SELL"
+                        isSignal := true
+                        alert("Bearish Entry Signal: Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
+
+                color lblCol = color.red
+                if txt == "SWEEP"
+                    lblCol := color.yellow
+                else if txt == "SELL"
+                    lblCol := color.red
+
+                if isSignal and showSignalHistory
+                    label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                else
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBearBoxes, i)
+            array.remove(activeBearScores, i)
+            array.remove(activeBearTouches, i)
+        else
+            box.set_right(b, bar_index + 5)
+            if isSweep and mitigateMethod == "Close"
+                if volume > (volMA * absorbVolMult)
+                    string txt = "SWEEP"
+                    bool isSignal = false
+                    if showSignals
+                        if (reqRejection and close < open) or (not reqRejection)
+                            txt := "SELL"
+                            isSignal := true
+                            alert("Bearish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
+                    color lblCol = color.red
+                    if txt == "SWEEP"
+                        lblCol := color.yellow
+                    else if txt == "SELL"
+                        lblCol := color.red
+
+                    if isSignal and showSignalHistory
+                        label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+
+            if absorbed
+                currentScore = array.get(activeBearScores, i)
+                newScore = math.min(currentScore + 10, 100)
+                array.set(activeBearScores, i, newScore)
+                box.set_border_color(b, colAbsorb)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 2)
+
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBearScores, i)
+            tCount = array.get(activeBearTouches, i)
+            tScore = math.min(tCount * 10, 30)
+            totalScore = ageScore + vScore + tScore
+            transp = 80 - (totalScore / 130 * 50)
+            box.set_bgcolor(b, color.new(color.red, transp))
+            if not absorbed and totalScore > 75
+                box.set_border_color(b, color.red)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
+// Manage Zones (Bull)
+if array.size(activeBullBoxes) > 0
+    for i = array.size(activeBullBoxes) - 1 to 0
+        b = array.get(activeBullBoxes, i)
+        bTop = box.get_top(b)
+
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close < bTop
+        else
+            mitigated := low < bTop
+
+        bool isSweep = false
+        if not (close < bTop) and (low < bTop)
+            isSweep := true
+            if showSweepArea
+                box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+
+        bool absorbed = false
+        if mitigateMethod == "Close" and not mitigated and low < bTop
+            if volume > (volMA * absorbVolMult)
+                absorbed := true
+            tCount = array.get(activeBullTouches, i)
+            array.set(activeBullTouches, i, tCount + 1)
+
+        if mitigated
+            if mitigateMethod == "Wick" and close > bTop
+                string txt = "SWEEP"
+                bool isSignal = false
+                if showSignals
+                    if (reqRejection and close > open) or (not reqRejection)
+                        txt := "BUY"
+                        isSignal := true
+                        alert("Bullish Entry Signal: Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
+
+                color lblCol = color.green
+                if txt == "SWEEP"
+                    lblCol := color.blue
+                else if txt == "BUY"
+                    lblCol := color.green
+
+                if isSignal and showSignalHistory
+                    label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                else
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBullBoxes, i)
+            array.remove(activeBullScores, i)
+            array.remove(activeBullTouches, i)
+        else
+            box.set_right(b, bar_index + 5)
+            if isSweep and mitigateMethod == "Close"
+                if volume > (volMA * absorbVolMult)
+                    string txt = "SWEEP"
+                    bool isSignal = false
+                    if showSignals
+                        if (reqRejection and close > open) or (not reqRejection)
+                            txt := "BUY"
+                            isSignal := true
+                            alert("Bullish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
+                    color lblCol = color.green
+                    if txt == "SWEEP"
+                        lblCol := color.blue
+                    else if txt == "BUY"
+                        lblCol := color.green
+
+                    if isSignal and showSignalHistory
+                        label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+
+            if absorbed
+                currentScore = array.get(activeBullScores, i)
+                newScore = math.min(currentScore + 10, 100)
+                array.set(activeBullScores, i, newScore)
+                box.set_border_color(b, colAbsorb)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 2)
+
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBullScores, i)
+            tCount = array.get(activeBullTouches, i)
+            tScore = math.min(tCount * 10, 30)
+            totalScore = ageScore + vScore + tScore
+            transp = 80 - (totalScore / 130 * 50)
+            box.set_bgcolor(b, color.new(color.green, transp))
+            if not absorbed and totalScore > 75
+                box.set_border_color(b, color.green)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// MAIN LOGIC - ORDER BLOCKS (FLUX CHARTS)
+//---------------------------------------------------------------------------------------------------------------------{
+
+if OBsEnabled
+    findOrderBlocks()
+    if barstate.isconfirmed
+        handleOrderBlocksFinal()
+
+//---------------------------------------------------------------------------------------------------------------------}
+// MAIN LOGIC - FAIR VALUE GAPS (LUXALGO)
+//---------------------------------------------------------------------------------------------------------------------{
+
+if showFairValueGapsInput
+    deleteFairValueGaps()
+    drawFairValueGaps()
+
+//---------------------------------------------------------------------------------------------------------------------}
+// VISUALIZATION & COLORING
+//---------------------------------------------------------------------------------------------------------------------{
+
+color finalCandleColor = na
+if showTrendInput
+    if swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
+        finalCandleColor := color.green
+    else if swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
+        finalCandleColor := color.red
+
+barcolor(finalCandleColor)
+
+// Update Vars
+lastBarIndex    := currentBarIndex
+currentBarIndex := bar_index
+
+//---------------------------------------------------------------------------------------------------------------------}
+// ALERTS
+//---------------------------------------------------------------------------------------------------------------------{
+
+alertcondition(currentAlerts.internalBullishBOS,        'Internal Bullish BOS',         'Internal Bullish BOS formed')
+alertcondition(currentAlerts.internalBullishCHoCH,      'Internal Bullish CHoCH',       'Internal Bullish CHoCH formed')
+alertcondition(currentAlerts.internalBearishBOS,        'Internal Bearish BOS',         'Internal Bearish BOS formed')
+alertcondition(currentAlerts.internalBearishCHoCH,      'Internal Bearish CHoCH',       'Internal Bearish CHoCH formed')
+alertcondition(currentAlerts.swingBullishBOS,           'Bullish BOS',                  'Internal Bullish BOS formed')
+alertcondition(currentAlerts.swingBullishCHoCH,         'Bullish CHoCH',                'Internal Bullish CHoCH formed')
+alertcondition(currentAlerts.swingBearishBOS,           'Bearish BOS',                  'Bearish BOS formed')
+alertcondition(currentAlerts.swingBearishCHoCH,         'Bearish CHoCH',                'Bearish CHoCH formed')
+alertcondition(currentAlerts.bullishFairValueGap,       'Bullish FVG',                  'Bullish FVG formed')
+alertcondition(currentAlerts.bearishFairValueGap,       'Bearish FVG',                  'Bearish FVG formed')
