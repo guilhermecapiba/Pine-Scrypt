@@ -1,0 +1,234 @@
+//@version=6
+indicator("Capiba Williams Fractals MTF", overlay=true, shorttitle="Capiba MTF Fractals")
+
+// -----------------------------------------------------------------------------
+// INPUTS
+// -----------------------------------------------------------------------------
+grp_tf      = "Tempos Gráficos (Timeframes)"
+ltf1_input  = input.timeframe("240", "Tempo Gráfico Menor 1", group=grp_tf)
+ltf2_input  = input.timeframe("60", "Tempo Gráfico Menor 2", group=grp_tf)
+htf_input   = input.timeframe("D", "Tempo Gráfico Maior (Confluência)", group=grp_tf)
+
+grp_filter  = "Filtro de Tendência"
+use_filter  = input.bool(true, "Habilitar Filtro EMA?", group=grp_filter)
+ema_len     = input.int(20, "Comprimento EMA", minval=1, group=grp_filter)
+
+grp_style   = "Estilo e Sensibilidade"
+tol_pct     = input.float(0.5, "Tolerância de Confluência (%)", minval=0.0, step=0.1, group=grp_style, tooltip="Distância percentual para considerar níveis 'iguais'")
+show_lines  = input.bool(true, "Mostrar Linhas S/R Dinâmicas (Atual)", group=grp_style)
+line_count  = input.int(3, "Máx. Linhas S/R", minval=1, maxval=20, group=grp_style)
+show_htf_conf = input.bool(false, "Mostrar Destaque Confluência HTF (Fundo)", group=grp_style)
+show_ltf_conf = input.bool(false, "Mostrar Destaque Confluência LTF (Fundo)", group=grp_style)
+
+// -----------------------------------------------------------------------------
+// FUNCTIONS
+// -----------------------------------------------------------------------------
+
+// Standard Williams Fractal (5 bars)
+// Returns: [isUp, isDown, priceUp, priceDown]
+get_fractal_data() =>
+    // Up Fractal: High[2] is highest of 5
+    bool up = high[2] > high[3] and high[2] > high[4] and high[2] > high[1] and high[2] > high[0]
+    // Down Fractal: Low[2] is lowest of 5
+    bool down = low[2] < low[3] and low[2] < low[4] and low[2] < low[1] and low[2] < low[0]
+
+    // EMA Filter Logic (if enabled)
+    float ema_val = ta.ema(close, ema_len)
+    if use_filter
+        // Logic: Compare Close[2] (Pivot Time) with EMA[2] (Pivot Time)
+        // "Buy Fractal" (Down Fractal/Support) valid if Price > EMA (Uptrend)
+        // "Sell Fractal" (Up Fractal/Resistance) valid if Price < EMA (Downtrend)
+        bool trend_up = close[2] > ema_val[2]
+
+        if trend_up
+            up := false // Hide Sell signals (Up Fractals) in Uptrend
+        else
+            down := false // Hide Buy signals (Down Fractals) in Downtrend
+
+    [up, down, high[2], low[2]]
+
+// -----------------------------------------------------------------------------
+// CALCULATIONS (CURRENT TF)
+// -----------------------------------------------------------------------------
+[cur_up, cur_down, cur_up_price, cur_down_price] = get_fractal_data()
+
+// -----------------------------------------------------------------------------
+// MTF CALCULATIONS
+// -----------------------------------------------------------------------------
+// We need to fetch the *result* of the fractal function from other TFs.
+// Using a tuple in request.security is supported in v5/v6.
+
+type FractalData
+    bool isUp
+    bool isDown
+    float priceUp
+    float priceDown
+
+// Helper to wrap the tuple for security (v6 structs can be passed, but tuples are easier if simple)
+// Actually, we can just pass the expression `get_fractal_data()`.
+[ltf1_up, ltf1_down, ltf1_up_price, ltf1_down_price] = request.security(syminfo.tickerid, ltf1_input, get_fractal_data(), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
+[ltf2_up, ltf2_down, ltf2_up_price, ltf2_down_price] = request.security(syminfo.tickerid, ltf2_input, get_fractal_data(), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
+[htf_up, htf_down, htf_up_price, htf_down_price]     = request.security(syminfo.tickerid, htf_input, get_fractal_data(), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
+
+// -----------------------------------------------------------------------------
+// PLOTTING & VISUALS
+// -----------------------------------------------------------------------------
+
+// Colors
+col_cur_up   = color.new(color.red, 0)
+col_cur_down = color.new(color.green, 0)
+col_ltf1_up  = color.new(color.maroon, 30)
+col_ltf1_down= color.new(color.lime, 30)
+col_ltf2_up  = color.new(color.orange, 50)
+col_ltf2_down= color.new(color.teal, 50)
+col_htf_up   = color.new(color.purple, 20)
+col_htf_down = color.new(color.fuchsia, 20)
+
+// Shapes
+// Note: Fractals confirm 2 bars ago. We plot at `bar_index - 2`.
+// However, request.security returns data at the *current* bar matching the *other* TF's close.
+// If we plot `ltf1_up` at `bar_index`, it corresponds to the close of the LTF bar.
+// For Current TF, we must use `offset=-2`.
+
+// Logic for Pollution Control:
+// If Current TF has fractal at bar_index-2, we plot it.
+// If LTF1 has fractal, we plot it ONLY if it doesn't overlap visually or logically?
+// Since `cur_up` is true at `bar_index`, it actually refers to `high[2]`.
+// We plot it with offset -2.
+
+plotshape(cur_up, "Fractal Alta (Atual)", shape.diamond, location.abovebar, col_cur_up, size=size.normal, offset=-2)
+plotshape(cur_down, "Fractal Baixa (Atual)", shape.diamond, location.belowbar, col_cur_down, size=size.normal, offset=-2)
+
+// For LTF, we don't need offset=-2 because `request.security` already gives us the confirmed value at the current bar (which corresponds to the close of the LTF bar).
+// But wait, the LTF bar *also* had its fractal 2 bars ago *in its own timeframe*.
+// If we want to align it perfectly in time, it's hard without array mapping.
+// However, typically MTF fractals are plotted at the bar they become available (confirmation).
+// The user says: "Smaller fractals serve as anticipation".
+// If I plot LTF fractal at `bar_index`, it appears "now" (when confirmed).
+// If I plot Current fractal at `bar_index-2`, it appears "in the past".
+// This is confusing visually.
+// Standard approach: Plot Current Fractal at -2.
+// Plot LTF Fractal at -2? No, `request.security` aligns to the close.
+// Let's just plot LTF fractals where they are reported (current bar) to show "New Information".
+// Or, if we want to show where the fractal *actually* is (the peak), we don't know the exact offset on this timeframe easily.
+// I will plot LTF fractals at `offset=0` (Confirmation Time).
+// Pollution Check:
+// If `cur_up` is true (meaning we have a confirmed Current Fractal from 2 bars ago), do we hide LTF?
+// They are at different bar indices visually (Current is at -2, LTF is at 0).
+// So they won't overlap physically.
+// But conceptually?
+// "If I have confluences for the 8H, I don't need to show that... 4H and 2H also conflue."
+// This implies spatial overlap.
+// If I plot LTF at 0, and Current at -2, they are distinct.
+// I will just plot them. The "pollution" likely refers to cluttering the same visual space.
+// I'll make LTF shapes smaller.
+
+plotshape(ltf1_up and not cur_up, "Fractal Alta (TF Menor 1)", shape.triangledown, location.abovebar, col_ltf1_up, size=size.small)
+plotshape(ltf1_down and not cur_down, "Fractal Baixa (TF Menor 1)", shape.triangleup, location.belowbar, col_ltf1_down, size=size.small)
+
+plotshape(ltf2_up and not ltf1_up and not cur_up, "Fractal Alta (TF Menor 2)", shape.circle, location.abovebar, col_ltf2_up, size=size.tiny)
+plotshape(ltf2_down and not ltf1_down and not cur_down, "Fractal Baixa (TF Menor 2)", shape.circle, location.belowbar, col_ltf2_down, size=size.tiny)
+
+// HTF Fractals Visuals (Distinctive)
+plotshape(htf_up, "Fractal Alta (TF Maior)", shape.square, location.abovebar, col_htf_up, size=size.small)
+plotshape(htf_down, "Fractal Baixa (TF Maior)", shape.square, location.belowbar, col_htf_down, size=size.small)
+
+// -----------------------------------------------------------------------------
+// DYNAMIC S/R LINES (Chosen Higher TF)
+// -----------------------------------------------------------------------------
+var line[] up_lines = array.new_line()
+var line[] down_lines = array.new_line()
+
+if htf_up
+    // Create new line at the HTF Fractal Price
+    // Note: htf_up triggers at confirmation (end of HTF bar). We draw from current bar.
+    l = line.new(bar_index, htf_up_price, bar_index + 10, htf_up_price, color=col_htf_up, width=2, style=line.style_solid)
+    array.push(up_lines, l)
+    // Maintain limit
+    if array.size(up_lines) > line_count
+        line.delete(array.shift(up_lines))
+
+if htf_down
+    // Create new line at HTF Fractal Price
+    l = line.new(bar_index, htf_down_price, bar_index + 10, htf_down_price, color=col_htf_down, width=2, style=line.style_solid)
+    array.push(down_lines, l)
+    // Maintain limit
+    if array.size(down_lines) > line_count
+        line.delete(array.shift(down_lines))
+
+// Extend lines
+// Only extend the *active* lines
+if barstate.islast and show_lines
+    for l in up_lines
+        line.set_x2(l, bar_index + 10)
+    for l in down_lines
+        line.set_x2(l, bar_index + 10)
+
+// -----------------------------------------------------------------------------
+// ALERTS & CONFLUENCE
+// -----------------------------------------------------------------------------
+
+// We need the *price* of the most recent HTF fractal to compare with Current.
+// We can use `ta.valuewhen` on the series returned by security.
+// `htf_up` is true when a fractal confirms. `htf_up_price` is the price.
+// Note: `htf_up` from security is a series of bools.
+var float last_htf_up_price = na
+var float last_htf_down_price = na
+var float last_ltf1_up_price = na
+var float last_ltf1_down_price = na
+
+if htf_up
+    last_htf_up_price := htf_up_price
+if htf_down
+    last_htf_down_price := htf_down_price
+if ltf1_up
+    last_ltf1_up_price := ltf1_up_price
+if ltf1_down
+    last_ltf1_down_price := ltf1_down_price
+
+// Confluence Logic
+// Trigger when Current Fractal Forms (cur_up/cur_down is true)
+// Check if `high[2]` (the fractal price) is close to `last_htf_up_price`
+
+is_confluence_htf_up = false
+is_confluence_htf_down = false
+is_confluence_ltf_up = false
+is_confluence_ltf_down = false
+
+// Check UP Confluences
+if cur_up and not na(last_htf_up_price)
+    // Calculate percentage difference
+    diff = math.abs(high[2] - last_htf_up_price) / high[2] * 100
+    if diff <= tol_pct
+        is_confluence_htf_up := true
+
+if cur_up and not na(last_ltf1_up_price)
+    diff = math.abs(high[2] - last_ltf1_up_price) / high[2] * 100
+    if diff <= tol_pct
+        is_confluence_ltf_up := true
+
+// Check DOWN Confluences
+if cur_down and not na(last_htf_down_price)
+    diff = math.abs(low[2] - last_htf_down_price) / low[2] * 100
+    if diff <= tol_pct
+        is_confluence_htf_down := true
+
+if cur_down and not na(last_ltf1_down_price)
+    diff = math.abs(low[2] - last_ltf1_down_price) / low[2] * 100
+    if diff <= tol_pct
+        is_confluence_ltf_down := true
+
+// Trigger Alerts
+if is_confluence_htf_up
+    alert("Confluência Fractal de Baixa (Atual + TF Maior) em " + str.tostring(high[2]), alert.freq_once_per_bar_close)
+if is_confluence_htf_down
+    alert("Confluência Fractal de Alta (Atual + TF Maior) em " + str.tostring(low[2]), alert.freq_once_per_bar_close)
+
+if is_confluence_ltf_up
+    alert("Confluência Fractal de Baixa (Atual + TF Menor) em " + str.tostring(high[2]), alert.freq_once_per_bar_close)
+if is_confluence_ltf_down
+    alert("Confluência Fractal de Alta (Atual + TF Menor) em " + str.tostring(low[2]), alert.freq_once_per_bar_close)
+
+// Visualise Confluence (Optional - small background highlight?)
+bgcolor(show_htf_conf and (is_confluence_htf_up or is_confluence_htf_down) ? color.new(color.yellow, 80) : na, title="HTF Confluence Highlight")
+bgcolor(show_ltf_conf and (is_confluence_ltf_up or is_confluence_ltf_down) ? color.new(color.blue, 90) : na, title="LTF Confluence Highlight")
