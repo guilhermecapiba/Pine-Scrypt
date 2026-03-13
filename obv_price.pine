@@ -1,0 +1,11 @@
+//@version=5
+indicator("OBV / Preço", shorttitle="OBV/P", overlay=false)
+
+// Cálculo do OBV padrão (On-Balance Volume)
+obv = ta.cum(math.sign(ta.change(close)) * volume)
+
+// Cálculo da nova métrica (OBV / Preço)
+obv_price = obv / close
+
+// Plotagem da nova métrica (OBV / Preço) em vez da linha OBV
+plot(obv_price, title="OBV / Preço", color=color.blue, linewidth=2)
