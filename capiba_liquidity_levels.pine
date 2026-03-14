@@ -5,6 +5,7 @@ indicator("Capiba Liquidity Levels", overlay=true, max_lines_count=500, max_labe
 lookback     = input.int(20,    "Pivot Lookback",       minval=5)
 eqThreshold  = input.float(0.1, "Equal H/L Threshold %", minval=0.01, step=0.01)
 showSwept    = input.bool(true, "Show Swept Levels")
+maxLevels    = input.int(20,    "Max Active Levels",    minval=1, maxval=100)
 colorBuy     = input.color(color.new(#00bcd4, 0),  "Buyside Color")
 colorSell    = input.color(color.new(#ff5722, 0),  "Sellside Color")
 colorSwept   = input.color(color.new(#888888, 60), "Swept Color")
@@ -143,3 +144,11 @@ if levels.size() > 0
             // Extend active level
             line.set_x2(lv.ln, bar_index + 10)
             label.set_x(lv.lbl, bar_index + 10)
+
+// ─── GARBAGE COLLECTION ───────────────────────────────────────────────────────
+if levels.size() > maxLevels
+    int toRemove = levels.size() - maxLevels
+    for i = 0 to toRemove - 1
+        lv = levels.shift()
+        line.delete(lv.ln)
+        label.delete(lv.lbl)
