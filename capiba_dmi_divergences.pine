@@ -1,5 +1,5 @@
 //@version=6
-indicator(title="Directional Movement Index", shorttitle="DMI [Capiba]", format=format.price, precision=4, timeframe="", timeframe_gaps=true)
+indicator(title="Directional Movement Index", shorttitle="Capiba DMI", format=format.price, precision=4)
 
 TT_ADX_LEN = "The time period to be used in calculating the ADX which has a smoothing component."
 TT_DI_LEN  = "The time period to be used in calculating the DI (Directional Indicator)."
