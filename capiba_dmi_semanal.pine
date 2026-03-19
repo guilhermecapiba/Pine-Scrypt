@@ -8,20 +8,6 @@ lensig = input.int(12, "ADX Smoothing", minval = 1, tooltip = TT_ADX_LEN)
 len =    input.int(12, "DI Length",     minval = 1, tooltip = TT_DI_LEN)
 shape_size_str = input.string("normal", title="Tamanho da Marca", options=["auto", "tiny", "small", "normal", "large", "huge"])
 
-var string size_str = shape_size_str
-
-// Map string input to size type
-get_size() =>
-    size_str == "auto" ? size.auto :
-      size_str == "tiny" ? size.tiny :
-      size_str == "small" ? size.small :
-      size_str == "normal" ? size.normal :
-      size_str == "large" ? size.large :
-      size_str == "huge" ? size.huge :
-      size.auto
-
-mark_size = get_size()
-
 up = ta.change(high)
 down = -ta.change(low)
 plusDM = na(up) ? na : (up > down and up > 0 ? up : 0)
@@ -51,8 +37,19 @@ if not na(adx) and not na(adx[1])
             plot_red := true
             adx_dir := -1
 
-plotshape(plot_green ? adx : na, title="ADX Subindo", style=shape.triangleup, location=location.absolute, color=color.green, size=mark_size)
-plotshape(plot_red ? adx : na, title="ADX Caindo", style=shape.triangledown, location=location.absolute, color=color.red, size=mark_size)
+plotshape(plot_green and shape_size_str == "auto" ? adx : na, title="ADX Subindo (auto)", style=shape.triangleup, location=location.absolute, color=color.green, size=size.auto)
+plotshape(plot_green and shape_size_str == "tiny" ? adx : na, title="ADX Subindo (tiny)", style=shape.triangleup, location=location.absolute, color=color.green, size=size.tiny)
+plotshape(plot_green and shape_size_str == "small" ? adx : na, title="ADX Subindo (small)", style=shape.triangleup, location=location.absolute, color=color.green, size=size.small)
+plotshape(plot_green and shape_size_str == "normal" ? adx : na, title="ADX Subindo (normal)", style=shape.triangleup, location=location.absolute, color=color.green, size=size.normal)
+plotshape(plot_green and shape_size_str == "large" ? adx : na, title="ADX Subindo (large)", style=shape.triangleup, location=location.absolute, color=color.green, size=size.large)
+plotshape(plot_green and shape_size_str == "huge" ? adx : na, title="ADX Subindo (huge)", style=shape.triangleup, location=location.absolute, color=color.green, size=size.huge)
+
+plotshape(plot_red and shape_size_str == "auto" ? adx : na, title="ADX Caindo (auto)", style=shape.triangledown, location=location.absolute, color=color.red, size=size.auto)
+plotshape(plot_red and shape_size_str == "tiny" ? adx : na, title="ADX Caindo (tiny)", style=shape.triangledown, location=location.absolute, color=color.red, size=size.tiny)
+plotshape(plot_red and shape_size_str == "small" ? adx : na, title="ADX Caindo (small)", style=shape.triangledown, location=location.absolute, color=color.red, size=size.small)
+plotshape(plot_red and shape_size_str == "normal" ? adx : na, title="ADX Caindo (normal)", style=shape.triangledown, location=location.absolute, color=color.red, size=size.normal)
+plotshape(plot_red and shape_size_str == "large" ? adx : na, title="ADX Caindo (large)", style=shape.triangledown, location=location.absolute, color=color.red, size=size.large)
+plotshape(plot_red and shape_size_str == "huge" ? adx : na, title="ADX Caindo (huge)", style=shape.triangledown, location=location.absolute, color=color.red, size=size.huge)
 
 // Divergence Logic (Capiba style)
 prd = input.int(5, title="Pivot Period", minval=1)
