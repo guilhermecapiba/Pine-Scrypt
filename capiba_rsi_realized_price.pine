@@ -114,7 +114,7 @@ plot(ema1460, "EMA 1460 dias", color = color.red, linewidth = 6)
 
 // 3. Horizontal RP Zones (Multipliers)
 // Levels
-l_07  = rp * 0.7
+l_065 = rp * 0.65
 l_10  = rp * 1.0
 l_12  = rp * 1.2
 l_14  = rp * 1.4
@@ -127,7 +127,7 @@ l_34  = rp * 3.4
 l_38  = rp * 3.8
 
 // Colors
-c_07  = color.new(#8A0303, 0)   // Vermelho sangue
+c_065 = color.new(#8A0303, 0)   // Vermelho sangue
 c_10  = color.new(color.white, 0)
 c_12  = color.new(color.green, 0)
 c_14  = color.new(color.green, 0)
@@ -140,7 +140,7 @@ c_34  = color.new(color.red, 0)
 c_38  = color.new(color.red, 0)
 
 // Plot Levels with trackprice=false
-p_07  = plot(l_07,  "0.7x RP", color = c_07, linewidth=6, trackprice=false)
+p_065 = plot(l_065, "0.65x RP", color = c_065, linewidth=6, trackprice=false)
 p_10  = plot(l_10,  "1.0x RP", color = c_10, linewidth=6, trackprice=false)
 p_12  = plot(l_12,  "1.2x RP", color = c_12, linewidth=2, trackprice=false)
 p_14  = plot(l_14,  "1.4x RP", color = c_14, linewidth=2, trackprice=false)
@@ -176,7 +176,7 @@ draw_extended_line(price, col, width) =>
     line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
 
 if barstate.islast
-    draw_extended_line(l_07,  c_07,  6)
+    draw_extended_line(l_065, c_065, 6)
     draw_extended_line(l_10,  c_10,  6)
     draw_extended_line(l_12,  c_12,  2)
     draw_extended_line(l_14,  c_14,  2)
@@ -188,8 +188,8 @@ if barstate.islast
     draw_extended_line(l_34,  c_34,  2)
     draw_extended_line(l_38,  c_38,  2)
 
-    label.new(bar_index + 60, l_07,  "70% do Realized Price - LIQUIDAÇÃO AAVE  - LINHA DE COLAPSO - BALANCED PRICE", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_07,  size=size.large)
-    label.new(bar_index + 60, l_10,  "Realized Price - (HF 1,45)", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10,  size=size.large)
+    label.new(bar_index + 60, l_065, "65% Realized Price - LIQUIDAÇÃO AAVE", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_065, size=size.large)
+    label.new(bar_index + 60, l_10,  "REALIZED PRICE", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_10,  size=size.large)
     label.new(bar_index + 60, l_12,  "120% do Realized Price", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_12,  size=size.large)
     label.new(bar_index + 60, l_14,  "140% do Realized Price", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_14,  size=size.large)
     label.new(bar_index + 60, l_16,  "160% do Realized Price", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_16,  size=size.large)
