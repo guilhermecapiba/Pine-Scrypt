@@ -6,6 +6,21 @@ TT_DI_LEN  = "The time period to be used in calculating the DI (Directional Indi
 
 lensig = input.int(12, "ADX Smoothing", minval = 1, tooltip = TT_ADX_LEN)
 len =    input.int(12, "DI Length",     minval = 1, tooltip = TT_DI_LEN)
+shape_size_str = input.string("normal", title="Tamanho da Marca", options=["auto", "tiny", "small", "normal", "large", "huge"])
+
+var string size_str = shape_size_str
+
+// Map string input to size type
+get_size() =>
+    size_str == "auto" ? size.auto :
+      size_str == "tiny" ? size.tiny :
+      size_str == "small" ? size.small :
+      size_str == "normal" ? size.normal :
+      size_str == "large" ? size.large :
+      size_str == "huge" ? size.huge :
+      size.auto
+
+mark_size = get_size()
 
 up = ta.change(high)
 down = -ta.change(low)
@@ -36,8 +51,8 @@ if not na(adx) and not na(adx[1])
             plot_red := true
             adx_dir := -1
 
-plotshape(plot_green ? adx : na, title="ADX Subindo", style=shape.arrowup, location=location.absolute, color=color.green, size=size.small)
-plotshape(plot_red ? adx : na, title="ADX Caindo", style=shape.arrowdown, location=location.absolute, color=color.red, size=size.small)
+plotshape(plot_green ? adx : na, title="ADX Subindo", style=shape.triangleup, location=location.absolute, color=color.green, size=mark_size)
+plotshape(plot_red ? adx : na, title="ADX Caindo", style=shape.triangledown, location=location.absolute, color=color.red, size=mark_size)
 
 // Divergence Logic (Capiba style)
 prd = input.int(5, title="Pivot Period", minval=1)
