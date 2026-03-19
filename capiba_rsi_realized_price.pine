@@ -19,12 +19,12 @@ color corSinalBaixa = color.new(color.red, 0)
 
 // === PARÂMETROS DO RSI ULTIMATE ===
 string groupRSI = "1. Parâmetros do RSI Ultimate"
-rsiLength      = input.int(21, title="Período RSI", minval=2, group=groupRSI)
+rsiLength      = input.int(12, title="Período RSI", minval=2, group=groupRSI)
 rsiMethod      = input.string("EMA", title="Método de Suavização RSI", options=["EMA", "SMA", "RMA", "TMA"], group=groupRSI)
 rsiSrc         = input.source(hlc3, title="Fonte do RSI", group=groupRSI)
 rsiOversold    = input.float(20, title="Nível Sobrevendido", group=groupRSI)
 rsiOverbought  = input.float(80, title="Nível Sobrecomprado", group=groupRSI)
-momentumLength = input.int(21, title="Período Momentum EMA", minval=1, group=groupRSI)
+momentumLength = input.int(12, title="Período Momentum EMA", minval=1, group=groupRSI)
 rsiMomentumType = input.string("EMA", title="Tipo de MA do Momentum do RSI", options=["EMA", "SMA", "RMA", "TMA", "VWMA"], group=groupRSI)
 
 // === FUNÇÃO DE MÉDIA FLEXÍVEL ===
@@ -95,21 +95,21 @@ float rp_auto = RC / SP
 float rp = use_auto_rp and not na(rp_auto) ? rp_auto : rp_manual
 
 // 2. Médias Móveis Automáticas
-// 21 semanas
-ema21  = ta.ema(close, 21)
-plot(ema21, "EMA 21 semanas", color = color.white, linewidth = 3)
+// 90 dias
+ema90  = ta.ema(close, 90)
+plot(ema90, "EMA 90dias", color = color.white, linewidth = 3)
 
-// 261 dias úteis 2026 = 38 semanas
-ema38  = ta.ema(close, 38)
-plot(ema38, "EMA (38 semanas / ano útil)", color = color.yellow, linewidth = 4)
+// 180 dias - 6 meses
+ema180  = ta.ema(close, 180)
+plot(ema180, "EMA 180 dias", color = color.yellow, linewidth = 4)
 
-// 365 dias = 52 semanas = 1 ano
-ema52  = ta.ema(close, 52)
-plot(ema52, "EMA (52 semanas / 1 ano)", color = #ff9800, linewidth = 5)
+// 365 dias = 1 ano
+ema365  = ta.ema(close, 365)
+plot(ema365, "EMA 365 dias", color = #ff9800, linewidth = 5)
 
-// 1460 dias = 208 semanas = 4 anos (halving)
-ema208 = ta.ema(close, 208)
-plot(ema208, "EMA (208 semanas / 4 anos)", color = color.red, linewidth = 6)
+// 1460 dias = 4 anos
+ema1460 = ta.ema(close, 1460)
+plot(ema1460, "EMA 1460 dias", color = color.red, linewidth = 6)
 
 
 // 3. Horizontal RP Zones (Multipliers)
