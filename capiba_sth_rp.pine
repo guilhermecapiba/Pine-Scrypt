@@ -155,6 +155,7 @@ l_130 = sth_rp * 1.30
 l_140 = sth_rp * 1.40
 l_150 = sth_rp * 1.50
 l_160 = sth_rp * 1.60
+l_170 = sth_rp * 1.70
 
 // Cores (Opacidade das linhas)
 // 90% -> 50% opacity -> 50 transparency
@@ -172,6 +173,7 @@ c_130 = color.new(color.red, 60)   // 40% opacidade
 c_140 = color.new(color.red, 65)   // 35% opacidade
 c_150 = color.new(color.red, 70)   // 30% opacidade
 c_160 = color.new(color.red, 75)   // 25% opacidade
+c_170 = color.new(color.red, 80)   // 20% opacidade
 
 // Plot Levels with trackprice=false
 p_045 = plot(l_045, "45% STH-RP", color = c_045, linewidth=4, trackprice=false) // max linewidth em plot() é 4, mas visual principal será pela linha extendida
@@ -187,6 +189,7 @@ p_130 = plot(l_130, "130% STH-RP", color = c_130, linewidth=2, trackprice=false)
 p_140 = plot(l_140, "140% STH-RP", color = c_140, linewidth=2, trackprice=false)
 p_150 = plot(l_150, "150% STH-RP", color = c_150, linewidth=2, trackprice=false)
 p_160 = plot(l_160, "160% STH-RP", color = c_160, linewidth=2, trackprice=false)
+p_170 = plot(l_170, "170% STH-RP", color = c_170, linewidth=2, trackprice=false)
 
 // Preenchimento (Fill Zones - começando 10% opacidade, aumentando +3%)
 // 10% opacidade -> 90 transparencia
@@ -202,6 +205,7 @@ f_120_130 = color.new(color.red, 84) // 16%
 f_130_140 = color.new(color.red, 81) // 19%
 f_140_150 = color.new(color.red, 78) // 22%
 f_150_160 = color.new(color.red, 75) // 25%
+f_160_170 = color.new(color.red, 72) // 28%
 
 fill(p_050, p_060, color = f_050_060, title="Faixa Compra Profunda (50-60%)")
 fill(p_060, p_070, color = f_060_070, title="Faixa de Compra Forte (60-70%)")
@@ -215,6 +219,7 @@ fill(p_120, p_130, color = f_120_130, title="Faixa de Venda 2 (120-130%)")
 fill(p_130, p_140, color = f_130_140, title="Faixa de Venda Forte (130-140%)")
 fill(p_140, p_150, color = f_140_150, title="Faixa de Venda Máxima 1 (140-150%)")
 fill(p_150, p_160, color = f_150_160, title="Faixa de Venda Máxima 2 (150-160%)")
+fill(p_160, p_170, color = f_160_170, title="Faixa de Venda Extrema (160-170%)")
 
 // ==========================================
 // LINHAS E LABELS ESTENDIDOS (Lado Direito)
@@ -236,6 +241,7 @@ if barstate.islast
     draw_extended_line(l_140, c_140, 2)
     draw_extended_line(l_150, c_150, 2)
     draw_extended_line(l_160, c_160, 2)
+    draw_extended_line(l_170, c_170, 2)
 
     label.new(bar_index + 60, l_045, "45% STH-RP - Zona de Liquidação", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_045, size=size.large)
     label.new(bar_index + 60, l_050, "50% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_050, size=size.large)
@@ -250,3 +256,4 @@ if barstate.islast
     label.new(bar_index + 60, l_140, "140% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_140, size=size.large)
     label.new(bar_index + 60, l_150, "150% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_150, size=size.large)
     label.new(bar_index + 60, l_160, "160% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_160, size=size.large)
+    label.new(bar_index + 60, l_170, "170% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_170, size=size.large)
