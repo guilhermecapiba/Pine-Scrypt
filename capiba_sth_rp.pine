@@ -142,6 +142,7 @@ sth_rp = request.security(syminfo.tickerid, "D", ta.sma(close, 155))
 // ==========================================
 // NÍVEIS HORIZONTAIS (MULTIPLICADORES)
 // ==========================================
+l_045 = sth_rp * 0.45
 l_050 = sth_rp * 0.50
 l_060 = sth_rp * 0.60
 l_070 = sth_rp * 0.70
@@ -158,6 +159,7 @@ l_160 = sth_rp * 1.60
 // Cores (Opacidade das linhas)
 // 90% -> 50% opacity -> 50 transparency
 // 80% -> 45% opacity -> 55 transparency
+c_045 = color.new(#8A0303, 0)      // Vermelho escuro sangue - Zona de Liquidação (Solida)
 c_050 = color.new(color.green, 70) // 30% opacidade
 c_060 = color.new(color.green, 65) // 35% opacidade
 c_070 = color.new(color.green, 60) // 40% opacidade
@@ -172,6 +174,7 @@ c_150 = color.new(color.red, 70)   // 30% opacidade
 c_160 = color.new(color.red, 75)   // 25% opacidade
 
 // Plot Levels with trackprice=false
+p_045 = plot(l_045, "45% STH-RP", color = c_045, linewidth=4, trackprice=false) // max linewidth em plot() é 4, mas visual principal será pela linha extendida
 p_050 = plot(l_050, "50% STH-RP", color = c_050, linewidth=2, trackprice=false)
 p_060 = plot(l_060, "60% STH-RP", color = c_060, linewidth=2, trackprice=false)
 p_070 = plot(l_070, "70% STH-RP", color = c_070, linewidth=2, trackprice=false)
@@ -220,6 +223,7 @@ draw_extended_line(price, col, width) =>
     line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
 
 if barstate.islast
+    draw_extended_line(l_045, c_045, 7)
     draw_extended_line(l_050, c_050, 2)
     draw_extended_line(l_060, c_060, 2)
     draw_extended_line(l_070, c_070, 2)
@@ -233,6 +237,7 @@ if barstate.islast
     draw_extended_line(l_150, c_150, 2)
     draw_extended_line(l_160, c_160, 2)
 
+    label.new(bar_index + 60, l_045, "45% STH-RP - Zona de Liquidação", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_045, size=size.large)
     label.new(bar_index + 60, l_050, "50% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_050, size=size.large)
     label.new(bar_index + 60, l_060, "60% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_060, size=size.large)
     label.new(bar_index + 60, l_070, "70% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_070, size=size.large)
