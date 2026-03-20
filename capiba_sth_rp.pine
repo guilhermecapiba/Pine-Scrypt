@@ -2,6 +2,137 @@
 indicator("Capiba STH-RP Histórico", overlay=true)
 
 // ==========================================
+// TREND LITE: CÁLCULO DE ESTRUTURA E COLORAÇÃO DE VELAS
+// ==========================================
+grp_struct = "Configurações de Estrutura (Trend Lite)"
+swingsLengthInput = input.int(21, "Comprimento Swing", group = grp_struct, minval = 10)
+internalLengthInput = input.int(7, "Comprimento Interno", group = grp_struct, minval = 1)
+
+// Colors
+colorBull = input.color(color.green, "Cor Alta (Bullish)", group = grp_struct)
+colorBear = input.color(color.red, "Cor Baixa (Bearish)", group = grp_struct)
+
+// Constants
+BULLISH_LEG = 1
+BEARISH_LEG = 0
+BULLISH = 1
+BEARISH = -1
+
+// Types
+type trend
+    int bias
+
+type pivot
+    float currentLevel
+    float lastLevel
+    bool crossed
+
+// Global Variables
+var pivot swingHigh     = pivot.new(na,na,false)
+var pivot swingLow      = pivot.new(na,na,false)
+var pivot internalHigh  = pivot.new(na,na,false)
+var pivot internalLow   = pivot.new(na,na,false)
+
+var trend swingTrend    = trend.new(0)
+var trend internalTrend = trend.new(0)
+
+var int swingLegState = 0
+var int internalLegState = 0
+
+// Helper Functions
+calculateLeg(int size, int prevState) =>
+    int nextState = prevState
+    bool newLegHigh  = high[size] > ta.highest(size)
+    bool newLegLow   = low[size]  < ta.lowest(size)
+    if newLegHigh
+        nextState := BEARISH_LEG
+    else if newLegLow
+        nextState := BULLISH_LEG
+    nextState
+
+startOfNewLeg(int leg)      => ta.change(leg) != 0
+startOfBearishLeg(int leg)  => ta.change(leg) == -1
+startOfBullishLeg(int leg)  => ta.change(leg) == +1
+
+// Core Logic
+getCurrentStructure(int size, bool isInternal) =>
+    int prevState = isInternal ? internalLegState : swingLegState
+    int currentLeg = calculateLeg(size, prevState)
+
+    bool newPivot   = startOfNewLeg(currentLeg)
+    bool pivotLow   = startOfBullishLeg(currentLeg)
+
+    if newPivot
+        if pivotLow
+            pivot p_ivot = isInternal ? internalLow : swingLow
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := low[size]
+            p_ivot.crossed      := false
+        else
+            pivot p_ivot = isInternal ? internalHigh : swingHigh
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := high[size]
+            p_ivot.crossed      := false
+    currentLeg
+
+updateTrend(bool isInternal) =>
+    pivot p_ivotHigh = isInternal ? internalHigh : swingHigh
+    pivot p_ivotLow  = isInternal ? internalLow : swingLow
+    trend t_rend     = isInternal ? internalTrend : swingTrend
+
+    // Check for Bullish Break (Price crosses above High Pivot)
+    if ta.crossover(close, p_ivotHigh.currentLevel) and not p_ivotHigh.crossed
+        p_ivotHigh.crossed := true
+        t_rend.bias        := BULLISH
+
+    // Check for Bearish Break (Price crosses below Low Pivot)
+    if ta.crossunder(close, p_ivotLow.currentLevel) and not p_ivotLow.crossed
+        p_ivotLow.crossed := true
+        t_rend.bias       := BEARISH
+
+// Execution
+swingLegState := getCurrentStructure(swingsLengthInput, false)
+internalLegState := getCurrentStructure(internalLengthInput, true)
+
+updateTrend(false)
+updateTrend(true)
+
+// Visualization (Coloring)
+bool isBullConfluence = swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
+bool isBearConfluence = swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
+
+color finalColor = na
+if isBullConfluence
+    finalColor := colorBull
+else if isBearConfluence
+    finalColor := colorBear
+
+barcolor(finalColor)
+
+// Signals for Confluence Start
+bool bullStart = isBullConfluence and not isBullConfluence[1]
+bool bearStart = isBearConfluence and not isBearConfluence[1]
+
+plotshape(bullStart, title="Bullish Confluence Start", style=shape.labelup, location=location.belowbar, color=colorBull, size=size.normal, text="STRONG BULL", textcolor=color.white)
+plotshape(bearStart, title="Bearish Confluence Start", style=shape.labeldown, location=location.abovebar, color=colorBear, size=size.normal, text="STRONG BEAR", textcolor=color.white)
+
+// Individual Trend Signals
+int swingBias = swingTrend.bias
+int internalBias = internalTrend.bias
+
+bool swingBullStart = swingBias == BULLISH and swingBias[1] != BULLISH
+bool swingBearStart = swingBias == BEARISH and swingBias[1] != BEARISH
+
+bool internalBullStart = internalBias == BULLISH and internalBias[1] != BULLISH
+bool internalBearStart = internalBias == BEARISH and internalBias[1] != BEARISH
+
+plotshape(swingBullStart, title="Swing Bullish Start", style=shape.triangleup, location=location.belowbar, color=color.blue, size=size.small, text="SWING BULL", textcolor=color.white)
+plotshape(swingBearStart, title="Swing Bearish Start", style=shape.triangledown, location=location.abovebar, color=color.yellow, size=size.small, text="SWING BEAR", textcolor=color.white)
+
+plotshape(internalBullStart, title="Internal Bullish Start", style=shape.triangleup, location=location.belowbar, color=color.blue, size=size.small, text="INT BULL", textcolor=color.white)
+plotshape(internalBearStart, title="Internal Bearish Start", style=shape.triangledown, location=location.abovebar, color=color.yellow, size=size.small, text="INT BEAR", textcolor=color.white)
+
+// ==========================================
 // CÁLCULO DO STH-RP PROXY
 // ==========================================
 // A SMA de 155 dias é a aproximação estatística padrão para o STH-RP.
