@@ -4,8 +4,9 @@ indicator("Capiba STH-RP Histórico", overlay=true)
 // ==========================================
 // CÁLCULO DO STH-RP PROXY
 // ==========================================
-// A SMA de 155 dias é a aproximação estatística padrão para o STH-RP
-sth_rp = ta.sma(close, 155)
+// A SMA de 155 dias é a aproximação estatística padrão para o STH-RP.
+// Solicitamos do tempo gráfico Diário ("D") para não distorcer em outros timeframes.
+sth_rp = request.security(syminfo.tickerid, "D", ta.sma(close, 155))
 
 // ==========================================
 // NÍVEIS HORIZONTAIS (MULTIPLICADORES)
