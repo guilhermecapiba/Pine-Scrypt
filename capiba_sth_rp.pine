@@ -1,0 +1,259 @@
+//@version=5
+indicator("Capiba STH-RP Histórico", overlay=true)
+
+// ==========================================
+// TREND LITE: CÁLCULO DE ESTRUTURA E COLORAÇÃO DE VELAS
+// ==========================================
+grp_struct = "Configurações de Estrutura (Trend Lite)"
+swingsLengthInput = input.int(21, "Comprimento Swing", group = grp_struct, minval = 10)
+internalLengthInput = input.int(7, "Comprimento Interno", group = grp_struct, minval = 1)
+
+// Colors
+colorBull = input.color(color.green, "Cor Alta (Bullish)", group = grp_struct)
+colorBear = input.color(color.red, "Cor Baixa (Bearish)", group = grp_struct)
+
+// Constants
+BULLISH_LEG = 1
+BEARISH_LEG = 0
+BULLISH = 1
+BEARISH = -1
+
+// Types
+type trend
+    int bias
+
+type pivot
+    float currentLevel
+    float lastLevel
+    bool crossed
+
+// Global Variables
+var pivot swingHigh     = pivot.new(na,na,false)
+var pivot swingLow      = pivot.new(na,na,false)
+var pivot internalHigh  = pivot.new(na,na,false)
+var pivot internalLow   = pivot.new(na,na,false)
+
+var trend swingTrend    = trend.new(0)
+var trend internalTrend = trend.new(0)
+
+var int swingLegState = 0
+var int internalLegState = 0
+
+// Helper Functions
+calculateLeg(int size, int prevState) =>
+    int nextState = prevState
+    bool newLegHigh  = high[size] > ta.highest(size)
+    bool newLegLow   = low[size]  < ta.lowest(size)
+    if newLegHigh
+        nextState := BEARISH_LEG
+    else if newLegLow
+        nextState := BULLISH_LEG
+    nextState
+
+startOfNewLeg(int leg)      => ta.change(leg) != 0
+startOfBearishLeg(int leg)  => ta.change(leg) == -1
+startOfBullishLeg(int leg)  => ta.change(leg) == +1
+
+// Core Logic
+getCurrentStructure(int size, bool isInternal) =>
+    int prevState = isInternal ? internalLegState : swingLegState
+    int currentLeg = calculateLeg(size, prevState)
+
+    bool newPivot   = startOfNewLeg(currentLeg)
+    bool pivotLow   = startOfBullishLeg(currentLeg)
+
+    if newPivot
+        if pivotLow
+            pivot p_ivot = isInternal ? internalLow : swingLow
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := low[size]
+            p_ivot.crossed      := false
+        else
+            pivot p_ivot = isInternal ? internalHigh : swingHigh
+            p_ivot.lastLevel    := p_ivot.currentLevel
+            p_ivot.currentLevel := high[size]
+            p_ivot.crossed      := false
+    currentLeg
+
+updateTrend(bool isInternal) =>
+    pivot p_ivotHigh = isInternal ? internalHigh : swingHigh
+    pivot p_ivotLow  = isInternal ? internalLow : swingLow
+    trend t_rend     = isInternal ? internalTrend : swingTrend
+
+    // Check for Bullish Break (Price crosses above High Pivot)
+    if ta.crossover(close, p_ivotHigh.currentLevel) and not p_ivotHigh.crossed
+        p_ivotHigh.crossed := true
+        t_rend.bias        := BULLISH
+
+    // Check for Bearish Break (Price crosses below Low Pivot)
+    if ta.crossunder(close, p_ivotLow.currentLevel) and not p_ivotLow.crossed
+        p_ivotLow.crossed := true
+        t_rend.bias       := BEARISH
+
+// Execution
+swingLegState := getCurrentStructure(swingsLengthInput, false)
+internalLegState := getCurrentStructure(internalLengthInput, true)
+
+updateTrend(false)
+updateTrend(true)
+
+// Visualization (Coloring)
+bool isBullConfluence = swingTrend.bias == BULLISH and internalTrend.bias == BULLISH
+bool isBearConfluence = swingTrend.bias == BEARISH and internalTrend.bias == BEARISH
+
+color finalColor = na
+if isBullConfluence
+    finalColor := colorBull
+else if isBearConfluence
+    finalColor := colorBear
+
+barcolor(finalColor)
+
+// Signals for Confluence Start
+bool bullStart = isBullConfluence and not isBullConfluence[1]
+bool bearStart = isBearConfluence and not isBearConfluence[1]
+
+plotshape(bullStart, title="Bullish Confluence Start", style=shape.labelup, location=location.belowbar, color=colorBull, size=size.normal, text="STRONG BULL", textcolor=color.white)
+plotshape(bearStart, title="Bearish Confluence Start", style=shape.labeldown, location=location.abovebar, color=colorBear, size=size.normal, text="STRONG BEAR", textcolor=color.white)
+
+// Individual Trend Signals
+int swingBias = swingTrend.bias
+int internalBias = internalTrend.bias
+
+bool swingBullStart = swingBias == BULLISH and swingBias[1] != BULLISH
+bool swingBearStart = swingBias == BEARISH and swingBias[1] != BEARISH
+
+bool internalBullStart = internalBias == BULLISH and internalBias[1] != BULLISH
+bool internalBearStart = internalBias == BEARISH and internalBias[1] != BEARISH
+
+plotshape(swingBullStart, title="Swing Bullish Start", style=shape.triangleup, location=location.belowbar, color=color.blue, size=size.small, text="SWING BULL", textcolor=color.white)
+plotshape(swingBearStart, title="Swing Bearish Start", style=shape.triangledown, location=location.abovebar, color=color.yellow, size=size.small, text="SWING BEAR", textcolor=color.white)
+
+plotshape(internalBullStart, title="Internal Bullish Start", style=shape.triangleup, location=location.belowbar, color=color.blue, size=size.small, text="INT BULL", textcolor=color.white)
+plotshape(internalBearStart, title="Internal Bearish Start", style=shape.triangledown, location=location.abovebar, color=color.yellow, size=size.small, text="INT BEAR", textcolor=color.white)
+
+// ==========================================
+// CÁLCULO DO STH-RP PROXY
+// ==========================================
+// A SMA de 155 dias é a aproximação estatística padrão para o STH-RP.
+// Solicitamos do tempo gráfico Diário ("D") para não distorcer em outros timeframes.
+sth_rp = request.security(syminfo.tickerid, "D", ta.sma(close, 155))
+
+// ==========================================
+// NÍVEIS HORIZONTAIS (MULTIPLICADORES)
+// ==========================================
+l_045 = sth_rp * 0.45
+l_050 = sth_rp * 0.50
+l_060 = sth_rp * 0.60
+l_070 = sth_rp * 0.70
+l_080 = sth_rp * 0.80
+l_090 = sth_rp * 0.90
+l_100 = sth_rp * 1.00
+l_110 = sth_rp * 1.10
+l_120 = sth_rp * 1.20
+l_130 = sth_rp * 1.30
+l_140 = sth_rp * 1.40
+l_150 = sth_rp * 1.50
+l_160 = sth_rp * 1.60
+l_170 = sth_rp * 1.70
+
+// Cores (Opacidade das linhas)
+// 90% -> 50% opacity -> 50 transparency
+// 80% -> 45% opacity -> 55 transparency
+c_045 = color.new(#8A0303, 0)      // Vermelho escuro sangue - Zona de Liquidação (Solida)
+c_050 = color.new(color.green, 70) // 30% opacidade
+c_060 = color.new(color.green, 65) // 35% opacidade
+c_070 = color.new(color.green, 60) // 40% opacidade
+c_080 = color.new(color.green, 55) // 45% opacidade
+c_090 = color.new(color.green, 50) // 50% opacidade
+c_100 = color.new(color.white, 0)  // 100% solida
+c_110 = color.new(color.red, 50)   // 50% opacidade
+c_120 = color.new(color.red, 55)   // 45% opacidade
+c_130 = color.new(color.red, 60)   // 40% opacidade
+c_140 = color.new(color.red, 65)   // 35% opacidade
+c_150 = color.new(color.red, 70)   // 30% opacidade
+c_160 = color.new(color.red, 75)   // 25% opacidade
+c_170 = color.new(color.red, 80)   // 20% opacidade
+
+// Plot Levels with trackprice=false
+p_045 = plot(l_045, "45% STH-RP", color = c_045, linewidth=4, trackprice=false) // max linewidth em plot() é 4, mas visual principal será pela linha extendida
+p_050 = plot(l_050, "50% STH-RP", color = c_050, linewidth=2, trackprice=false)
+p_060 = plot(l_060, "60% STH-RP", color = c_060, linewidth=2, trackprice=false)
+p_070 = plot(l_070, "70% STH-RP", color = c_070, linewidth=2, trackprice=false)
+p_080 = plot(l_080, "80% STH-RP", color = c_080, linewidth=2, trackprice=false)
+p_090 = plot(l_090, "90% STH-RP", color = c_090, linewidth=2, trackprice=false)
+p_100 = plot(l_100, "100% STH-RP", color = c_100, linewidth=3, trackprice=false)
+p_110 = plot(l_110, "110% STH-RP", color = c_110, linewidth=2, trackprice=false)
+p_120 = plot(l_120, "120% STH-RP", color = c_120, linewidth=2, trackprice=false)
+p_130 = plot(l_130, "130% STH-RP", color = c_130, linewidth=2, trackprice=false)
+p_140 = plot(l_140, "140% STH-RP", color = c_140, linewidth=2, trackprice=false)
+p_150 = plot(l_150, "150% STH-RP", color = c_150, linewidth=2, trackprice=false)
+p_160 = plot(l_160, "160% STH-RP", color = c_160, linewidth=2, trackprice=false)
+p_170 = plot(l_170, "170% STH-RP", color = c_170, linewidth=2, trackprice=false)
+
+// Preenchimento (Fill Zones - começando 10% opacidade, aumentando +3%)
+// 10% opacidade -> 90 transparencia
+f_050_060 = color.new(color.green, 78) // 22%
+f_060_070 = color.new(color.green, 81) // 19%
+f_070_080 = color.new(color.green, 84) // 16%
+f_080_090 = color.new(color.green, 87) // 13%
+f_090_100 = color.new(color.green, 90) // 10%
+
+f_100_110 = color.new(color.red, 90) // 10%
+f_110_120 = color.new(color.red, 87) // 13%
+f_120_130 = color.new(color.red, 84) // 16%
+f_130_140 = color.new(color.red, 81) // 19%
+f_140_150 = color.new(color.red, 78) // 22%
+f_150_160 = color.new(color.red, 75) // 25%
+f_160_170 = color.new(color.red, 72) // 28%
+
+fill(p_050, p_060, color = f_050_060, title="Faixa Compra Profunda (50-60%)")
+fill(p_060, p_070, color = f_060_070, title="Faixa de Compra Forte (60-70%)")
+fill(p_070, p_080, color = f_070_080, title="Faixa de Compra 2 (70-80%)")
+fill(p_080, p_090, color = f_080_090, title="Faixa de Compra 1 (80-90%)")
+fill(p_090, p_100, color = f_090_100, title="Faixa de Acumulação Leve (90-100%)")
+
+fill(p_100, p_110, color = f_100_110, title="Faixa de Venda Leve (100-110%)")
+fill(p_110, p_120, color = f_110_120, title="Faixa de Venda 1 (110-120%)")
+fill(p_120, p_130, color = f_120_130, title="Faixa de Venda 2 (120-130%)")
+fill(p_130, p_140, color = f_130_140, title="Faixa de Venda Forte (130-140%)")
+fill(p_140, p_150, color = f_140_150, title="Faixa de Venda Máxima 1 (140-150%)")
+fill(p_150, p_160, color = f_150_160, title="Faixa de Venda Máxima 2 (150-160%)")
+fill(p_160, p_170, color = f_160_170, title="Faixa de Venda Extrema (160-170%)")
+
+// ==========================================
+// LINHAS E LABELS ESTENDIDOS (Lado Direito)
+// ==========================================
+draw_extended_line(price, col, width) =>
+    line.new(bar_index, price, bar_index + 10, price, xloc=xloc.bar_index, extend=extend.right, color=col, style=line.style_solid, width=width)
+
+if barstate.islast
+    draw_extended_line(l_045, c_045, 7)
+    draw_extended_line(l_050, c_050, 2)
+    draw_extended_line(l_060, c_060, 2)
+    draw_extended_line(l_070, c_070, 2)
+    draw_extended_line(l_080, c_080, 2)
+    draw_extended_line(l_090, c_090, 2)
+    draw_extended_line(l_100, c_100, 3)
+    draw_extended_line(l_110, c_110, 2)
+    draw_extended_line(l_120, c_120, 2)
+    draw_extended_line(l_130, c_130, 2)
+    draw_extended_line(l_140, c_140, 2)
+    draw_extended_line(l_150, c_150, 2)
+    draw_extended_line(l_160, c_160, 2)
+    draw_extended_line(l_170, c_170, 2)
+
+    label.new(bar_index + 60, l_045, "45% STH-RP - Zona de Liquidação", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_045, size=size.large)
+    label.new(bar_index + 60, l_050, "50% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_050, size=size.large)
+    label.new(bar_index + 60, l_060, "60% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_060, size=size.large)
+    label.new(bar_index + 60, l_070, "70% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_070, size=size.large)
+    label.new(bar_index + 60, l_080, "80% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_080, size=size.large)
+    label.new(bar_index + 60, l_090, "90% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_090, size=size.large)
+    label.new(bar_index + 60, l_100, "STH-RP (155d Proxy)", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_100, size=size.large)
+    label.new(bar_index + 60, l_110, "110% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_110, size=size.large)
+    label.new(bar_index + 60, l_120, "120% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_120, size=size.large)
+    label.new(bar_index + 60, l_130, "130% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_130, size=size.large)
+    label.new(bar_index + 60, l_140, "140% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_140, size=size.large)
+    label.new(bar_index + 60, l_150, "150% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_150, size=size.large)
+    label.new(bar_index + 60, l_160, "160% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_160, size=size.large)
+    label.new(bar_index + 60, l_170, "170% STH-RP", xloc=xloc.bar_index, yloc=yloc.price, color=color.new(color.white, 100), style=label.style_label_upper_right, textcolor=c_170, size=size.large)
