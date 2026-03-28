@@ -1,0 +1,69 @@
+//@version=5
+indicator("MA Tracker", overlay=true)
+
+// ==========================================
+// INPUTS GERAIS
+// ==========================================
+grp_geral = "Configurações Gerais"
+len = input.int(10, title="Período das MAs", minval=1, group=grp_geral)
+src = input.source(close, title="Fonte das MAs", group=grp_geral)
+tf  = input.timeframe("", title="Timeframe das MAs", group=grp_geral)
+
+// ==========================================
+// CÁLCULO DAS 6 MAs
+// ==========================================
+sma_calc  = ta.sma(src, len)
+ema_calc  = ta.ema(src, len)
+wma_calc  = ta.wma(src, len)
+vwma_calc = ta.vwma(src, len)
+hma_calc  = ta.hma(src, len)
+rma_calc  = ta.rma(src, len)
+
+ma_sma  = request.security(syminfo.tickerid, tf == "" ? timeframe.period : tf, sma_calc)
+ma_ema  = request.security(syminfo.tickerid, tf == "" ? timeframe.period : tf, ema_calc)
+ma_wma  = request.security(syminfo.tickerid, tf == "" ? timeframe.period : tf, wma_calc)
+ma_vwma = request.security(syminfo.tickerid, tf == "" ? timeframe.period : tf, vwma_calc)
+ma_hma  = request.security(syminfo.tickerid, tf == "" ? timeframe.period : tf, hma_calc)
+ma_rma  = request.security(syminfo.tickerid, tf == "" ? timeframe.period : tf, rma_calc)
+
+// ==========================================
+// LÓGICA DE CORES E DIREÇÕES
+// ==========================================
+sma_green  = ma_sma > ma_sma[1]
+ema_green  = ma_ema > ma_ema[1]
+wma_green  = ma_wma > ma_wma[1]
+vwma_green = ma_vwma > ma_vwma[1]
+hma_green  = ma_hma > ma_hma[1]
+rma_green  = ma_rma > ma_rma[1]
+
+sma_red  = ma_sma < ma_sma[1]
+ema_red  = ma_ema < ma_ema[1]
+wma_red  = ma_wma < ma_wma[1]
+vwma_red = ma_vwma < ma_vwma[1]
+hma_red  = ma_hma < ma_hma[1]
+rma_red  = ma_rma < ma_rma[1]
+
+all_green = sma_green and ema_green and wma_green and vwma_green and hma_green and rma_green
+all_red   = sma_red and ema_red and wma_red and vwma_red and hma_red and rma_red
+
+rma_color = all_green ? color.green : all_red ? color.red : color.white
+
+// ==========================================
+// PLOTS
+// ==========================================
+// Plota apenas a RMA por default (espessura 3)
+plot(ma_rma, color=rma_color, linewidth=3, title="RMA Tracker")
+
+// Plota as outras MAs opcionalmente (desativadas por default)
+grp_outras = "Exibir Outras MAs (Opcional)"
+show_sma  = input.bool(false, title="Exibir SMA", group=grp_outras)
+show_ema  = input.bool(false, title="Exibir EMA", group=grp_outras)
+show_wma  = input.bool(false, title="Exibir WMA", group=grp_outras)
+show_vwma = input.bool(false, title="Exibir VWMA", group=grp_outras)
+show_hma  = input.bool(false, title="Exibir HMA", group=grp_outras)
+
+plot(show_sma  ? ma_sma  : na, color=sma_green ? color.green : color.red, linewidth=1, title="SMA")
+plot(show_ema  ? ma_ema  : na, color=ema_green ? color.green : color.red, linewidth=1, title="EMA")
+plot(show_wma  ? ma_wma  : na, color=wma_green ? color.green : color.red, linewidth=1, title="WMA")
+plot(show_vwma ? ma_vwma : na, color=vwma_green ? color.green : color.red, linewidth=1, title="VWMA")
+plot(show_hma  ? ma_hma  : na, color=hma_green ? color.green : color.red, linewidth=1, title="HMA")
