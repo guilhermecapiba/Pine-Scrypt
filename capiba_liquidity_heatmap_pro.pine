@@ -85,19 +85,22 @@ if array.size(bslLevels) > 0
         lvl = array.get(bslLevels, i)
 
         if lvl.isActive
-            // O gatilho (trigger) continua sendo o cruzamento do Pivô original (A base da caixa)
+            // O extremo externo da piscina de liquidez
+            poolTop = box.get_top(lvl.lvlBox)
+
+            // O gatilho (trigger) para sweep continua sendo entrar na piscina (cruzar o Pivô original)
             touched = high >= lvl.price
 
-            // Condição de Mitigação (remoção da faixa do mapa)
+            // Condição de Mitigação: O preço deve ultrapassar o EXTREMO da piscina (ATR)
             mitigated = false
             if mitigateMethod == "Close"
-                mitigated := close > lvl.price
+                mitigated := close > poolTop
             else
-                mitigated := high >= lvl.price
+                mitigated := high >= poolTop
 
             // Lógica de "Sweep" (Captura/Absorção):
-            // Tocou no pivô (entrou na piscina), mas não fechou acima (rejeitado)
-            isRejection = touched and (close <= lvl.price)
+            // Tocou no pivô (entrou na piscina), mas não rompeu/fechou acima do extremo (rejeitado)
+            isRejection = touched and (close <= poolTop)
 
             // Se foi mitigado, consome a faixa
             if mitigated
@@ -124,19 +127,22 @@ if array.size(sslLevels) > 0
         lvl = array.get(sslLevels, i)
 
         if lvl.isActive
-            // O gatilho (trigger) é cruzar o Pivô original (O topo da caixa)
+            // O extremo externo da piscina de liquidez
+            poolBottom = box.get_bottom(lvl.lvlBox)
+
+            // O gatilho (trigger) para sweep continua sendo entrar na piscina (cruzar o Pivô original)
             touched = low <= lvl.price
 
-            // Condição de Mitigação
+            // Condição de Mitigação: O preço deve ultrapassar o EXTREMO da piscina (ATR)
             mitigated = false
             if mitigateMethod == "Close"
-                mitigated := close < lvl.price
+                mitigated := close < poolBottom
             else
-                mitigated := low <= lvl.price
+                mitigated := low <= poolBottom
 
             // Lógica de "Sweep" (Captura/Absorção):
-            // Tocou no pivô (entrou na piscina), mas não fechou abaixo
-            isRejection = touched and (close >= lvl.price)
+            // Tocou no pivô (entrou na piscina), mas não rompeu/fechou abaixo do extremo (rejeitado)
+            isRejection = touched and (close >= poolBottom)
 
             // Se foi mitigado, consome a faixa
             if mitigated
