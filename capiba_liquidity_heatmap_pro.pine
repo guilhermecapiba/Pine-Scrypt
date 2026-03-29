@@ -15,6 +15,7 @@ grp_vis = "Visualização Heatmap"
 // A opacidade inicial deve ser bem baixa (ex: 90 transparente) para permitir a soma de cores na sobreposição.
 colorBsl = input.color(color.new(color.red, 90), "Cor Liquidez Acima (BSL)", group=grp_vis)
 colorSsl = input.color(color.new(color.green, 90), "Cor Liquidez Abaixo (SSL)", group=grp_vis)
+colorMitigated = input.color(color.new(color.gray, 90), "Cor Faixa Mitigada", group=grp_vis)
 
 grp_logic = "Lógica de Fluxo (Order Flow)"
 mitigateMethod = input.string("Close", "Condição de Mitigação", options=["Close", "Wick"], group=grp_logic, tooltip="Close: A faixa só some se o candle FECHAR além do Pivô original. Wick: A faixa some no primeiro toque.")
@@ -48,7 +49,7 @@ pl = ta.pivotlow(low, lenLeft, lenRight)
 if not na(ph)
     // Calcula a projeção da faixa do pivô para cima (Pool)
     poolSize = atrValue[lenRight] * atrMult
-    newBox = box.new(left=bar_index[lenRight], top=ph + poolSize, right=bar_index, bottom=ph, bgcolor=colorBsl, border_color=na, extend=extend.right)
+    newBox = box.new(left=bar_index[lenRight], top=ph + poolSize, right=bar_index, bottom=ph, bgcolor=colorBsl, border_color=colorBsl, extend=extend.right)
     array.push(bslLevels, LiquidityLevel.new(ph, newBox, true))
 
     // Garbage collection para BSL
@@ -61,7 +62,7 @@ if not na(ph)
 if not na(pl)
     // Calcula a projeção da faixa do pivô para baixo (Pool)
     poolSize = atrValue[lenRight] * atrMult
-    newBox = box.new(left=bar_index[lenRight], top=pl, right=bar_index, bottom=pl - poolSize, bgcolor=colorSsl, border_color=na, extend=extend.right)
+    newBox = box.new(left=bar_index[lenRight], top=pl, right=bar_index, bottom=pl - poolSize, bgcolor=colorSsl, border_color=colorSsl, extend=extend.right)
     array.push(sslLevels, LiquidityLevel.new(pl, newBox, true))
 
     // Garbage collection para SSL
@@ -102,6 +103,8 @@ if array.size(bslLevels) > 0
             if mitigated
                 box.set_extend(lvl.lvlBox, extend.none)
                 box.set_right(lvl.lvlBox, bar_index)
+                box.set_bgcolor(lvl.lvlBox, colorMitigated)
+                box.set_border_color(lvl.lvlBox, colorMitigated)
                 lvl.isActive := false
 
                 // Modo Wick Sweep (Capturado com rejeição durante a mitigação no pavio)
@@ -139,6 +142,8 @@ if array.size(sslLevels) > 0
             if mitigated
                 box.set_extend(lvl.lvlBox, extend.none)
                 box.set_right(lvl.lvlBox, bar_index)
+                box.set_bgcolor(lvl.lvlBox, colorMitigated)
+                box.set_border_color(lvl.lvlBox, colorMitigated)
                 lvl.isActive := false
 
                 // Modo Wick Sweep
