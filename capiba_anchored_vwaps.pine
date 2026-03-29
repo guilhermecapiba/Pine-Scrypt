@@ -1,0 +1,147 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Capiba
+
+//@version=6
+indicator("Capiba VWAPs Ancoradas", shorttitle="Capiba Anchored VWAPs", overlay=true, max_lines_count=5000)
+
+// --- Inputs ---
+grp_settings = "Configurações"
+lookback = input.int(200, "Período de Ancoragem (Velas)", minval=1, group=grp_settings)
+show_broken = input.bool(true, "Mostrar VWAPs Rompidas Históricas", group=grp_settings)
+
+grp_colors = "Cores"
+color_top = input.color(color.new(color.blue, 0), "Cor VWAP Topo (Ativa)", group=grp_colors)
+color_bot = input.color(color.new(color.red, 0), "Cor VWAP Fundo (Ativa)", group=grp_colors)
+color_broken = input.color(color.new(color.gray, 50), "Cor VWAPs Rompidas", group=grp_colors)
+line_width = input.int(2, "Espessura da Linha", minval=1, maxval=5, group=grp_colors)
+
+// --- Variáveis de Estado (Topo) ---
+var float top_sumSrcVol = 0.0
+var float top_sumVol = 0.0
+var float top_prev_vwap = na
+var top_active_lines = array.new_line()
+
+// --- Variáveis de Estado (Fundo) ---
+var float bot_sumSrcVol = 0.0
+var float bot_sumVol = 0.0
+var float bot_prev_vwap = na
+var bot_active_lines = array.new_line()
+
+// --- Dados ---
+float typ_price = hlc3
+float vol = nz(volume, 1)
+
+// ==========================================
+// VWAP DE TOPO (Ancorada no Maior Fechamento)
+// ==========================================
+// Condição 1: A vela atual é o maior fechamento das últimas 'lookback' velas?
+bool isNewHigh = close >= ta.highest(close, lookback)
+
+// Calculamos como seria a VWAP neste candle ANTES de saber se vamos resetar ou não
+float top_prov_sumSrcVol = top_sumSrcVol + (typ_price * vol)
+float top_prov_sumVol = top_sumVol + vol
+float top_prov_vwap = top_prov_sumVol > 0 ? top_prov_sumSrcVol / top_prov_sumVol : typ_price
+
+// Condição 2: O fechamento atual rompeu a VWAP ATIVA para cima?
+bool isBreakoutTop = not na(top_prev_vwap) and close > top_prov_vwap
+
+// Precisamos resetar se for um novo High OU se rompeu a VWAP
+bool resetTop = isNewHigh or isBreakoutTop
+
+if resetTop
+    // Se havia uma VWAP ativa rolando, ela foi rompida ou substituída por um novo topo absoluto
+    if not na(top_prev_vwap)
+        // Desenhamos o último segmento conectando a VWAP anterior ao candle atual (rompimento)
+        line final_seg = line.new(bar_index - 1, top_prev_vwap, bar_index, top_prov_vwap, color=color_broken, width=line_width)
+
+        // Transformamos as linhas ativas anteriores em cinza (ou apagamos)
+        if show_broken
+            if array.size(top_active_lines) > 0
+                for l in top_active_lines
+                    line.set_color(l, color_broken)
+        else
+            if array.size(top_active_lines) > 0
+                for l in top_active_lines
+                    line.delete(l)
+            line.delete(final_seg)
+
+    // Limpamos o array de linhas ativas (pois elas já não são mais ativas)
+    array.clear(top_active_lines)
+
+    // Iniciamos a nova ancoragem A PARTIR DESTA VELA (que rompeu ou que é o novo topo)
+    top_sumSrcVol := typ_price * vol
+    top_sumVol := vol
+    top_prev_vwap := typ_price // A VWAP inicia no preço típico desta vela
+else
+    // Continuamos acumulando a VWAP normalmente
+    top_sumSrcVol := top_prov_sumSrcVol
+    top_sumVol := top_prov_sumVol
+
+    // Nova VWAP calculada
+    float top_curr_vwap = top_sumVol > 0 ? top_sumSrcVol / top_sumVol : typ_price
+
+    // Desenhamos a linha do candle anterior para este candle (em Azul)
+    if not na(top_prev_vwap)
+        line new_line = line.new(bar_index - 1, top_prev_vwap, bar_index, top_curr_vwap, color=color_top, width=line_width)
+        array.push(top_active_lines, new_line)
+
+    // Atualiza a VWAP anterior
+    top_prev_vwap := top_curr_vwap
+
+
+// ==========================================
+// VWAP DE FUNDO (Ancorada no Menor Fechamento)
+// ==========================================
+// Condição 1: A vela atual é o menor fechamento das últimas 'lookback' velas?
+bool isNewLow = close <= ta.lowest(close, lookback)
+
+// Calculamos como seria a VWAP neste candle ANTES de saber se vamos resetar ou não
+float bot_prov_sumSrcVol = bot_sumSrcVol + (typ_price * vol)
+float bot_prov_sumVol = bot_sumVol + vol
+float bot_prov_vwap = bot_prov_sumVol > 0 ? bot_prov_sumSrcVol / bot_prov_sumVol : typ_price
+
+// Condição 2: O fechamento atual rompeu a VWAP ATIVA para baixo?
+bool isBreakoutBot = not na(bot_prev_vwap) and close < bot_prov_vwap
+
+// Precisamos resetar se for um novo Low OU se rompeu a VWAP
+bool resetBot = isNewLow or isBreakoutBot
+
+if resetBot
+    // Se havia uma VWAP ativa rolando, ela foi rompida ou substituída por um novo fundo absoluto
+    if not na(bot_prev_vwap)
+        // Desenhamos o último segmento conectando a VWAP anterior ao candle atual (rompimento)
+        line final_seg = line.new(bar_index - 1, bot_prev_vwap, bar_index, bot_prov_vwap, color=color_broken, width=line_width)
+
+        // Transformamos as linhas ativas anteriores em cinza (ou apagamos)
+        if show_broken
+            if array.size(bot_active_lines) > 0
+                for l in bot_active_lines
+                    line.set_color(l, color_broken)
+        else
+            if array.size(bot_active_lines) > 0
+                for l in bot_active_lines
+                    line.delete(l)
+            line.delete(final_seg)
+
+    // Limpamos o array de linhas ativas (pois elas já não são mais ativas)
+    array.clear(bot_active_lines)
+
+    // Iniciamos a nova ancoragem A PARTIR DESTA VELA (que rompeu ou que é o novo fundo)
+    bot_sumSrcVol := typ_price * vol
+    bot_sumVol := vol
+    bot_prev_vwap := typ_price // A VWAP inicia no preço típico desta vela
+else
+    // Continuamos acumulando a VWAP normalmente
+    bot_sumSrcVol := bot_prov_sumSrcVol
+    bot_sumVol := bot_prov_sumVol
+
+    // Nova VWAP calculada
+    float bot_curr_vwap = bot_sumVol > 0 ? bot_sumSrcVol / bot_sumVol : typ_price
+
+    // Desenhamos a linha do candle anterior para este candle (em Vermelho)
+    if not na(bot_prev_vwap)
+        line new_line = line.new(bar_index - 1, bot_prev_vwap, bar_index, bot_curr_vwap, color=color_bot, width=line_width)
+        array.push(bot_active_lines, new_line)
+
+    // Atualiza a VWAP anterior
+    bot_prev_vwap := bot_curr_vwap
