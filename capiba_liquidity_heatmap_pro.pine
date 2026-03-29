@@ -1,22 +1,23 @@
 //@version=6
-indicator("Capiba Liquidity Heatmap Pro (1H BTC)", shorttitle="Heatmap Pro", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Capiba Liquidity Heatmap Pro (1H BTC)", shorttitle="Heatmap Pro", overlay=true, max_boxes_count=500, max_labels_count=500)
 
 // --- INPUTS: CONFIGURAÇÕES OTIMIZADAS PARA 1H BTC ---
 grp_sett = "Configurações de Pivô (1H)"
-// 12 barras (12 horas) left e right criam topos/fundos significativos para intra-day/swing
 lenLeft  = input.int(12, "Período Esquerdo (Pivot)", minval=1, group=grp_sett)
 lenRight = input.int(12, "Período Direito (Pivot)", minval=1, group=grp_sett)
-maxLevels = input.int(100, "Máximo de Níveis Ativos", minval=10, maxval=200, group=grp_sett, tooltip="Quantidade de linhas mantidas para empilhamento de cor (Heatmap).")
+maxLevels = input.int(100, "Máximo de Níveis Ativos", minval=10, maxval=200, group=grp_sett, tooltip="Quantidade de zonas mantidas para empilhamento de cor (Heatmap).")
+
+grp_pool = "Projeção da Piscina (ATR Pool)"
+atrLen = input.int(14, "Períodos do ATR", minval=1, group=grp_pool)
+atrMult = input.float(0.5, "Multiplicador do ATR (Altura da Faixa)", minval=0.1, step=0.1, group=grp_pool, tooltip="Tamanho da faixa projetada a partir do Topo/Fundo para abrigar a volatilidade dos Stops.")
 
 grp_vis = "Visualização Heatmap"
-// A opacidade inicial é baixa. Quando várias linhas (stops) se juntam no mesmo preço, a cor soma (Heatmap)
-colorBsl = input.color(color.new(color.red, 80), "Cor Liquidez Acima (BSL)", group=grp_vis)
-colorSsl = input.color(color.new(color.green, 80), "Cor Liquidez Abaixo (SSL)", group=grp_vis)
-lineWidth = input.int(2, "Espessura da Linha", minval=1, maxval=10, group=grp_vis)
-lineStyleStr = input.string("Dotted", "Estilo da Linha", options=["Solid", "Dashed", "Dotted"], group=grp_vis)
+// A opacidade inicial deve ser bem baixa (ex: 90 transparente) para permitir a soma de cores na sobreposição.
+colorBsl = input.color(color.new(color.red, 90), "Cor Liquidez Acima (BSL)", group=grp_vis)
+colorSsl = input.color(color.new(color.green, 90), "Cor Liquidez Abaixo (SSL)", group=grp_vis)
 
 grp_logic = "Lógica de Fluxo (Order Flow)"
-mitigateMethod = input.string("Close", "Condição de Mitigação", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Linha só some se o candle FECHAR além dela. Wick: Linha some no primeiro toque do pavio.")
+mitigateMethod = input.string("Close", "Condição de Mitigação", options=["Close", "Wick"], group=grp_logic, tooltip="Close: A faixa só some se o candle FECHAR além do Pivô original. Wick: A faixa some no primeiro toque.")
 absorbVolMult  = input.float(1.5, "Multiplicador de Volume (Absorção)", step=0.1, group=grp_logic, tooltip="Exige volume X vezes maior que a média para validar um 'Sweep' como Sinal de Entrada. Coloque 0 para ignorar volume.")
 volMaLen = input.int(50, "Média Móvel de Volume", minval=10, group=grp_logic)
 
@@ -24,22 +25,19 @@ grp_sig = "Sinais de Entrada"
 showSignals = input.bool(true, "Mostrar Alertas de Sweep", group=grp_sig)
 reqRejection = input.bool(true, "Exigir Rejeição de Cor", group=grp_sig, tooltip="Se ativo: 'SELL' apenas se candle fechar vermelho. 'BUY' apenas se candle fechar verde.")
 
-// --- CONVERSÃO DE ESTILO DE LINHA ---
-getLineStyle() =>
-    lineStyleStr == "Solid" ? line.style_solid : lineStyleStr == "Dashed" ? line.style_dashed : line.style_dotted
-
 // --- TIPOS E ARRAYS ---
 type LiquidityLevel
-    float price
-    line  lvlLine
+    float price   // Preço exato do Pivô original
+    box   lvlBox  // A faixa projetada
     bool  isActive
 
 var array<LiquidityLevel> bslLevels = array.new<LiquidityLevel>() // Buy-Side Liquidity (Acima de Topos)
 var array<LiquidityLevel> sslLevels = array.new<LiquidityLevel>() // Sell-Side Liquidity (Abaixo de Fundos)
 
-// --- MÉTricas DE VOLUME ---
+// --- MÉTricas DE VOLUME E VOLATILIDADE ---
 volMA = ta.sma(volume, volMaLen)
 hasHighVolume = absorbVolMult > 0 ? (volume > (volMA * absorbVolMult)) : true
+atrValue = ta.atr(atrLen)
 
 // --- DETECÇÃO DE PIVOTS ---
 // Funções de Pivot devem ser executadas no escopo global para empilhamento correto
@@ -48,25 +46,29 @@ pl = ta.pivotlow(low, lenLeft, lenRight)
 
 // Adicionar novos níveis de BSL (Topos)
 if not na(ph)
-    newLine = line.new(bar_index[lenRight], ph, bar_index, ph, color=colorBsl, style=getLineStyle(), width=lineWidth, extend=extend.right)
-    array.push(bslLevels, LiquidityLevel.new(ph, newLine, true))
+    // Calcula a projeção da faixa do pivô para cima (Pool)
+    poolSize = atrValue[lenRight] * atrMult
+    newBox = box.new(left=bar_index[lenRight], top=ph + poolSize, right=bar_index, bottom=ph, bgcolor=colorBsl, border_color=na, extend=extend.right)
+    array.push(bslLevels, LiquidityLevel.new(ph, newBox, true))
 
     // Garbage collection para BSL
     if array.size(bslLevels) > maxLevels
         firstLvl = array.shift(bslLevels)
-        if not na(firstLvl.lvlLine)
-            line.delete(firstLvl.lvlLine)
+        if not na(firstLvl.lvlBox)
+            box.delete(firstLvl.lvlBox)
 
 // Adicionar novos níveis de SSL (Fundos)
 if not na(pl)
-    newLine = line.new(bar_index[lenRight], pl, bar_index, pl, color=colorSsl, style=getLineStyle(), width=lineWidth, extend=extend.right)
-    array.push(sslLevels, LiquidityLevel.new(pl, newLine, true))
+    // Calcula a projeção da faixa do pivô para baixo (Pool)
+    poolSize = atrValue[lenRight] * atrMult
+    newBox = box.new(left=bar_index[lenRight], top=pl, right=bar_index, bottom=pl - poolSize, bgcolor=colorSsl, border_color=na, extend=extend.right)
+    array.push(sslLevels, LiquidityLevel.new(pl, newBox, true))
 
     // Garbage collection para SSL
     if array.size(sslLevels) > maxLevels
         firstLvl = array.shift(sslLevels)
-        if not na(firstLvl.lvlLine)
-            line.delete(firstLvl.lvlLine)
+        if not na(firstLvl.lvlBox)
+            box.delete(firstLvl.lvlBox)
 
 // --- VARIÁVEIS DE SINAL ---
 bullishSweep = false
@@ -82,10 +84,10 @@ if array.size(bslLevels) > 0
         lvl = array.get(bslLevels, i)
 
         if lvl.isActive
-            // O preço atingiu a linha?
+            // O gatilho (trigger) continua sendo o cruzamento do Pivô original (A base da caixa)
             touched = high >= lvl.price
 
-            // Condição de Mitigação (remoção da liquidez do mapa)
+            // Condição de Mitigação (remoção da faixa do mapa)
             mitigated = false
             if mitigateMethod == "Close"
                 mitigated := close > lvl.price
@@ -93,23 +95,22 @@ if array.size(bslLevels) > 0
                 mitigated := high >= lvl.price
 
             // Lógica de "Sweep" (Captura/Absorção):
-            // Tocou na linha, mas não fechou acima (ou seja, foi rejeitado / deixou pavio)
+            // Tocou no pivô (entrou na piscina), mas não fechou acima (rejeitado)
             isRejection = touched and (close <= lvl.price)
 
-            // Se foi mitigado, consome a linha
+            // Se foi mitigado, consome a faixa
             if mitigated
-                line.set_extend(lvl.lvlLine, extend.none)
-                line.set_x2(lvl.lvlLine, bar_index)
+                box.set_extend(lvl.lvlBox, extend.none)
+                box.set_right(lvl.lvlBox, bar_index)
                 lvl.isActive := false
 
-                // Se estamos no modo Wick e houve rejeição (Wick Rejection) no momento da mitigação
+                // Modo Wick Sweep (Capturado com rejeição durante a mitigação no pavio)
                 if mitigateMethod == "Wick" and isRejection
                     if hasHighVolume and ((reqRejection and isRedCandle) or not reqRejection)
                         bearishSweep := true
 
             else if touched
-                // Se tocou, mas não mitigou (Ex: Modo Close, e o candle não fechou acima)
-                // Isto é uma Absorção Clara.
+                // Modo Close Absorção (Tocou a faixa mas não fechou acima, faixa continua ativa)
                 if isRejection
                     if hasHighVolume and ((reqRejection and isRedCandle) or not reqRejection)
                         bearishSweep := true
@@ -120,7 +121,7 @@ if array.size(sslLevels) > 0
         lvl = array.get(sslLevels, i)
 
         if lvl.isActive
-            // O preço atingiu a linha?
+            // O gatilho (trigger) é cruzar o Pivô original (O topo da caixa)
             touched = low <= lvl.price
 
             // Condição de Mitigação
@@ -131,13 +132,13 @@ if array.size(sslLevels) > 0
                 mitigated := low <= lvl.price
 
             // Lógica de "Sweep" (Captura/Absorção):
-            // Tocou na linha, mas não fechou abaixo
+            // Tocou no pivô (entrou na piscina), mas não fechou abaixo
             isRejection = touched and (close >= lvl.price)
 
-            // Se foi mitigado, consome a linha
+            // Se foi mitigado, consome a faixa
             if mitigated
-                line.set_extend(lvl.lvlLine, extend.none)
-                line.set_x2(lvl.lvlLine, bar_index)
+                box.set_extend(lvl.lvlBox, extend.none)
+                box.set_right(lvl.lvlBox, bar_index)
                 lvl.isActive := false
 
                 // Modo Wick Sweep
@@ -153,6 +154,6 @@ if array.size(sslLevels) > 0
 
 
 // --- VISUALIZAÇÃO DE SINAIS ---
-// Sinais de Reversão após Captura Institucional (Sweep + Volume)
+// Sinais de Reversão após Captura Institucional na Faixa (Sweep + Volume)
 plotshape(showSignals and bullishSweep, "Compra (Bullish Sweep)", shape.labelup, location.belowbar, color.green, 0, "BUY", color.white, size=size.small)
 plotshape(showSignals and bearishSweep, "Venda (Bearish Sweep)", shape.labeldown, location.abovebar, color.red, 0, "SELL", color.white, size=size.small)
