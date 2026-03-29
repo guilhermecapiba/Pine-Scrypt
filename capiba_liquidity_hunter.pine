@@ -1,0 +1,98 @@
+//@version=6
+indicator("Capiba Liquidity Hunter", overlay=true, max_lines_count=500, max_labels_count=500)
+
+// --- INPUTS ---
+grp_liq = "Configurações de Liquidez"
+lookback = input.int(24, "Período de Liquidez (Pivot Length)", minval=2, group=grp_liq)
+maxLevels = input.int(50, "Máximo de Níveis Ativos", minval=10, maxval=200, group=grp_liq)
+
+grp_visuals = "Visualização Heatmap"
+colorBsl = input.color(color.new(color.red, 70), "Cor Liquidez Acima (BSL)", group=grp_visuals)
+colorSsl = input.color(color.new(color.green, 70), "Cor Liquidez Abaixo (SSL)", group=grp_visuals)
+lineWidth = input.int(2, "Espessura da Linha", minval=1, maxval=10, group=grp_visuals)
+lineStyleStr = input.string("Dotted", "Estilo da Linha", options=["Solid", "Dashed", "Dotted"], group=grp_visuals)
+
+grp_signals = "Sinais de Captura"
+showLabels = input.bool(true, "Mostrar Alertas de Sweep", group=grp_signals)
+
+// --- CONVERSÃO DE ESTILO DE LINHA ---
+getLineStyle() =>
+    lineStyleStr == "Solid" ? line.style_solid : lineStyleStr == "Dashed" ? line.style_dashed : line.style_dotted
+
+// --- TIPOS E ARRAYS ---
+type LiquidityLevel
+    float price
+    line  lvlLine
+    bool  isActive
+
+var array<LiquidityLevel> bslLevels = array.new<LiquidityLevel>() // Buy-Side Liquidity (Acima de Topos)
+var array<LiquidityLevel> sslLevels = array.new<LiquidityLevel>() // Sell-Side Liquidity (Abaixo de Fundos)
+
+// --- DETECÇÃO DE PIVOTS ---
+// Funções de Pivot devem ser executadas no escopo global
+// O heatmap ganha "peso" com mais confluências nas faixas de preço
+ph = ta.pivothigh(high, lookback, lookback)
+pl = ta.pivotlow(low, lookback, lookback)
+
+// Adicionar novos níveis de BSL (Topos)
+if not na(ph)
+    newLine = line.new(bar_index[lookback], ph, bar_index, ph, color=colorBsl, style=getLineStyle(), width=lineWidth, extend=extend.right)
+    array.push(bslLevels, LiquidityLevel.new(ph, newLine, true))
+
+    // Garbage collection para BSL
+    if array.size(bslLevels) > maxLevels
+        firstLvl = array.shift(bslLevels)
+        if not na(firstLvl.lvlLine)
+            line.delete(firstLvl.lvlLine)
+
+// Adicionar novos níveis de SSL (Fundos)
+if not na(pl)
+    newLine = line.new(bar_index[lookback], pl, bar_index, pl, color=colorSsl, style=getLineStyle(), width=lineWidth, extend=extend.right)
+    array.push(sslLevels, LiquidityLevel.new(pl, newLine, true))
+
+    // Garbage collection para SSL
+    if array.size(sslLevels) > maxLevels
+        firstLvl = array.shift(sslLevels)
+        if not na(firstLvl.lvlLine)
+            line.delete(firstLvl.lvlLine)
+
+// --- DETECÇÃO DE SWEEP (CAPTURA) ---
+bullishSweep = false
+bearishSweep = false
+isGreenCandle = close > open
+isRedCandle = close < open
+
+// Checar capturas de Buy-Side Liquidity (BSL)
+if array.size(bslLevels) > 0
+    for i = array.size(bslLevels) - 1 to 0
+        lvl = array.get(bslLevels, i)
+        if lvl.isActive and high >= lvl.price
+            // O preço atingiu a liquidez! (Sweep)
+            // Mitiga a linha
+            line.set_extend(lvl.lvlLine, extend.none)
+            line.set_x2(lvl.lvlLine, bar_index)
+            lvl.isActive := false
+
+            // Regra de sinal de venda: Candle deve fechar vermelho (Bearish Sweep)
+            if isRedCandle
+                bearishSweep := true
+
+// Checar capturas de Sell-Side Liquidity (SSL)
+if array.size(sslLevels) > 0
+    for i = array.size(sslLevels) - 1 to 0
+        lvl = array.get(sslLevels, i)
+        if lvl.isActive and low <= lvl.price
+            // O preço atingiu a liquidez! (Sweep)
+            // Mitiga a linha
+            line.set_extend(lvl.lvlLine, extend.none)
+            line.set_x2(lvl.lvlLine, bar_index)
+            lvl.isActive := false
+
+            // Regra de sinal de compra: Candle deve fechar verde (Bullish Sweep)
+            if isGreenCandle
+                bullishSweep := true
+
+// --- VISUALIZAÇÃO DE SINAIS ---
+// Sinais de Reversão após Captura
+plotshape(showLabels and bullishSweep, "Liquidez Capturada (Alta)", shape.labelup, location.belowbar, color.green, 0, "LIQ GRAB", color.white, size=size.small)
+plotshape(showLabels and bearishSweep, "Liquidez Capturada (Baixa)", shape.labeldown, location.abovebar, color.red, 0, "LIQ GRAB", color.white, size=size.small)
