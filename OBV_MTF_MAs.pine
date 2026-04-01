@@ -1,0 +1,44 @@
+//@version=5
+indicator("OBV MTF com MAs", shorttitle="OBV MTF", overlay=false, max_lines_count=500)
+
+// --- Inputs ---
+// Timeframe: Default is chart timeframe ("")
+tf = input.timeframe("", title="Timeframe do OBV")
+
+// MA 1 Settings (Default: EMA 21)
+type1 = input.string("EMA", title="Tipo MA 1", options=["SMA", "EMA"])
+len1 = input.int(21, title="Periodo MA 1", minval=1)
+
+// MA 2 Settings (Default: EMA 90)
+type2 = input.string("EMA", title="Tipo MA 2", options=["SMA", "EMA"])
+len2 = input.int(90, title="Periodo MA 2", minval=1)
+
+// --- Calculation ---
+
+// Helper function to select MA type
+get_ma(src, type, len) =>
+    type == "SMA" ? ta.sma(src, len) : ta.ema(src, len)
+
+// Function to calculate OBV and MAs in the requested timeframe context
+calc_data() =>
+    // Standard On Balance Volume
+    _obv = ta.obv
+    // Calculate MAs based on that OBV
+    _ma1 = get_ma(_obv, type1, len1)
+    _ma2 = get_ma(_obv, type2, len2)
+    [_obv, _ma1, _ma2]
+
+// request.security to get data from the chosen timeframe
+[v_obv, v_ma1, v_ma2] = request.security(syminfo.tickerid, tf, calc_data())
+
+// --- Plotting ---
+// OBV: Blue, Width 2
+plot(v_obv, title="OBV", color=color.blue, linewidth=2)
+
+// MA 1: Abóbora (Orange), Width 2
+plot(v_ma1, title="MA 1", color=color.orange, linewidth=2)
+
+// MA 2: White, Width 1, Dashed (Requested: "branca, espessura 1 mas em linha tracejada")
+// Note: plot() does not support dashed style, so we use line.new()
+if not na(v_ma2) and not na(v_ma2[1])
+    line.new(bar_index[1], v_ma2[1], bar_index, v_ma2, style=line.style_dashed, color=color.white, width=1)
