@@ -1,0 +1,95 @@
+//@version=5
+indicator("Força da Tendência Heikin Ashi [Jules]", shorttitle="HA Trend Strength", overlay=true)
+
+// --- Inputs ---
+length_sma = input.int(10, title="Período da Média (Tamanho)", minval=1)
+color_up = input.color(color.green, title="Cor de Alta")
+color_down = input.color(color.red, title="Cor de Baixa")
+
+// --- Heikin Ashi Calculation ---
+var float haOpen = na
+float haClose = (open + high + low + close) / 4
+
+if na(haOpen[1])
+    haOpen := (open + close) / 2
+else
+    haOpen := (nz(haOpen[1]) + nz(haClose[1])) / 2
+
+float haHigh = math.max(high, math.max(haOpen, haClose))
+float haLow = math.min(low, math.min(haOpen, haClose))
+
+// --- Logic ---
+float bodySize = math.abs(haClose - haOpen)
+float avgBody = ta.sma(bodySize, length_sma)
+float safeAvgBody = avgBody == 0 ? syminfo.mintick : avgBody
+
+// Green Arrow (Strong Up)
+// Rule: haClose > haOpen AND haLow == haOpen (No lower wick)
+bool isGreenArrow = (haClose > haOpen) and (math.abs(haLow - haOpen) < syminfo.mintick)
+
+// Red Arrow (Strong Down)
+// Rule: haClose < haOpen AND haHigh == haOpen (No upper wick)
+bool isRedArrow = (haClose < haOpen) and (math.abs(haHigh - haOpen) < syminfo.mintick)
+
+// Green Ball (Indecision in Up)
+// Rule: haClose > haOpen BUT haLow < haOpen (Lower wick exists)
+bool isGreenBall = (haClose > haOpen) and (haLow < haOpen - syminfo.mintick)
+float lowerShadow = haOpen - haLow
+
+// Red Ball (Indecision in Down)
+// Rule: haClose < haOpen BUT haHigh > haOpen (Upper wick exists)
+bool isRedBall = (haClose < haOpen) and (haHigh > haOpen + syminfo.mintick)
+float upperShadow = haHigh - haOpen
+
+// --- Sizing Logic ---
+float ratioArrow = bodySize / safeAvgBody
+float ratioBallGreen = lowerShadow / safeAvgBody
+float ratioBallRed = upperShadow / safeAvgBody
+
+// Helper to determine size category (0=Tiny, 1=Small, 2=Normal, 3=Large, 4=Huge)
+getSizeCategory(float ratio) =>
+    if ratio < 0.5
+        0 // Tiny
+    else if ratio < 1.0
+        1 // Small
+    else if ratio < 1.5
+        2 // Normal
+    else if ratio < 2.0
+        3 // Large
+    else
+        4 // Huge
+
+int catGreenArrow = getSizeCategory(ratioArrow)
+int catRedArrow = getSizeCategory(ratioArrow)
+int catGreenBall = getSizeCategory(ratioBallGreen)
+int catRedBall = getSizeCategory(ratioBallRed)
+
+// --- Plotting Shapes ---
+
+// Green Triangle (Up)
+// Tiny (cat=0) is suppressed
+plotshape(isGreenArrow and catGreenArrow == 1, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.small, title="Triângulo Alta (Small)")
+plotshape(isGreenArrow and catGreenArrow == 2, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.normal, title="Triângulo Alta (Normal)")
+plotshape(isGreenArrow and catGreenArrow == 3, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.large, title="Triângulo Alta (Large)")
+plotshape(isGreenArrow and catGreenArrow == 4, style=shape.triangleup, location=location.belowbar, color=color_up, size=size.huge, title="Triângulo Alta (Huge)")
+
+// Red Triangle (Down)
+// Tiny (cat=0) is suppressed
+plotshape(isRedArrow and catRedArrow == 1, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.small, title="Triângulo Baixa (Small)")
+plotshape(isRedArrow and catRedArrow == 2, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.normal, title="Triângulo Baixa (Normal)")
+plotshape(isRedArrow and catRedArrow == 3, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.large, title="Triângulo Baixa (Large)")
+plotshape(isRedArrow and catRedArrow == 4, style=shape.triangledown, location=location.abovebar, color=color_down, size=size.huge, title="Triângulo Baixa (Huge)")
+
+// Green Ball (Indecision Up)
+// Tiny (cat=0) is suppressed
+plotshape(isGreenBall and catGreenBall == 1, style=shape.circle, location=location.belowbar, color=color_up, size=size.small, title="Bola Alta (Small)")
+plotshape(isGreenBall and catGreenBall == 2, style=shape.circle, location=location.belowbar, color=color_up, size=size.normal, title="Bola Alta (Normal)")
+plotshape(isGreenBall and catGreenBall == 3, style=shape.circle, location=location.belowbar, color=color_up, size=size.large, title="Bola Alta (Large)")
+plotshape(isGreenBall and catGreenBall == 4, style=shape.circle, location=location.belowbar, color=color_up, size=size.huge, title="Bola Alta (Huge)")
+
+// Red Ball (Indecision Down)
+// Tiny (cat=0) is suppressed
+plotshape(isRedBall and catRedBall == 1, style=shape.circle, location=location.abovebar, color=color_down, size=size.small, title="Bola Baixa (Small)")
+plotshape(isRedBall and catRedBall == 2, style=shape.circle, location=location.abovebar, color=color_down, size=size.normal, title="Bola Baixa (Normal)")
+plotshape(isRedBall and catRedBall == 3, style=shape.circle, location=location.abovebar, color=color_down, size=size.large, title="Bola Baixa (Large)")
+plotshape(isRedBall and catRedBall == 4, style=shape.circle, location=location.abovebar, color=color_down, size=size.huge, title="Bola Baixa (Huge)")
