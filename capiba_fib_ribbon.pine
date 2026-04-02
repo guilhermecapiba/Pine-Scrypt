@@ -9,14 +9,15 @@ indicator("Capiba Fibonacci Ribbon Pro", shorttitle="Capiba Fib Ribbon", overlay
 // =========================================================================
 grp_ma = "Configurações das Médias"
 ma_src = input.source(close, "Fonte de Dados", group=grp_ma)
-ma_type_fast = input.string("EMA", "Tipo MAs Gatilho/Tendência", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA"], group=grp_ma)
+ma_type_fast = input.string("SMA", "Tipo MAs Gatilho/Tendência", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA"], group=grp_ma)
 ma_type_slow = input.string("SMA", "Tipo MAs Institucionais", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA"], group=grp_ma)
 
 grp_vis = "Visualização e Cores"
 show_ribbons = input.bool(true, "Mostrar Fitas (Preenchimento)", group=grp_vis)
 color_candles = input.bool(true, "Colorir Velas por Fase", group=grp_vis)
-show_squeeze = input.bool(true, "Destacar Zonas de Squeeze (Compressão)", group=grp_vis)
+show_bg = input.bool(true, "Colorir Fundo (Background)", group=grp_vis)
 show_signals = input.bool(true, "Mostrar Sinais de Exaustão (3x13)", group=grp_vis)
+show_table = input.bool(true, "Mostrar Tabela Informativa", group=grp_vis)
 
 // =========================================================================
 // 2. FUNÇÕES BASE
@@ -34,97 +35,113 @@ get_ma(src, length, type) =>
 // =========================================================================
 // 3. CÁLCULO DAS CAMADAS (FIBONACCI)
 // =========================================================================
-// A) Gatilho de Reversão (3, 5, 8, 13) - Sentimento Imediato
+// A) Gatilho de Reversão (3, 5, 8, 13)
 ma03 = get_ma(ma_src, 3, ma_type_fast)
 ma05 = get_ma(ma_src, 5, ma_type_fast)
 ma08 = get_ma(ma_src, 8, ma_type_fast)
 ma13 = get_ma(ma_src, 13, ma_type_fast)
 
-// B) Corpo da Tendência (21, 34, 55) - Varejo / Algoritmos
+// B) Corpo da Tendência (21, 34, 55)
 ma21 = get_ma(ma_src, 21, ma_type_fast)
 ma34 = get_ma(ma_src, 34, ma_type_fast)
 ma55 = get_ma(ma_src, 55, ma_type_fast)
 
-// C) Âncora Institucional (89, 144, 233) - Smart Money / Ciclo
+// C) Âncora Institucional (89, 144, 233)
 ma89  = get_ma(ma_src, 89, ma_type_slow)
 ma144 = get_ma(ma_src, 144, ma_type_slow)
 ma233 = get_ma(ma_src, 233, ma_type_slow)
 
 // =========================================================================
-// 4. PLOTS E ESTILIZAÇÃO VISUAL
+// 4. PLOTS E ESTILIZAÇÃO VISUAL (LEQUES SIMPLIFICADOS)
 // =========================================================================
-// Cores Camada 1: Vibrantes (Amarelo/Ciano)
-c_ma03 = color.new(#FFFF00, 0) // Amarelo
-c_ma05 = color.new(#FFEA00, 0) // Amarelo alaranjado
-c_ma08 = color.new(#00FFFF, 0) // Ciano claro
-c_ma13 = color.new(#00B8D4, 0) // Ciano escuro
-
-// Cores Camada 2: Gradiente Verde
-c_ma21 = color.new(#64DD17, 0) // Verde claro
-c_ma34 = color.new(#00C853, 0) // Verde médio
-c_ma55 = color.new(#1B5E20, 0) // Verde escuro
-
-// Cores Camada 3: Sóbrias
-c_ma89  = color.new(#880E4F, 0) // Bordô
-c_ma144 = color.new(#4A148C, 0) // Roxo Escuro / Anil
-c_ma233 = color.new(#1A237E, 0) // Azul Marinho
+// Leque 1: Ciano (Curto Prazo)
+c_layer1 = color.new(#00BCD4, 0)
+// Leque 2: Laranja (Médio Prazo)
+c_layer2 = color.new(#FF9800, 0)
+// Leque 3: Roxo (Longo Prazo)
+c_layer3 = color.new(#9C27B0, 0)
 
 // Plots
-p03 = plot(ma03, color=c_ma03, linewidth=1, title="MA 3 Gatilho")
-p05 = plot(ma05, color=c_ma05, linewidth=1, title="MA 5")
-p08 = plot(ma08, color=c_ma08, linewidth=1, title="MA 8")
-p13 = plot(ma13, color=c_ma13, linewidth=2, title="MA 13 Exaustão")
+p03 = plot(ma03, color=color.new(c_layer1, 40), linewidth=1)
+p05 = plot(ma05, color=color.new(c_layer1, 20), linewidth=1)
+p08 = plot(ma08, color=color.new(c_layer1, 0),  linewidth=1)
+p13 = plot(ma13, color=color.new(c_layer1, 0),  linewidth=2, title="MA 13")
 
-p21 = plot(ma21, color=c_ma21, linewidth=1, title="MA 21 Tendência")
-p34 = plot(ma34, color=c_ma34, linewidth=1, title="MA 34")
-p55 = plot(ma55, color=c_ma55, linewidth=2, title="MA 55 Limite Tendência")
+p21 = plot(ma21, color=color.new(c_layer2, 40), linewidth=1)
+p34 = plot(ma34, color=color.new(c_layer2, 20), linewidth=1)
+p55 = plot(ma55, color=color.new(c_layer2, 0),  linewidth=2, title="MA 55")
 
-p89  = plot(ma89,  color=c_ma89,  linewidth=2, title="MA 89 Âncora Curta")
-p144 = plot(ma144, color=c_ma144, linewidth=3, title="MA 144 Âncora STH")
-p233 = plot(ma233, color=c_ma233, linewidth=4, title="MA 233 Stop Ciclo")
+p89  = plot(ma89,  color=color.new(c_layer3, 40), linewidth=2)
+p144 = plot(ma144, color=color.new(c_layer3, 20), linewidth=3)
+p233 = plot(ma233, color=color.new(c_layer3, 0),  linewidth=4, title="MA 233")
 
-// Fills (Fitas)
-fill(p03, p13, color=show_ribbons ? color.new(c_ma13, 85) : na, title="Ribbon Gatilho")
-fill(p21, p55, color=show_ribbons ? color.new(c_ma34, 85) : na, title="Ribbon Tendência")
-fill(p89, p233, color=show_ribbons ? color.new(c_ma144, 85) : na, title="Ribbon Institucional")
+// Fitas
+fill(p03, p13, color=show_ribbons ? color.new(c_layer1, 85) : na, title="Fita Curta")
+fill(p21, p55, color=show_ribbons ? color.new(c_layer2, 85) : na, title="Fita Média")
+fill(p89, p233, color=show_ribbons ? color.new(c_layer3, 85) : na, title="Fita Longa")
 
 // =========================================================================
-// 5. LÓGICA DE DETECÇÃO (SQUEEZE, FASES, SINAIS)
+// 5. LÓGICA DE FASES, COLORAÇÃO E SINAIS
 // =========================================================================
-// A) Detecção de Squeeze (Compressão 3 ao 55)
-// Se a distância entre a média mais rápida (3) e a base da tendência (55) for muito pequena
+// Definição das Condições
+// Topo: Preço muito esticado acima da MA rápida e caindo
+is_top = close > ma03 and ta.falling(ma03, 1) and close > ma55
+// Alta: Preço subindo acima das MAs de tendência
+is_bull = close > ma21 and ma21 > ma55
+// Fundo: Preço abaixo da MA 233 (Deep Discount) ou retornando nela
+is_bottom = close < ma233 or (close >= ma233 and close <= ma144 and ta.rising(close, 1))
+// Baixa: Preço caindo abaixo das MAs de tendência
+is_bear = close < ma55 and ma21 < ma55
+// Neutro/Squeeze
 atr = ta.atr(14)
-dist_3_55 = math.abs(ma03 - ma55)
-is_squeeze = dist_3_55 < (atr * 0.4) // Threshold de agrupamento
+is_squeeze = math.abs(ma03 - ma55) < (atr * 0.4)
 
-bgcolor(show_squeeze and is_squeeze ? color.new(color.yellow, 90) : na, title="Fundo Squeeze")
+// A) Coloração de Velas
+c_vela = is_top ? color.new(color.blue, 0) :
+         is_bottom ? color.new(color.yellow, 0) :
+         is_bull ? color.new(color.green, 0) :
+         is_bear ? color.new(color.red, 0) :
+         color.new(color.white, 0)
 
-// B) Lógica de Fases de Mercado para Coloração de Velas
-// 1. Alta Forte: Preço > 21 > 55 > 144
-is_strong_bull = close > ma21 and ma21 > ma55 and ma55 > ma144
+barcolor(color_candles ? c_vela : na, title="Cores das Velas")
 
-// 2. Zona de Compra (Discount): Preço retorna entre 89 e 144
-is_buy_zone = close <= ma89 and close >= ma144 and ma144 > ma233
+// B) Coloração de Fundo (Background)
+// Compra = Verde (Retorno em Fundo/Alta), Venda = Vermelho (Topo/Baixa Forte), Neutro/Squeeze = Cinza
+c_bg = is_bottom ? color.new(color.green, 90) :
+       is_squeeze ? color.new(color.gray, 90) :
+       is_top ? color.new(color.red, 90) :
+       na
 
-// 3. Reversão de Topo: Médias curtas curvam pra baixo com preço acima da 144
-short_curving_down = ta.falling(ma03, 2) and ta.falling(ma05, 2) and ta.falling(ma08, 1)
-is_top_reversion = short_curving_down and close > ma144 and ma13 > ma55
+bgcolor(show_bg ? c_bg : na, title="Cor de Fundo")
 
-// 4. Bear Market (Stop de Ciclo): Preço perde a 233
-is_bear_market = close < ma233
+// C) Sinais de Cruzamento 3x13
+cross_up = ta.crossover(ma03, ma13)
+cross_dn = ta.crossunder(ma03, ma13)
+plotshape(show_signals and cross_up, style=shape.triangleup, location=location.belowbar, color=color.new(color.green,0), size=size.small)
+plotshape(show_signals and cross_dn, style=shape.triangledown, location=location.abovebar, color=color.new(color.red,0), size=size.small)
 
-// Definir a cor da vela baseada na hierarquia
-c_vela = is_bear_market ? color.new(#FF5252, 0) : // Vermelho: Bear Market
-         is_top_reversion ? color.new(#FFA726, 0) : // Laranja: Exaustão/Topo
-         is_buy_zone ? color.new(#29B6F6, 0) : // Azul: Deep Discount
-         is_strong_bull ? color.new(#69F0AE, 0) : // Verde: Alta Forte
-         color.new(color.gray, 30) // Neutro
+// =========================================================================
+// 6. TABELA INFORMATIVA (DASHBOARD)
+// =========================================================================
+var table info_table = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 20), border_width=1)
 
-barcolor(color_candles ? c_vela : na, title="Coloração de Velas")
+if barstate.islast and show_table
+    // Linha 1: Cabeçalho
+    table.cell(info_table, 0, 0, "Status Geral do Mercado", text_color=color.white, text_size=size.normal)
+    table.cell(info_table, 1, 0, "Sinal", text_color=color.white, text_size=size.normal)
 
-// C) Gatilhos de Exaustão (Cruzamento 3 com 13)
-cross_3_13_up = ta.crossover(ma03, ma13)
-cross_3_13_dn = ta.crossunder(ma03, ma13)
+    // Linha 2: Fase e Cor da Vela
+    txt_fase = is_top ? "Zona de Topo (Exaustão)" : is_bottom ? "Zona de Fundo (Desconto)" : is_bull ? "Tendência de Alta" : is_bear ? "Tendência de Baixa" : "Neutro / Lateral"
+    table.cell(info_table, 0, 1, "Fase Atual:", text_color=color.white)
+    table.cell(info_table, 1, 1, txt_fase, text_color=c_vela, bgcolor=color.new(c_vela, 80))
 
-plotshape(show_signals and cross_3_13_up, style=shape.triangleup, location=location.belowbar, color=c_ma03, size=size.small, title="Sinal Alta 3x13")
-plotshape(show_signals and cross_3_13_dn, style=shape.triangledown, location=location.abovebar, color=color.new(#FFA726, 0), size=size.small, title="Sinal Baixa 3x13")
+    // Linha 3: Background Explicado
+    txt_bg = is_bottom ? "Oportunidade de Compra" : is_squeeze ? "Compressão (Aguarde o Rompimento)" : is_top ? "Risco de Queda (Realize Lucros)" : "Seguir a Tendência"
+    c_txt_bg = is_bottom ? color.green : is_squeeze ? color.gray : is_top ? color.red : color.white
+    table.cell(info_table, 0, 2, "Ação Sugerida:", text_color=color.white)
+    table.cell(info_table, 1, 2, txt_bg, text_color=c_txt_bg)
+
+    // Linha 4: MAs Principais
+    txt_mas = "MA 55: " + str.tostring(math.round(ma55,2)) + " | MA 233: " + str.tostring(math.round(ma233,2))
+    table.cell(info_table, 0, 3, "Níveis Chave:", text_color=color.white)
+    table.cell(info_table, 1, 3, txt_mas, text_color=color.silver)
