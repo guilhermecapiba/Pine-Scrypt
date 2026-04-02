@@ -12,18 +12,39 @@ ma_src = input.source(close, "Fonte de Dados", group=grp_ma)
 ma_type_fast = input.string("SMA", "Tipo MAs Gatilho/Tendência", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA"], group=grp_ma)
 ma_type_slow = input.string("SMA", "Tipo MAs Institucionais", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA"], group=grp_ma)
 
-grp_vis = "Visualização e Cores - Linhas/Fitas"
-show_lines = input.bool(true, "Mostrar Linhas das Médias", group=grp_vis)
-show_ribbons = input.bool(true, "Mostrar Preenchimento (Fitas)", group=grp_vis)
-color_layer1 = input.color(#00BCD4, "Cor Leque 1 (Curto Prazo - 3,5,8,13)", group=grp_vis)
-color_layer2 = input.color(#FF9800, "Cor Leque 2 (Tendência - 21,34,55)", group=grp_vis)
-color_layer3 = input.color(#9C27B0, "Cor Leque 3 (Longo Prazo - 89,144,233)", group=grp_vis)
+grp_lines = "Exibição Individual - Linhas"
+show_03 = input.bool(false, "Mostrar MA 03", group=grp_lines)
+show_05 = input.bool(false, "Mostrar MA 05", group=grp_lines)
+show_08 = input.bool(false, "Mostrar MA 08", group=grp_lines)
+show_13 = input.bool(false, "Mostrar MA 13", group=grp_lines)
+show_21 = input.bool(true,  "Mostrar MA 21", group=grp_lines)
+show_34 = input.bool(false, "Mostrar MA 34", group=grp_lines)
+show_55 = input.bool(true,  "Mostrar MA 55", group=grp_lines)
+show_89 = input.bool(true,  "Mostrar MA 89", group=grp_lines)
+show_144 = input.bool(false, "Mostrar MA 144", group=grp_lines)
+show_233 = input.bool(true,  "Mostrar MA 233", group=grp_lines)
 
-grp_fases = "Visualização e Cores - Fases do Mercado"
-color_candles = input.bool(true, "Colorir Velas por Fase", group=grp_fases)
-show_bg = input.bool(true, "Colorir Fundo (Background)", group=grp_fases)
-show_signals = input.bool(true, "Mostrar Sinais Estruturais (13x55)", group=grp_fases, tooltip="Substitui o sinal rápido 3x13 por um cruzamento mais sólido entre a MA13 (fim do curto prazo) e MA55 (limite da tendência)")
-show_table = input.bool(true, "Mostrar Tabela Informativa", group=grp_fases)
+grp_ribbons = "Exibição Individual - Fitas e Cores"
+show_ribbon1 = input.bool(false, "Mostrar Fita Curta (3 a 13)", group=grp_ribbons)
+color_layer1 = input.color(#4CAF50, "Cor Fita Curta (Verde)", group=grp_ribbons) // Verde default
+show_ribbon2 = input.bool(true, "Mostrar Fita Média (21 a 55)", group=grp_ribbons)
+color_layer2 = input.color(#FFEB3B, "Cor Fita Média (Amarelo)", group=grp_ribbons) // Amarelo default
+show_ribbon3 = input.bool(true, "Mostrar Fita Longa (89 a 233)", group=grp_ribbons)
+color_layer3 = input.color(#F44336, "Cor Fita Longa (Vermelho)", group=grp_ribbons) // Vermelho default
+
+grp_fases = "Visuais e Sinais do Gráfico"
+color_candles = input.bool(true, "Colorir Velas por Fase (Suavizado)", group=grp_fases)
+show_bg = input.bool(false, "Colorir Fundo (Background)", group=grp_fases) // Default falso
+show_signals = input.bool(true, "Mostrar Sinais Estruturais (13x21)", group=grp_fases)
+
+grp_tbl = "Painel Informativo"
+show_table = input.bool(true, "Mostrar Tabela Informativa", group=grp_tbl)
+pos_table_str = input.string("Top Right", "Posição da Tabela", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group=grp_tbl)
+
+pos_table = pos_table_str == "Top Right" ? position.top_right :
+            pos_table_str == "Top Left" ? position.top_left :
+            pos_table_str == "Bottom Right" ? position.bottom_right :
+            position.bottom_left
 
 // =========================================================================
 // 2. FUNÇÕES BASE
@@ -41,18 +62,15 @@ get_ma(src, length, type) =>
 // =========================================================================
 // 3. CÁLCULO DAS CAMADAS (FIBONACCI)
 // =========================================================================
-// A) Gatilho de Reversão (3, 5, 8, 13)
 ma03 = get_ma(ma_src, 3, ma_type_fast)
 ma05 = get_ma(ma_src, 5, ma_type_fast)
 ma08 = get_ma(ma_src, 8, ma_type_fast)
 ma13 = get_ma(ma_src, 13, ma_type_fast)
 
-// B) Corpo da Tendência (21, 34, 55)
 ma21 = get_ma(ma_src, 21, ma_type_fast)
 ma34 = get_ma(ma_src, 34, ma_type_fast)
 ma55 = get_ma(ma_src, 55, ma_type_fast)
 
-// C) Âncora Institucional (89, 144, 233)
 ma89  = get_ma(ma_src, 89, ma_type_slow)
 ma144 = get_ma(ma_src, 144, ma_type_slow)
 ma233 = get_ma(ma_src, 233, ma_type_slow)
@@ -60,53 +78,51 @@ ma233 = get_ma(ma_src, 233, ma_type_slow)
 // =========================================================================
 // 4. PLOTS E ESTILIZAÇÃO VISUAL COM CUSTOMIZAÇÃO
 // =========================================================================
-// Opacidade base para linhas
-c1_0 = show_lines ? color.new(color_layer1, 0) : na
-c1_20 = show_lines ? color.new(color_layer1, 20) : na
-c1_40 = show_lines ? color.new(color_layer1, 40) : na
+// Em Pine, para que o `fill()` funcione, as variáveis de plot (p03, p13...) devem existir independentemente se a linha é visível.
+// O truque é plotar sempre, mas passar `na` na cor caso o usuário desligue a visualização da linha.
+p03 = plot(ma03, color=show_03 ? color.new(color_layer1, 40) : na, linewidth=1, editable=false)
+p05 = plot(ma05, color=show_05 ? color.new(color_layer1, 20) : na, linewidth=1, editable=false)
+p08 = plot(ma08, color=show_08 ? color.new(color_layer1, 0)  : na, linewidth=1, editable=false)
+p13 = plot(ma13, color=show_13 ? color.new(color_layer1, 0)  : na, linewidth=2, title="MA 13")
 
-c2_0 = show_lines ? color.new(color_layer2, 0) : na
-c2_20 = show_lines ? color.new(color_layer2, 20) : na
-c2_40 = show_lines ? color.new(color_layer2, 40) : na
+p21 = plot(ma21, color=show_21 ? color.new(color_layer2, 40) : na, linewidth=1, title="MA 21")
+p34 = plot(ma34, color=show_34 ? color.new(color_layer2, 20) : na, linewidth=1, editable=false)
+p55 = plot(ma55, color=show_55 ? color.new(color_layer2, 0)  : na, linewidth=2, title="MA 55")
 
-c3_0 = show_lines ? color.new(color_layer3, 0) : na
-c3_20 = show_lines ? color.new(color_layer3, 20) : na
-c3_40 = show_lines ? color.new(color_layer3, 40) : na
+p89  = plot(ma89,  color=show_89  ? color.new(color_layer3, 40) : na, linewidth=2, title="MA 89")
+p144 = plot(ma144, color=show_144 ? color.new(color_layer3, 20) : na, linewidth=3, editable=false)
+p233 = plot(ma233, color=show_233 ? color.new(color_layer3, 0)  : na, linewidth=4, title="MA 233")
 
-// Plots
-p03 = plot(ma03, color=c1_40, linewidth=1)
-p05 = plot(ma05, color=c1_20, linewidth=1)
-p08 = plot(ma08, color=c1_0,  linewidth=1)
-p13 = plot(ma13, color=c1_0,  linewidth=2, title="MA 13")
-
-p21 = plot(ma21, color=c2_40, linewidth=1)
-p34 = plot(ma34, color=c2_20, linewidth=1)
-p55 = plot(ma55, color=c2_0,  linewidth=2, title="MA 55")
-
-p89  = plot(ma89,  color=c3_40, linewidth=2)
-p144 = plot(ma144, color=c3_20, linewidth=3)
-p233 = plot(ma233, color=c3_0,  linewidth=4, title="MA 233")
-
-// Fitas
-fill(p03, p13, color=show_ribbons ? color.new(color_layer1, 85) : na, title="Fita Curta")
-fill(p21, p55, color=show_ribbons ? color.new(color_layer2, 85) : na, title="Fita Média")
-fill(p89, p233, color=show_ribbons ? color.new(color_layer3, 85) : na, title="Fita Longa")
+// Fitas (Preenchimentos)
+fill(p03, p13, color=show_ribbon1 ? color.new(color_layer1, 85) : na, title="Fita Curta")
+fill(p21, p55, color=show_ribbon2 ? color.new(color_layer2, 85) : na, title="Fita Média")
+fill(p89, p233, color=show_ribbon3 ? color.new(color_layer3, 85) : na, title="Fita Longa")
 
 // =========================================================================
-// 5. LÓGICA DE FASES E COLORAÇÃO
+// 5. LÓGICA DE FASES E COLORAÇÃO SUAVIZADA (MENOS RUÍDO)
 // =========================================================================
-// Definição das Condições
-is_top = close > ma03 and ta.falling(ma03, 1) and close > ma55
-is_bull = close > ma21 and ma21 > ma55
-is_bottom = close < ma233 or (close >= ma233 and close <= ma144 and ta.rising(close, 1))
-is_bear = close < ma55 and ma21 < ma55
+// Para evitar pisca-pisca de cores (alta variabilidade), focamos nas MAs mais lentas.
+// Condições simplificadas:
+// Fundo: Preço operando abaixo da 233.
+// Alta: Cruzamento estrutural altista (MA21 > MA55) mantido e preço operando na tendência.
+// Baixa: Cruzamento estrutural baixista (MA21 < MA55) mantido.
+// Topo: Estava em tendência de alta (21 > 55), mas o preço cai abaixo da MA21 e a MA21 aponta para baixo.
+
+is_bottom = close < ma233
+
+trend_bull = ma21 > ma55 and close > ma55
+is_top_correction = trend_bull and close < ma21 and ta.falling(ma21, 2)
+is_bull = trend_bull and not is_top_correction
+
+trend_bear = ma21 < ma55 and close < ma89
+is_bear = trend_bear and not is_bottom
 
 atr = ta.atr(14)
-is_squeeze = math.abs(ma03 - ma55) < (atr * 0.4)
+is_squeeze = math.abs(ma21 - ma55) < (atr * 0.4) and (not is_bull) and (not is_bear) and (not is_bottom)
 
-// A) Coloração de Velas
-c_vela = is_top ? color.new(color.blue, 0) :
-         is_bottom ? color.new(color.yellow, 0) :
+// A) Coloração de Velas (Mais estável)
+c_vela = is_bottom ? color.new(color.yellow, 0) :
+         is_top_correction ? color.new(color.blue, 0) :
          is_bull ? color.new(color.green, 0) :
          is_bear ? color.new(color.red, 0) :
          color.new(color.white, 0)
@@ -116,46 +132,45 @@ barcolor(color_candles ? c_vela : na, title="Cores das Velas")
 // B) Coloração de Fundo (Background)
 c_bg = is_bottom ? color.new(color.green, 90) :
        is_squeeze ? color.new(color.gray, 90) :
-       is_top ? color.new(color.red, 90) :
+       is_top_correction ? color.new(color.red, 90) :
        na
 
 bgcolor(show_bg ? c_bg : na, title="Cor de Fundo")
 
 // =========================================================================
-// 6. LÓGICA DE SINAIS ESTRUTURAIS (MENOS RUÍDO)
+// 6. LÓGICA DE SINAIS ESTRUTURAIS (13x21)
 // =========================================================================
-// Em vez de 3x13 (ruído extremo), usamos a relação entre MA13 e MA55.
-// Um cruzamento da MA13 (fim do curto prazo) com a MA55 (limite da tendência) é muito mais limpo.
-// Além disso, filtramos: o cruzamento de alta ganha força se o preço e as MAs curtas estiverem convergindo positivamente.
+// Cruzamento 13x21
+cross_up = ta.crossover(ma13, ma21)
+cross_dn = ta.crossunder(ma13, ma21)
 
-cross_up_13_55 = ta.crossover(ma13, ma55)
-cross_dn_13_55 = ta.crossunder(ma13, ma55)
+// Validação simples
+valid_cross_up = cross_up and close > ma13
+valid_cross_dn = cross_dn and close < ma13
 
-// Filtro Adicional: Sinais só ocorrem se houver alinhamento básico
-valid_cross_up = cross_up_13_55 and close > ma13
-valid_cross_dn = cross_dn_13_55 and close < ma13
-
-plotshape(show_signals and valid_cross_up, style=shape.triangleup, location=location.belowbar, color=color.new(color.green,0), size=size.small, title="Sinal Compra (13x55)")
-plotshape(show_signals and valid_cross_dn, style=shape.triangledown, location=location.abovebar, color=color.new(color.red,0), size=size.small, title="Sinal Venda (13x55)")
+plotshape(show_signals and valid_cross_up, style=shape.triangleup, location=location.belowbar, color=color.new(color.green,0), size=size.small, title="Sinal Compra (13x21)")
+plotshape(show_signals and valid_cross_dn, style=shape.triangledown, location=location.abovebar, color=color.new(color.red,0), size=size.small, title="Sinal Venda (13x21)")
 
 // =========================================================================
 // 7. TABELA INFORMATIVA (DASHBOARD)
 // =========================================================================
-var table info_table = table.new(position.top_right, 2, 4, bgcolor=color.new(color.black, 20), border_width=1)
+var table info_table = table.new(pos_table, 2, 4, bgcolor=color.new(color.black, 20), border_width=1)
 
 if barstate.islast and show_table
+    // Atualiza Posição dinamicamente no final se possível (Pine V6 Tables precisam ser init, então só atualizamos conteudo)
+
     // Linha 1: Cabeçalho
     table.cell(info_table, 0, 0, "Status Geral do Mercado", text_color=color.white, text_size=size.normal)
     table.cell(info_table, 1, 0, "Sinal", text_color=color.white, text_size=size.normal)
 
     // Linha 2: Fase e Cor da Vela
-    txt_fase = is_top ? "Zona de Topo (Exaustão)" : is_bottom ? "Zona de Fundo (Desconto)" : is_bull ? "Tendência de Alta" : is_bear ? "Tendência de Baixa" : "Neutro / Lateral"
+    txt_fase = is_top_correction ? "Correção/Exaustão" : is_bottom ? "Zona de Fundo (Desconto)" : is_bull ? "Tendência de Alta" : is_bear ? "Tendência de Baixa" : "Neutro / Lateral"
     table.cell(info_table, 0, 1, "Fase Atual:", text_color=color.white)
     table.cell(info_table, 1, 1, txt_fase, text_color=c_vela, bgcolor=color.new(c_vela, 80))
 
     // Linha 3: Background Explicado
-    txt_bg = is_bottom ? "Oportunidade de Compra" : is_squeeze ? "Compressão (Aguarde o Rompimento)" : is_top ? "Risco de Queda (Realize Lucros)" : "Seguir a Tendência"
-    c_txt_bg = is_bottom ? color.green : is_squeeze ? color.gray : is_top ? color.red : color.white
+    txt_bg = is_bottom ? "Oportunidade de Compra" : is_squeeze ? "Compressão (Aguarde o Rompimento)" : is_top_correction ? "Risco de Queda (Realize Lucros)" : "Seguir a Tendência"
+    c_txt_bg = is_bottom ? color.green : is_squeeze ? color.gray : is_top_correction ? color.red : color.white
     table.cell(info_table, 0, 2, "Ação Sugerida:", text_color=color.white)
     table.cell(info_table, 1, 2, txt_bg, text_color=c_txt_bg)
 
