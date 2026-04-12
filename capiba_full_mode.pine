@@ -1,5 +1,5 @@
 //@version=6
-indicator("Capiba Full Mode", shorttitle="Capiba Full Mode", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
+indicator("Capiba Full Mode", shorttitle="CapibaFull", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
 
 // --- Inputs ---
 grp_sett = "Settings"
@@ -322,9 +322,9 @@ if array.size(activeBearZones) > 0
         // Needs Sweep + High Volume + Close in Lower Third
         bool eliteSignal = isSweep and (volume > (volMA * absorbVolMult)) and isLowerThird
         if eliteSignal
-                searchingBearSniper := true
-                bearSniperTriggerLevel := lastBullFVG_bot
-                bearSniperStartIdx := bar_index
+            searchingBearSniper := true
+            bearSniperTriggerLevel := lastBullFVG_bot
+            bearSniperStartIdx := bar_index
 
         if mitigateMethod == "Close" and not mitigated and high > bBottom
             if eliteSignal
@@ -416,9 +416,9 @@ if array.size(activeBullZones) > 0
         // Needs Sweep + High Volume + Close in Upper Third
         bool eliteSignal = isSweep and (volume > (volMA * absorbVolMult)) and isUpperThird
         if eliteSignal
-                searchingBullSniper := true
-                bullSniperTriggerLevel := lastBearFVG_top
-                bullSniperStartIdx := bar_index
+            searchingBullSniper := true
+            bullSniperTriggerLevel := lastBearFVG_top
+            bullSniperStartIdx := bar_index
 
         if mitigateMethod == "Close" and not mitigated and low < bTop
             if eliteSignal
