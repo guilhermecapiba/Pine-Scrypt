@@ -51,8 +51,10 @@ cmeBtcC = request.security(symCMEBTC, timeframe.period, close, ignore_invalid_sy
 // SPX vs Asset RSI Divergence
 assetRsi = ta.rsi(close, 14)
 spxRsi = request.security(symSPX, timeframe.period, ta.rsi(close, 14), ignore_invalid_symbol=true)
-smDivergenceBear = (spxRsi > 70 and assetRsi < 70 and high >= ta.highest(high, 10))
-smDivergenceBull = (spxRsi < 30 and assetRsi > 30 and low <= ta.lowest(low, 10))
+high10 = ta.highest(high, 10)
+smDivergenceBear = (spxRsi > 70 and assetRsi < 70 and high >= high10)
+low10 = ta.lowest(low, 10)
+smDivergenceBull = (spxRsi < 30 and assetRsi > 30 and low <= low10)
 
 // Confluence logic
 rutBull = rutC > rutEma
@@ -365,6 +367,7 @@ if array.size(activeBearZones) > 0
                 box.set_border_width(z.b, 2)
 
 
+            boxLeft = box.get_left(z.b)
             // POC & Exhaustion tracking
             if isElephantBar and bar_index > boxLeft
                 if not z.isClimax
@@ -379,7 +382,6 @@ if array.size(activeBearZones) > 0
                 maxVol := volume
                 z.pocPrice := hl2
 
-            boxLeft = box.get_left(z.b)
             age = bar_index - boxLeft
             ageScore = math.min(age, 200) / 200.0 * 50
             tScore = math.min(z.touches * 10, 30)
@@ -459,6 +461,7 @@ if array.size(activeBullZones) > 0
                 box.set_border_width(z.b, 2)
 
 
+            boxLeft = box.get_left(z.b)
             // POC & Exhaustion tracking
             if isElephantBar and bar_index > boxLeft
                 if not z.isClimax
@@ -473,7 +476,6 @@ if array.size(activeBullZones) > 0
                 maxVol := volume
                 z.pocPrice := hl2
 
-            boxLeft = box.get_left(z.b)
             age = bar_index - boxLeft
             ageScore = math.min(age, 200) / 200.0 * 50
             tScore = math.min(z.touches * 10, 30)
