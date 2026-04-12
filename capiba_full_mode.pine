@@ -1,0 +1,488 @@
+//@version=6
+indicator("Capiba Full Mode", shorttitle="Capiba Full Mode", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
+
+// --- Inputs ---
+grp_sett = "Settings"
+grp_vis = "Visuals"
+grp_logic = "Order Flow Logic"
+
+lenLeft   = input.int(5, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
+lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
+atrLen    = input.int(20, "ATR Length", minval=1, group=grp_sett)
+atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
+
+colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
+colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
+colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
+showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_vis, tooltip="Visualizes the exact wick area that captured liquidity.")
+signalSize    = input.string("Small", "Signal Label Size", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_vis)
+
+// Entry Signals
+grp_sig = "Entry Signals"
+showSignals = input.bool(true, "Show Entry Signals", group=grp_sig)
+showSignalHistory = input.bool(true, "Keep Signal History", group=grp_sig, tooltip="If enabled, BUY/SELL signals will remain on the chart. If disabled, only the last signal/sweep is shown.")
+
+// Logic Inputs
+mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Zone breaks only on candle close. Wick: Zone breaks on any touch.")
+mergeThresh    = input.float(0.1, "Cluster Merge Threshold (%)", step=0.05, group=grp_logic, tooltip="If a new pivot is within X% of an active zone, merge it instead of creating a new one.")
+
+
+
+// --- Macro Intelligence Inputs ---
+grp_macro = "Macro Intelligence"
+useMacro      = input.bool(true, "Enable Macro Dashboard", group=grp_macro)
+symRUT        = input.symbol("TVC:RUT", "Russell 2000 Symbol", group=grp_macro)
+symIXIC       = input.symbol("NASDAQ:IXIC", "NASDAQ Symbol", group=grp_macro)
+symDXY        = input.symbol("TVC:DXY", "DXY Symbol", group=grp_macro)
+symSPX        = input.symbol("SP:SPX", "S&P 500 Symbol", group=grp_macro)
+symBRENT      = input.symbol("TVC:USOIL", "Oil Symbol", group=grp_macro)
+symCMEBTC     = input.symbol("CME:BTC1!", "CME BTC Futures Symbol", group=grp_macro)
+macroEmaLen   = input.int(20, "Macro Trend EMA Length", group=grp_macro)
+
+// --- Macro Data Fetching ---
+[rutC, rutEma] = request.security(symRUT, timeframe.period, [close, ta.ema(close, macroEmaLen)], ignore_invalid_symbol=true)
+[ixicC, ixicEma] = request.security(symIXIC, timeframe.period, [close, ta.ema(close, macroEmaLen)], ignore_invalid_symbol=true)
+[dxyC, dxyEma] = request.security(symDXY, timeframe.period, [close, ta.ema(close, macroEmaLen)], ignore_invalid_symbol=true)
+[spxC, spxEma] = request.security(symSPX, timeframe.period, [close, ta.ema(close, macroEmaLen)], ignore_invalid_symbol=true)
+brentC = request.security(symBRENT, timeframe.period, close, ignore_invalid_symbol=true)
+cmeBtcC = request.security(symCMEBTC, timeframe.period, close, ignore_invalid_symbol=true)
+
+// SPX vs Asset RSI Divergence
+assetRsi = ta.rsi(close, 14)
+spxRsi = request.security(symSPX, timeframe.period, ta.rsi(close, 14), ignore_invalid_symbol=true)
+smDivergenceBear = (spxRsi > 70 and assetRsi < 70 and high >= ta.highest(high, 10))
+smDivergenceBull = (spxRsi < 30 and assetRsi > 30 and low <= ta.lowest(low, 10))
+
+// Confluence logic
+rutBull = rutC > rutEma
+ixicBull = ixicC > ixicEma
+dxyStrong = dxyC > dxyEma
+
+// --- Macro Dashboard ---
+var table macroTb = table.new(position.top_right, 2, 6, bgcolor=color.new(color.black, 80), border_width=1)
+if barstate.islast and useMacro
+    table.cell(macroTb, 0, 0, "Macro Convergence", text_color=color.white, text_size=size.small)
+    table.cell(macroTb, 1, 0, "Status", text_color=color.white, text_size=size.small)
+
+    table.cell(macroTb, 0, 1, "RUT (Risk)", text_color=color.white, text_size=size.small)
+    table.cell(macroTb, 1, 1, rutBull ? "BULL" : "BEAR", text_color=rutBull ? color.green : color.red, text_size=size.small)
+
+    table.cell(macroTb, 0, 2, "IXIC (Tech)", text_color=color.white, text_size=size.small)
+    table.cell(macroTb, 1, 2, ixicBull ? "BULL" : "BEAR", text_color=ixicBull ? color.green : color.red, text_size=size.small)
+
+    table.cell(macroTb, 0, 3, "DXY (Dollar)", text_color=color.white, text_size=size.small)
+    table.cell(macroTb, 1, 3, dxyStrong ? "STRONG" : "WEAK", text_color=dxyStrong ? color.red : color.green, text_size=size.small)
+
+    table.cell(macroTb, 0, 4, "S&P Div", text_color=color.white, text_size=size.small)
+    divText = smDivergenceBear ? "BEAR DIV" : (smDivergenceBull ? "BULL DIV" : "NONE")
+    divCol = smDivergenceBear ? color.red : (smDivergenceBull ? color.green : color.gray)
+    table.cell(macroTb, 1, 4, divText, text_color=divCol, text_size=size.small)
+
+    verdict = (rutBull and not dxyStrong) ? "RISK ON" : ((not rutBull and dxyStrong) ? "RISK OFF" : "NEUTRAL")
+    vCol = verdict == "RISK ON" ? color.green : (verdict == "RISK OFF" ? color.red : color.yellow)
+    table.cell(macroTb, 0, 5, "Verdict", text_color=color.white, text_size=size.small)
+    table.cell(macroTb, 1, 5, verdict, text_color=vCol, text_size=size.small)
+
+// Check CME Gap
+var float lastCmeClose = na
+if dayofweek == dayofweek.friday and hour(time, "UTC") >= 21
+    lastCmeClose := cmeBtcC
+
+if dayofweek == dayofweek.monday and hour(time, "UTC") < 8 and not na(lastCmeClose)
+    if math.abs(close - lastCmeClose) / close > 0.005 // 0.5% gap
+        // Plot gap magnetic level
+        var line gapLine = na
+        line.delete(gapLine)
+        gapLine := line.new(bar_index - 5, lastCmeClose, bar_index + 10, lastCmeClose, color=color.new(color.orange, 0), style=line.style_dashed, width=2)
+        var label gapLbl = na
+        label.delete(gapLbl)
+        gapLbl := label.new(bar_index + 10, lastCmeClose, "CME Gap", style=label.style_label_left, color=color.orange, textcolor=color.white, size=size.small)
+
+// Helper for generic variables
+var label lastSweepLabel = na
+
+// Get Size for signals - we use constant size inputs via direct condition later for `plotshape`, but for labels we use strings mapping
+getSize(string s) =>
+    switch s
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Normal" => size.normal
+        "Large" => size.large
+        "Huge" => size.huge
+        => size.small
+
+string lblSize = getSize(signalSize)
+
+// Helper: Calculate Volume Score (0-50)
+volMA = ta.sma(volume, 50)
+relVol = volume / volMA
+volScore = math.min(relVol, 3.0) / 3.0 * 50
+
+// Custom Type for Liquidity Zone
+type LiquidityZone
+    box b
+    float score
+    int touches
+    bool isCleanLevel
+    float pocPrice // Rough estimate of point of control inside the box
+    bool isClimax
+
+// Arrays to track ACTIVE zones
+var array<LiquidityZone> activeBearZones = array.new<LiquidityZone>()
+var array<LiquidityZone> activeBullZones = array.new<LiquidityZone>()
+
+// --- Calculations ---
+ph = ta.pivothigh(high, lenLeft, lenRight)
+pl = ta.pivotlow(low, lenLeft, lenRight)
+atrVal = ta.atr(atrLen)
+zh = atrVal * atrMult
+
+// Garbage collection helper
+gcZones(array<LiquidityZone> zones) =>
+    if array.size(zones) > 400 // Keep within limits
+        removed = array.shift(zones)
+        box.delete(removed.b)
+
+
+// --- IFVG & Sniper Trigger Logic ---
+var bool searchingBullSniper = false
+var float bullSniperTriggerLevel = na
+var int bullSniperStartIdx = na
+
+var bool searchingBearSniper = false
+var float bearSniperTriggerLevel = na
+var int bearSniperStartIdx = na
+
+// Detect FVGs
+isBullFVG = low > high[2]
+bullFVG_top = low
+bullFVG_bot = high[2]
+
+isBearFVG = high < low[2]
+bearFVG_top = low[2]
+bearFVG_bot = high
+
+// Track last opposite FVG for Sniper
+var float lastBearFVG_top = na
+if isBearFVG
+    lastBearFVG_top := bearFVG_top
+
+var float lastBullFVG_bot = na
+if isBullFVG
+    lastBullFVG_bot := bullFVG_bot
+
+// IFVG Sniper Trigger
+if searchingBullSniper and not na(bullSniperTriggerLevel)
+    if close > bullSniperTriggerLevel
+        box.new(left=bullSniperStartIdx, top=close, right=bar_index, bottom=bullSniperTriggerLevel, border_color=color.blue, bgcolor=color.new(color.blue, 70))
+        label.new(bar_index, low, "SNIPER BUY", color=color.blue, style=label.style_label_up, textcolor=color.white, size=lblSize)
+        alert("Sniper BUY Triggered", alert.freq_once_per_bar_close)
+        searchingBullSniper := false // Reset
+    else if low < bullSniperTriggerLevel * 0.98 // Invalidated
+        searchingBullSniper := false
+
+if searchingBearSniper and not na(bearSniperTriggerLevel)
+    if close < bearSniperTriggerLevel
+        box.new(left=bearSniperStartIdx, top=bearSniperTriggerLevel, right=bar_index, bottom=close, border_color=color.fuchsia, bgcolor=color.new(color.fuchsia, 70))
+        label.new(bar_index, high, "SNIPER SELL", color=color.fuchsia, style=label.style_label_down, textcolor=color.white, size=lblSize)
+        alert("Sniper SELL Triggered", alert.freq_once_per_bar_close)
+        searchingBearSniper := false // Reset
+    else if high > bearSniperTriggerLevel * 1.02 // Invalidated
+        searchingBearSniper := false
+
+
+// --- Elephant Bars (Exhaustion) ---
+isElephantBar = math.abs(close - open) > (atrVal * 2.0)
+// Base Logic Structure
+if not na(ph)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = ph
+    z_height = zh[lenRight]
+    top = pivotPrice + z_height
+    bottom = pivotPrice
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBearZones) > 0
+        for i = 0 to array.size(activeBearZones) - 1
+            LiquidityZone z = array.get(activeBearZones, i)
+            eBottom = box.get_bottom(z.b)
+            eTop    = box.get_top(z.b)
+            distPct = math.abs(pivotPrice - eBottom) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(z.b, newTop)
+                box.set_bottom(z.b, newBottom)
+                z.score := math.min(z.score + (vScore * 0.5), 100)
+
+                // Clean Level Detection
+                if not z.isCleanLevel
+                    z.isCleanLevel := true
+                    box.set_border_color(z.b, color.new(color.fuchsia, 0)) // Neon Fuchsia for EQH
+                    box.set_border_width(z.b, 2)
+                    box.set_text(z.b, "EQH (Clean Level)")
+                    box.set_text_color(z.b, color.white)
+                    box.set_text_size(z.b, size.small)
+                    box.set_text_halign(z.b, text.align_right)
+                break
+
+    if not merged
+        isKillzone = (hour(time, "UTC") >= 0 and hour(time, "UTC") < 8) or dayofweek == dayofweek.saturday or dayofweek == dayofweek.sunday
+        color zoneCol = isKillzone ? color.new(color.red, 90) : colBear
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=isKillzone ? color.new(color.red, 50) : na, border_style=isKillzone ? line.style_dotted : line.style_solid, bgcolor=zoneCol)
+        if isKillzone
+            box.set_text(b, "KZ")
+            box.set_text_color(b, color.new(color.red, 50))
+            box.set_text_size(b, size.small)
+            box.set_text_halign(b, text.align_right)
+        array.push(activeBearZones, LiquidityZone.new(b, vScore, 0, false, na, false))
+        gcZones(activeBearZones)
+
+if not na(pl)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = pl
+    z_height = zh[lenRight]
+    top = pivotPrice
+    bottom = pivotPrice - z_height
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBullZones) > 0
+        for i = 0 to array.size(activeBullZones) - 1
+            LiquidityZone z = array.get(activeBullZones, i)
+            eTop    = box.get_top(z.b)
+            eBottom = box.get_bottom(z.b)
+            distPct = math.abs(pivotPrice - eTop) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(z.b, newTop)
+                box.set_bottom(z.b, newBottom)
+                z.score := math.min(z.score + (vScore * 0.5), 100)
+
+                // Clean Level Detection
+                if not z.isCleanLevel
+                    z.isCleanLevel := true
+                    box.set_border_color(z.b, color.new(color.aqua, 0)) // Neon Aqua for EQL
+                    box.set_border_width(z.b, 2)
+                    box.set_text(z.b, "EQL (Clean Level)")
+                    box.set_text_color(z.b, color.white)
+                    box.set_text_size(z.b, size.small)
+                    box.set_text_halign(z.b, text.align_right)
+                break
+
+    if not merged
+        isKillzone = (hour(time, "UTC") >= 0 and hour(time, "UTC") < 8) or dayofweek == dayofweek.saturday or dayofweek == dayofweek.sunday
+        color zoneCol = isKillzone ? color.new(color.green, 90) : colBull
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=isKillzone ? color.new(color.green, 50) : na, border_style=isKillzone ? line.style_dotted : line.style_solid, bgcolor=zoneCol)
+        if isKillzone
+            box.set_text(b, "KZ")
+            box.set_text_color(b, color.new(color.green, 50))
+            box.set_text_size(b, size.small)
+            box.set_text_halign(b, text.align_right)
+        array.push(activeBullZones, LiquidityZone.new(b, vScore, 0, false, na, false))
+        gcZones(activeBullZones)
+
+
+
+// --- Logic: Manage Zones (Extend, Mitigate, Absorb, Sweep, IFVG Triggers) ---
+
+absorbVolMult = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption.")
+
+// Check candle thirds for rejection validation (CISD)
+candleRange = high - low
+isUpperThird = close >= (high - (candleRange / 3.0))
+isLowerThird = close <= (low + (candleRange / 3.0))
+
+if array.size(activeBearZones) > 0
+    for i = array.size(activeBearZones) - 1 to 0
+        LiquidityZone z = array.get(activeBearZones, i)
+        bBottom = box.get_bottom(z.b)
+
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close > bBottom
+        else
+            mitigated := high > bBottom
+
+        bool isSweep = false
+        if not (close > bBottom) and (high > bBottom)
+            isSweep := true
+            if showSweepArea
+                box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50))
+
+        bool absorbed = false
+        // Validated Elite Signal (Absorption) for Bearish
+        // Needs Sweep + High Volume + Close in Lower Third
+        bool eliteSignal = isSweep and (volume > (volMA * absorbVolMult)) and isLowerThird
+        if eliteSignal
+                searchingBearSniper := true
+                bearSniperTriggerLevel := lastBullFVG_bot
+                bearSniperStartIdx := bar_index
+
+        if mitigateMethod == "Close" and not mitigated and high > bBottom
+            if eliteSignal
+                absorbed := true
+            z.touches += 1
+
+        if mitigated
+            if mitigateMethod == "Wick" and close < bBottom
+                if showSignals and eliteSignal
+                    color lblCol = color.red
+                    if showSignalHistory
+                        label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                    alert("Elite Bearish Entry Signal: Validated Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
+
+            box.set_bgcolor(z.b, colMitigated)
+            box.set_border_color(z.b, na)
+            array.remove(activeBearZones, i)
+        else
+            box.set_right(z.b, bar_index + 5)
+
+            if isSweep and mitigateMethod == "Close" and eliteSignal
+                if showSignals
+                    color lblCol = color.red
+                    if showSignalHistory
+                        label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                    alert("Elite Bearish Entry Signal: Validated Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
+
+            if absorbed
+                z.score := math.min(z.score + 10, 100)
+                box.set_border_color(z.b, colAbsorb)
+                box.set_border_style(z.b, line.style_solid)
+                box.set_border_width(z.b, 2)
+
+
+            // POC & Exhaustion tracking
+            if isElephantBar and bar_index > boxLeft
+                if not z.isClimax
+                    z.isClimax := true
+                    box.set_border_style(z.b, line.style_dashed)
+                    box.set_border_color(z.b, color.white)
+                    box.set_border_width(z.b, 2)
+
+            // Simple POC approximation (price level with highest volume inside box so far)
+            var float maxVol = 0.0
+            if bar_index > boxLeft and volume > maxVol
+                maxVol := volume
+                z.pocPrice := hl2
+
+            boxLeft = box.get_left(z.b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            tScore = math.min(z.touches * 10, 30)
+
+            totalScore = ageScore + z.score + tScore
+            transp = 80 - (totalScore / 130 * 50)
+            if not z.isCleanLevel // Don't override neon
+                box.set_bgcolor(z.b, color.new(color.red, transp))
+                if not absorbed and totalScore > 75
+                    box.set_border_color(z.b, color.red)
+                    box.set_border_style(z.b, line.style_solid)
+                    box.set_border_width(z.b, 1)
+
+
+if array.size(activeBullZones) > 0
+    for i = array.size(activeBullZones) - 1 to 0
+        LiquidityZone z = array.get(activeBullZones, i)
+        bTop = box.get_top(z.b)
+
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close < bTop
+        else
+            mitigated := low < bTop
+
+        bool isSweep = false
+        if not (close < bTop) and (low < bTop)
+            isSweep := true
+            if showSweepArea
+                box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+
+        bool absorbed = false
+        // Validated Elite Signal (Absorption) for Bullish
+        // Needs Sweep + High Volume + Close in Upper Third
+        bool eliteSignal = isSweep and (volume > (volMA * absorbVolMult)) and isUpperThird
+        if eliteSignal
+                searchingBullSniper := true
+                bullSniperTriggerLevel := lastBearFVG_top
+                bullSniperStartIdx := bar_index
+
+        if mitigateMethod == "Close" and not mitigated and low < bTop
+            if eliteSignal
+                absorbed := true
+            z.touches += 1
+
+        if mitigated
+            if mitigateMethod == "Wick" and close > bTop
+                if showSignals and eliteSignal
+                    color lblCol = color.green
+                    if showSignalHistory
+                        label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                    alert("Elite Bullish Entry Signal: Validated Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
+
+            box.set_bgcolor(z.b, colMitigated)
+            box.set_border_color(z.b, na)
+            array.remove(activeBullZones, i)
+        else
+            box.set_right(z.b, bar_index + 5)
+
+            if isSweep and mitigateMethod == "Close" and eliteSignal
+                if showSignals
+                    color lblCol = color.green
+                    if showSignalHistory
+                        label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                    alert("Elite Bullish Entry Signal: Validated Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
+
+            if absorbed
+                z.score := math.min(z.score + 10, 100)
+                box.set_border_color(z.b, colAbsorb)
+                box.set_border_style(z.b, line.style_solid)
+                box.set_border_width(z.b, 2)
+
+
+            // POC & Exhaustion tracking
+            if isElephantBar and bar_index > boxLeft
+                if not z.isClimax
+                    z.isClimax := true
+                    box.set_border_style(z.b, line.style_dashed)
+                    box.set_border_color(z.b, color.white)
+                    box.set_border_width(z.b, 2)
+
+            // Simple POC approximation (price level with highest volume inside box so far)
+            var float maxVol = 0.0
+            if bar_index > boxLeft and volume > maxVol
+                maxVol := volume
+                z.pocPrice := hl2
+
+            boxLeft = box.get_left(z.b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            tScore = math.min(z.touches * 10, 30)
+
+            totalScore = ageScore + z.score + tScore
+            transp = 80 - (totalScore / 130 * 50)
+            if not z.isCleanLevel
+                box.set_bgcolor(z.b, color.new(color.green, transp))
+                if not absorbed and totalScore > 75
+                    box.set_border_color(z.b, color.green)
+                    box.set_border_style(z.b, line.style_solid)
+                    box.set_border_width(z.b, 1)
