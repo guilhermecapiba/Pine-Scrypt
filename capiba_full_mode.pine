@@ -13,7 +13,6 @@ atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_s
 
 colBear      = input.color(color.new(color.red, 86), "Bearish Liquidity (Highs)", group=grp_vis)
 colBull      = input.color(color.new(color.green, 86), "Bullish Liquidity (Lows)", group=grp_vis)
-colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
 colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
 showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_vis, tooltip="Visualizes the exact wick area that captured liquidity.")
 signalSize    = input.string("Small", "Signal Label Size", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_vis)
@@ -177,8 +176,10 @@ if isBullFVG
 // IFVG Sniper Trigger
 if searchingBullSniper and not na(bullSniperTriggerLevel)
     if close > bullSniperTriggerLevel
-        box.new(left=bullSniperStartIdx, top=close, right=bar_index, bottom=bullSniperTriggerLevel, border_color=color.blue, bgcolor=color.new(color.blue, 70))
-        label.new(bar_index, low, "SNIPER BUY", color=color.blue, style=label.style_label_up, textcolor=color.white, size=lblSize)
+        array.push(auxBoxes, box.new(left=bullSniperStartIdx, top=close, right=bar_index, bottom=bullSniperTriggerLevel, border_color=color.blue, bgcolor=color.new(color.blue, 70)))
+)
+        array.push(auxLabels, label.new(bar_index, low, "SNIPER BUY", color=color.blue, style=label.style_label_up, textcolor=color.white, size=lblSize))
+)
         alert("Sniper BUY Triggered", alert.freq_once_per_bar_close)
         searchingBullSniper := false // Reset
     else if low < bullSniperTriggerLevel * 0.98 // Invalidated
@@ -186,8 +187,10 @@ if searchingBullSniper and not na(bullSniperTriggerLevel)
 
 if searchingBearSniper and not na(bearSniperTriggerLevel)
     if close < bearSniperTriggerLevel
-        box.new(left=bearSniperStartIdx, top=bearSniperTriggerLevel, right=bar_index, bottom=close, border_color=color.fuchsia, bgcolor=color.new(color.fuchsia, 70))
-        label.new(bar_index, high, "SNIPER SELL", color=color.fuchsia, style=label.style_label_down, textcolor=color.white, size=lblSize)
+        array.push(auxBoxes, box.new(left=bearSniperStartIdx, top=bearSniperTriggerLevel, right=bar_index, bottom=close, border_color=color.fuchsia, bgcolor=color.new(color.fuchsia, 70)))
+)
+        array.push(auxLabels, label.new(bar_index, high, "SNIPER SELL", color=color.fuchsia, style=label.style_label_down, textcolor=color.white, size=lblSize))
+)
         alert("Sniper SELL Triggered", alert.freq_once_per_bar_close)
         searchingBearSniper := false // Reset
     else if high > bearSniperTriggerLevel * 1.02 // Invalidated
@@ -293,6 +296,29 @@ if not na(pl)
 
 
 
+
+// --- Auxiliary Visual Tracking Arrays (Garbage Collection) ---
+var array<label> auxLabels = array.new<label>()
+var array<box> auxBoxes = array.new<box>()
+
+cleanOldVisuals() =>
+    if array.size(auxLabels) > 0
+        for i = array.size(auxLabels) - 1 to 0
+            lbl = array.get(auxLabels, i)
+            if bar_index - label.get_x(lbl) > 200
+                label.delete(lbl)
+                array.remove(auxLabels, i)
+
+    if array.size(auxBoxes) > 0
+        for i = array.size(auxBoxes) - 1 to 0
+            bx = array.get(auxBoxes, i)
+            if bar_index - box.get_left(bx) > 200
+                box.delete(bx)
+                array.remove(auxBoxes, i)
+
+// Run cleanup every bar
+cleanOldVisuals()
+
 // --- Logic: Manage Zones (Extend, Mitigate, Absorb, Sweep, IFVG Triggers) ---
 
 absorbVolMult = input.float(1.5, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption.")
@@ -323,7 +349,8 @@ if array.size(activeBearZones) > 0
         if not (close > bBottom) and (high > bBottom)
             isSweep := true
             if showSweepArea
-                box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50))
+                array.push(auxBoxes, box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50)))
+)
 
         bool absorbed = false
         // Validated Elite Signal (Absorption) for Bearish
@@ -344,23 +371,25 @@ if array.size(activeBearZones) > 0
                 if showSignals and eliteSignal
                     color lblCol = color.red
                     if showSignalHistory
-                        label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                        array.push(auxLabels, label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize))
+)
                     else
                         label.delete(lastSweepLabel)
                         lastSweepLabel := label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
                     alert("Elite Bearish Entry Signal: Validated Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
 
-            box.set_bgcolor(z.b, colMitigated)
-            box.set_border_color(z.b, na)
+            box.delete(z.b)
             array.remove(activeBearZones, i)
         else
-            box.set_right(z.b, bar_index + 5)
+            if barstate.islast or barstate.islastconfirmedhistory
+                box.set_right(z.b, bar_index + 5)
 
             if isSweep and mitigateMethod == "Close" and eliteSignal
                 if showSignals
                     color lblCol = color.red
                     if showSignalHistory
-                        label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                        array.push(auxLabels, label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize))
+)
                     else
                         label.delete(lastSweepLabel)
                         lastSweepLabel := label.new(bar_index, high, "SELL\n(Elite)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
@@ -393,12 +422,13 @@ if array.size(activeBearZones) > 0
 
             totalScore = ageScore + z.score + tScore
             transp = 80 - (totalScore / 130 * 50)
-            if not z.isCleanLevel // Don't override neon
-                box.set_bgcolor(z.b, color.new(color.red, transp))
-                if not absorbed and totalScore > 75
-                    box.set_border_color(z.b, color.red)
-                    box.set_border_style(z.b, line.style_solid)
-                    box.set_border_width(z.b, 1)
+            if barstate.islast or barstate.islastconfirmedhistory
+                if not z.isCleanLevel // Don't override neon
+                    box.set_bgcolor(z.b, color.new(color.red, transp))
+                    if not absorbed and totalScore > 75
+                        box.set_border_color(z.b, color.red)
+                        box.set_border_style(z.b, line.style_solid)
+                        box.set_border_width(z.b, 1)
 
 
 if array.size(activeBullZones) > 0
@@ -422,7 +452,8 @@ if array.size(activeBullZones) > 0
         if not (close < bTop) and (low < bTop)
             isSweep := true
             if showSweepArea
-                box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+                array.push(auxBoxes, box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50)))
+)
 
         bool absorbed = false
         // Validated Elite Signal (Absorption) for Bullish
@@ -443,23 +474,25 @@ if array.size(activeBullZones) > 0
                 if showSignals and eliteSignal
                     color lblCol = color.green
                     if showSignalHistory
-                        label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                        array.push(auxLabels, label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize))
+)
                     else
                         label.delete(lastSweepLabel)
                         lastSweepLabel := label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
                     alert("Elite Bullish Entry Signal: Validated Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
 
-            box.set_bgcolor(z.b, colMitigated)
-            box.set_border_color(z.b, na)
+            box.delete(z.b)
             array.remove(activeBullZones, i)
         else
-            box.set_right(z.b, bar_index + 5)
+            if barstate.islast or barstate.islastconfirmedhistory
+                box.set_right(z.b, bar_index + 5)
 
             if isSweep and mitigateMethod == "Close" and eliteSignal
                 if showSignals
                     color lblCol = color.green
                     if showSignalHistory
-                        label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                        array.push(auxLabels, label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize))
+)
                     else
                         label.delete(lastSweepLabel)
                         lastSweepLabel := label.new(bar_index, low, "BUY\n(Elite)", color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
@@ -492,9 +525,10 @@ if array.size(activeBullZones) > 0
 
             totalScore = ageScore + z.score + tScore
             transp = 80 - (totalScore / 130 * 50)
-            if not z.isCleanLevel
-                box.set_bgcolor(z.b, color.new(color.green, transp))
-                if not absorbed and totalScore > 75
-                    box.set_border_color(z.b, color.green)
-                    box.set_border_style(z.b, line.style_solid)
-                    box.set_border_width(z.b, 1)
+            if barstate.islast or barstate.islastconfirmedhistory
+                if not z.isCleanLevel
+                    box.set_bgcolor(z.b, color.new(color.green, transp))
+                    if not absorbed and totalScore > 75
+                        box.set_border_color(z.b, color.green)
+                        box.set_border_style(z.b, line.style_solid)
+                        box.set_border_width(z.b, 1)
