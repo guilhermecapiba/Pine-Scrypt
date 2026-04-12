@@ -1,5 +1,5 @@
 //@version=6
-indicator("Capiba Full Mode", shorttitle="CapibaFull", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
+indicator("Capiba Full Mode", shorttitle="CapibaFull", overlay=true, max_boxes_count=200, max_labels_count=200, max_lines_count=200)
 
 // --- Inputs ---
 grp_sett = "Settings"
@@ -11,8 +11,8 @@ lenRight  = input.int(5, "Pivot Lookback Right", minval=1, group=grp_sett, toolt
 atrLen    = input.int(20, "ATR Length", minval=1, group=grp_sett)
 atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
 
-colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
-colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colBear      = input.color(color.new(color.red, 86), "Bearish Liquidity (Highs)", group=grp_vis)
+colBull      = input.color(color.new(color.green, 86), "Bullish Liquidity (Lows)", group=grp_vis)
 colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
 colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
 showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_vis, tooltip="Visualizes the exact wick area that captured liquidity.")
@@ -142,7 +142,7 @@ zh = atrVal * atrMult
 
 // Garbage collection helper
 gcZones(array<LiquidityZone> zones) =>
-    if array.size(zones) > 400 // Keep within limits
+    if array.size(zones) > 200 // Keep within limits
         removed = array.shift(zones)
         box.delete(removed.b)
 
@@ -307,6 +307,12 @@ if array.size(activeBearZones) > 0
         LiquidityZone z = array.get(activeBearZones, i)
         bBottom = box.get_bottom(z.b)
 
+
+        boxLeft = box.get_left(z.b)
+        if bar_index - boxLeft > 200
+            box.delete(z.b)
+            array.remove(activeBearZones, i)
+            continue
         bool mitigated = false
         if mitigateMethod == "Close"
             mitigated := close > bBottom
@@ -367,7 +373,6 @@ if array.size(activeBearZones) > 0
                 box.set_border_width(z.b, 2)
 
 
-            boxLeft = box.get_left(z.b)
             // POC & Exhaustion tracking
             if isElephantBar and bar_index > boxLeft
                 if not z.isClimax
@@ -401,6 +406,12 @@ if array.size(activeBullZones) > 0
         LiquidityZone z = array.get(activeBullZones, i)
         bTop = box.get_top(z.b)
 
+
+        boxLeft = box.get_left(z.b)
+        if bar_index - boxLeft > 200
+            box.delete(z.b)
+            array.remove(activeBullZones, i)
+            continue
         bool mitigated = false
         if mitigateMethod == "Close"
             mitigated := close < bTop
@@ -461,7 +472,6 @@ if array.size(activeBullZones) > 0
                 box.set_border_width(z.b, 2)
 
 
-            boxLeft = box.get_left(z.b)
             // POC & Exhaustion tracking
             if isElephantBar and bar_index > boxLeft
                 if not z.isClimax
