@@ -338,7 +338,7 @@ displayStructureInternal() =>
             drawStructureInternal(p_ivot_high,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
 
     pivot p_ivot_low          = internalLow
-    extraCondition_low  := internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
+    extraCondition_low  = internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
     bearishColor    = internalBearColorInput
 
     if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition_low
