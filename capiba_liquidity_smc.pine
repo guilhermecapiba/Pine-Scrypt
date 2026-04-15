@@ -250,19 +250,17 @@ getCurrentStructureInternal(int size) =>
     pivotHigh               = startOfBearishLeg(currentLeg)
     if newPivot
         if pivotLow
-            pivot p_ivot    = internalLow
-            p_ivot.lastLevel    := p_ivot.currentLevel
-            p_ivot.currentLevel := low[size]
-            p_ivot.crossed      := false
-            p_ivot.barTime      := time[size]
-            p_ivot.barIndex     := bar_index[size]
+            internalLow.lastLevel    := internalLow.currentLevel
+            internalLow.currentLevel := low[size]
+            internalLow.crossed      := false
+            internalLow.barTime      := time[size]
+            internalLow.barIndex     := bar_index[size]
         else
-            pivot p_ivot = internalHigh
-            p_ivot.lastLevel    := p_ivot.currentLevel
-            p_ivot.currentLevel := high[size]
-            p_ivot.crossed      := false
-            p_ivot.barTime      := time[size]
-            p_ivot.barIndex     := bar_index[size]
+            internalHigh.lastLevel    := internalHigh.currentLevel
+            internalHigh.currentLevel := high[size]
+            internalHigh.crossed      := false
+            internalHigh.barTime      := time[size]
+            internalHigh.barIndex     := bar_index[size]
 
 getCurrentStructureSwing(int size) =>
     currentLeg              = legSwing(size)
@@ -271,31 +269,29 @@ getCurrentStructureSwing(int size) =>
     pivotHigh               = startOfBearishLeg(currentLeg)
     if newPivot
         if pivotLow
-            pivot p_ivot    = swingLow
-            p_ivot.lastLevel    := p_ivot.currentLevel
-            p_ivot.currentLevel := low[size]
-            p_ivot.crossed      := false
-            p_ivot.barTime      := time[size]
-            p_ivot.barIndex     := bar_index[size]
-            trailing.bottom         := p_ivot.currentLevel
-            trailing.barTime        := p_ivot.barTime
-            trailing.barIndex       := p_ivot.barIndex
-            trailing.lastBottomTime := p_ivot.barTime
+            swingLow.lastLevel    := swingLow.currentLevel
+            swingLow.currentLevel := low[size]
+            swingLow.crossed      := false
+            swingLow.barTime      := time[size]
+            swingLow.barIndex     := bar_index[size]
+            trailing.bottom         := swingLow.currentLevel
+            trailing.barTime        := swingLow.barTime
+            trailing.barIndex       := swingLow.barIndex
+            trailing.lastBottomTime := swingLow.barTime
             if showSwingsInput
-                drawLabel(time[size], p_ivot.currentLevel, p_ivot.currentLevel < p_ivot.lastLevel ? 'LL' : 'HL', swingBullishColor, label.style_label_up)
+                drawLabel(time[size], swingLow.currentLevel, swingLow.currentLevel < swingLow.lastLevel ? 'LL' : 'HL', swingBullishColor, label.style_label_up)
         else
-            pivot p_ivot = swingHigh
-            p_ivot.lastLevel    := p_ivot.currentLevel
-            p_ivot.currentLevel := high[size]
-            p_ivot.crossed      := false
-            p_ivot.barTime      := time[size]
-            p_ivot.barIndex     := bar_index[size]
-            trailing.top            := p_ivot.currentLevel
-            trailing.barTime        := p_ivot.barTime
-            trailing.barIndex       := p_ivot.barIndex
-            trailing.lastTopTime    := p_ivot.barTime
+            swingHigh.lastLevel    := swingHigh.currentLevel
+            swingHigh.currentLevel := high[size]
+            swingHigh.crossed      := false
+            swingHigh.barTime      := time[size]
+            swingHigh.barIndex     := bar_index[size]
+            trailing.top            := swingHigh.currentLevel
+            trailing.barTime        := swingHigh.barTime
+            trailing.barIndex       := swingHigh.barIndex
+            trailing.lastTopTime    := swingHigh.barTime
             if showSwingsInput
-                drawLabel(time[size], p_ivot.currentLevel, p_ivot.currentLevel > p_ivot.lastLevel ? 'HH' : 'LH', swingBearishColor, label.style_label_down)
+                drawLabel(time[size], swingHigh.currentLevel, swingHigh.currentLevel > swingHigh.lastLevel ? 'HH' : 'LH', swingBearishColor, label.style_label_down)
 
 
 
@@ -326,63 +322,62 @@ displayStructureInternal() =>
         bullishBar_int := high - math.max(close, open) > math.min(close, open - low)
         bearishBar_int := high - math.max(close, open) < math.min(close, open - low)
 
-    pivot p_ivot    = internalHigh
+    pivot p_ivot_high    = internalHigh
     trend t_rend    = internalTrend
     lineStyle       = line.style_dashed
     labelSize       = internalStructureSize
-    extraCondition  = internalHigh.currentLevel != swingHigh.currentLevel and bullishBar_int
+    extraCondition_high  = internalHigh.currentLevel != swingHigh.currentLevel and bullishBar_int
     bullishColor    = internalBullColorInput
 
-    if ta.crossover(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
+    if ta.crossover(close,p_ivot_high.currentLevel) and not p_ivot_high.crossed and extraCondition_high
         string tag = t_rend.bias == BEARISH ? CHOCH : BOS
-        p_ivot.crossed  := true
+        p_ivot_high.crossed  := true
         t_rend.bias     := BULLISH
         displayCondition = showInternalsInput and (showInternalBullInput == ALL or (showInternalBullInput == BOS and tag != CHOCH) or (showInternalBullInput == CHOCH and tag == CHOCH))
         if displayCondition
-            drawStructureInternal(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            drawStructureInternal(p_ivot_high,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
 
-    p_ivot          := internalLow
-    extraCondition  := internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
+    pivot p_ivot_low          = internalLow
+    extraCondition_low  := internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
     bearishColor    = internalBearColorInput
 
-    if ta.crossunder(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
+    if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition_low
         string tag = t_rend.bias == BULLISH ? CHOCH : BOS
-        p_ivot.crossed := true
+        p_ivot_low.crossed := true
         t_rend.bias := BEARISH
         displayCondition = showInternalsInput and (showInternalBearInput == ALL or (showInternalBearInput == BOS and tag != CHOCH) or (showInternalBearInput == CHOCH and tag == CHOCH))
         if displayCondition
-            drawStructureInternal(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            drawStructureInternal(p_ivot_low,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
 
 displayStructureSwing() =>
     var bullishBar_sw = true
     var bearishBar_sw = true
 
-    pivot p_ivot    = swingHigh
+    pivot p_ivot_high    = swingHigh
     trend t_rend    = swingTrend
     lineStyle       = line.style_solid
     labelSize       = swingStructureSize
     extraCondition  = true
     bullishColor    = swingBullColorInput
 
-    if ta.crossover(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
+    if ta.crossover(close,p_ivot_high.currentLevel) and not p_ivot_high.crossed and extraCondition
         string tag = t_rend.bias == BEARISH ? CHOCH : BOS
-        p_ivot.crossed  := true
+        p_ivot_high.crossed  := true
         t_rend.bias     := BULLISH
         displayCondition = showStructureInput and (showSwingBullInput == ALL or (showSwingBullInput == BOS and tag != CHOCH) or (showSwingBullInput == CHOCH and tag == CHOCH))
         if displayCondition
-            drawStructureSwing(p_ivot,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            drawStructureSwing(p_ivot_high,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
 
-    p_ivot          := swingLow
-    extraCondition  := true
+    pivot p_ivot_low          = swingLow
     bearishColor    = swingBearColorInput
 
-    if ta.crossunder(close,p_ivot.currentLevel) and not p_ivot.crossed and extraCondition
+    if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition
         string tag = t_rend.bias == BULLISH ? CHOCH : BOS
-        p_ivot.crossed := true
+        p_ivot_low.crossed := true
         t_rend.bias := BEARISH
         displayCondition = showStructureInput and (showSwingBearInput == ALL or (showSwingBearInput == BOS and tag != CHOCH) or (showSwingBearInput == CHOCH and tag == CHOCH))
         if displayCondition
-            drawStructureSwing(p_ivot,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            drawStructureSwing(p_ivot_low,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
 
 fairValueGapBox(leftTime,rightTime,topPrice,bottomPrice,boxColor) => box.new(chart.point.new(leftTime,na,topPrice),chart.point.new(rightTime + fairValueGapsExtendInput * (time-time[1]),na,bottomPrice), xloc=xloc.bar_time, border_color = boxColor, bgcolor = boxColor)
 
