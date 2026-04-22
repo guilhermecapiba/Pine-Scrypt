@@ -1,5 +1,5 @@
 //@version=5
-indicator("Capiba Liquidity + SMC V2.0", shorttitle="Capiba Liq + SMC V2", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
+indicator("Capiba Liquidity + SMC V2.0", shorttitle="CapSMCv2", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
 
 // --- Inputs ---
 grp_sett = "Settings"
@@ -147,7 +147,7 @@ var fairValueGapBearishColor = fairValueGapsBearColorInput
 var premiumZoneColor = premiumZoneColorInput
 var discountZoneColor = discountZoneColorInput
 
-varip int currentBarIndex = bar_index
+varip int currentBarIndex := bar_index
 varip int lastBarIndex = bar_index
 var initialTime = time
 
@@ -834,8 +834,8 @@ if showStructureInput or showHighLowSwingsInput
 if showFairValueGapsInput
     drawFairValueGaps()
 
-lastBarIndex = currentBarIndex
-currentBarIndex = bar_index
+lastBarIndex := currentBarIndex
+currentBarIndex := bar_index
 
 get_ma(type, src, len) =>
     float ma = na
