@@ -1,0 +1,102 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -656,9 +656,9 @@
+
+             box.set_bgcolor(b, colMitigated)
+             box.set_border_color(b, na)
+-            array.remove(activeBearBoxes, i)
+-            array.remove(activeBearScores, i)
+-            array.remove(activeBearTouches, i)
++            // V2: Remarcar como liquidez consumida (cinza) ao invés de deletar
++            // array.remove(activeBearBoxes, i)
++            // array.remove(activeBearScores, i)
++            // array.remove(activeBearTouches, i)
+         else
+             box.set_right(b, bar_index + 5)
+
+@@ -674,6 +674,10 @@
+                     if rsi20 > 70 and volume > (volMA * absorbVolMult)
+                         txt := "EXHAUSTION (SELL)"
+                         isSignal := true
++
++                    if fvgSweepConditionSell
++                        txt := "FVG + SWEEP (SELL)"
++                        isSignal := true
+
+                     color lblCol = color.red
+                     if txt == "SWEEP"
+@@ -681,6 +685,8 @@
+                     else if txt == "SELL" or txt == "EXHAUSTION (SELL)"
+                         lblCol := color.red
++                    else if txt == "FVG + SWEEP (SELL)"
++                        lblCol := colGolden
+
+                     if isSignal and showSignalHistory
+                         label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+@@ -737,6 +743,14 @@
+             if showSweepArea
+                 box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+
++        // FVG + Sweep Gatilho
++        bool fvgSweepConditionBuy = false
++        if isSweep and array.size(fairValueGaps) > 0
++            for f = 0 to array.size(fairValueGaps) - 1
++                fvg = array.get(fairValueGaps, f)
++                if fvg.bias == BULLISH and not fvg.mitigated and low <= fvg.top and low >= fvg.bottom
++                    fvgSweepConditionBuy := true
++
+         bool absorbed = false
+         if mitigateMethod == "Close" and not mitigated and low < bTop
+             if volume > (volMA * absorbVolMult)
+@@ -756,6 +770,10 @@
+                 if rsi20 < 30 and volume > (volMA * absorbVolMult)
+                     txt := "EXHAUSTION (BUY)"
+                     isSignal := true
++
++                if fvgSweepConditionBuy
++                    txt := "FVG + SWEEP (BUY)"
++                    isSignal := true
+
+                 color lblCol = color.green
+                 if txt == "SWEEP"
+@@ -763,6 +781,8 @@
+                 else if txt == "BUY" or txt == "EXHAUSTION (BUY)"
+                     lblCol := color.green
++                else if txt == "FVG + SWEEP (BUY)"
++                    lblCol := colGolden
+
+                 if isSignal and showSignalHistory
+                     label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+@@ -772,9 +792,9 @@
+
+             box.set_bgcolor(b, colMitigated)
+             box.set_border_color(b, na)
+-            array.remove(activeBullBoxes, i)
+-            array.remove(activeBullScores, i)
+-            array.remove(activeBullTouches, i)
++            // V2: Remarcar como liquidez consumida (cinza) ao invés de deletar
++            // array.remove(activeBullBoxes, i)
++            // array.remove(activeBullScores, i)
++            // array.remove(activeBullTouches, i)
+         else
+             box.set_right(b, bar_index + 5)
+
+@@ -790,6 +810,10 @@
+                     if rsi20 < 30 and volume > (volMA * absorbVolMult)
+                         txt := "EXHAUSTION (BUY)"
+                         isSignal := true
++
++                    if fvgSweepConditionBuy
++                        txt := "FVG + SWEEP (BUY)"
++                        isSignal := true
+
+                     color lblCol = color.green
+                     if txt == "SWEEP"
+@@ -797,6 +821,8 @@
+                     else if txt == "BUY" or txt == "EXHAUSTION (BUY)"
+                         lblCol := color.green
++                    else if txt == "FVG + SWEEP (BUY)"
++                        lblCol := colGolden
+
+                     if isSignal and showSignalHistory
+                         label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)

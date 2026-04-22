@@ -1,9 +1,5 @@
-## Passo 1: Corrigir Bugs Críticos em `capiba_v2.pine` e Implementar Faltas
-1.  **Bug do FVG Invalidation**: Corrigir a precedência em `invalidBull or invalidBear and not eachFairValueGap.mitigated` para `(invalidBull or invalidBear) and not eachFairValueGap.mitigated`.
-2.  **Bug do FVG Size Filter**: Alterar a lógica do FVG Size para comparar com a métrica da Elephant Bar ou volume/deslocamento relativo, ao invés de usar o gap vs ATR.
-3.  **Elephant Bar Defaults**: Ajustar `elephantMult` para um valor mais realista, como `1.0` ou `1.2`.
-4.  **Sniper OB Logic**: Implementar a lógica real em vez de stub (`bool isSniperOB = false`). Checar se o pivot varreu liquidez anterior E deixou FVG.
-5.  **FVG + Sweep**: Adicionar trigger de entrada.
-6.  **Strong/Weak Classifications**: Não usar o estado global `swingHigh`. Comparar o pivot com pivôs locais anteriores.
-7.  **SFP (Swing Failure Pattern)**: Marcar SFP quando há apenas um pavio que sweepa e volta.
-8.  **Gatilho de Mudança de Cor (Mapeamento de Invalidação)**: Mudar cor para cinza (mitigado).
+## Passo 1: Analisar as implementações feitas e as que faltam
+1.  **Gatilho de Mudança de Cor**: NÃO implementado. A lógica de buscar a primeira vela verde que supere a máxima da vermelha na EMA 20 não foi feita no código.
+2.  **Inversão de Lógica em Níveis Óbvios (Remarcação de Suporte Dourado)**: PARCIAL. Eu adicionei a cor dourada para fundos fortes (Sniper OB), mas a mecânica de remarcar níveis mitigados como novos suportes dourados ao invés de apagá-los não foi feita.
+3.  **Gatilho de Entrada "FVG + Sweep"**: NÃO implementado. A combinação de FVG macro + Sweep micro (varrer mínima interna) não foi implementada para disparar alertas.
+4.  **Resumo para o Usuário**: Escrever o resumo detalhado das features, explicando o que já tem e o que faltou, e planejar a implementação final do que faltou.

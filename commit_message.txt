@@ -1,8 +1,4 @@
-refactor: improve capiba v2 features and bug fixes
+refactor: finish missing capiba v2 requirements
 
-- Fix operator precedence in FVG mitigation logic causing all bull FVGs to mitigate
-- Fix FVG size filter to compare against candle body rather than useless gap
-- Lower default Elephant Bar to realistic 1.2 ATR
-- Fully implement "Sniper OB" by mapping Strong/Weak Highs/Lows and comparing to overlapping FVG pools
-- Ensure Single-wick (SFP) acts as a valid sweep instead of ignoring it
-- Fix uninitialized global Strong/Weak detection logic
+- Disable deletion of active liquidity pools when mitigated, changing their color to gray instead to act as persistent consumed liquidity
+- Introduce 'FVG + SWEEP' entry trigger, searching for liquidity sweeps that happen exactly inside an active macro FVG zone
