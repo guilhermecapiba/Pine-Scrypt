@@ -379,8 +379,9 @@ deleteFairValueGaps() =>
                 eachFairValueGap.topBox.delete()
                 eachFairValueGap.bottomBox.delete()
                 if not na(eachFairValueGap.midLine)
-                    eachFairValueGap.midLine.delete()
-                fairValueGaps.remove(index)
+                    line.delete(eachFairValueGap.midLine)
+                if array.size(fairValueGaps) > index
+                    array.remove(fairValueGaps, index)
 
 drawFairValueGaps() =>
     [lastClose, lastOpen, lastTime, currentHigh, currentLow, currentTime, last2High, last2Low] = request.security(syminfo.tickerid, fairValueGapsTimeframeInput, [close[1], open[1], time[1], high[0], low[0], time[0], high[2], low[2]],lookahead = barmerge.lookahead_on)
@@ -486,7 +487,11 @@ if not na(ph)
     lastHighPivot := ph
 
     // V2: Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
-    bool isSniperOB = isStrongHigh and array.size(fairValueGaps) > 0 and fairValueGaps.get(0).bias == BEARISH and fairValueGaps.get(0).top >= bottom
+    bool isSniperOB = false
+    if isStrongHigh and array.size(fairValueGaps) > 0
+        fvg = array.get(fairValueGaps, 0)
+        if fvg.bias == BEARISH and fvg.top >= bottom
+            isSniperOB := true
 
     // Check if in golden zone (0.382 to 0.618)
     swingDist = trailing.top - trailing.bottom
@@ -537,7 +542,11 @@ if not na(pl)
     lastLowPivot := pl
 
     // V2: Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
-    bool isSniperOB = isStrongLow and array.size(fairValueGaps) > 0 and fairValueGaps.get(0).bias == BULLISH and fairValueGaps.get(0).bottom <= top
+    bool isSniperOB = false
+    if isStrongLow and array.size(fairValueGaps) > 0
+        fvg = array.get(fairValueGaps, 0)
+        if fvg.bias == BULLISH and fvg.bottom <= top
+            isSniperOB := true
 
     swingDist = trailing.top - trailing.bottom
     goldenTop = trailing.bottom + (swingDist * 0.618)
