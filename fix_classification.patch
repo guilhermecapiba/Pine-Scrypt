@@ -1,0 +1,31 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -459,8 +459,10 @@
+ currentZoneHeight = zoneType == "ATR" ? atrVal : close * (pctSize / 100)
+
+ // V2 Box classification (Targets vs Base)
+-bool isStrongHigh = swingHigh.currentLevel > swingHigh.lastLevel
+-bool isStrongLow = swingLow.currentLevel < swingLow.lastLevel
++var float lastHighPivot = na
++var float lastLowPivot = na
++bool isStrongHigh = not na(lastHighPivot) and ph > lastHighPivot
++bool isStrongLow = not na(lastLowPivot) and pl < lastLowPivot
+
+ if not na(ph)
+     pivotIndex = bar_index[lenRight]
+@@ -469,6 +471,7 @@
+     top = pivotPrice + zh
+     bottom = pivotPrice
+     vScore = volScore[lenRight]
++    lastHighPivot := ph
+
+     // V2: Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
+     bool isSniperOB = isStrongHigh and array.size(fairValueGaps) > 0 and fairValueGaps.get(0).bias == BEARISH and fairValueGaps.get(0).top >= bottom
+@@ -514,6 +517,7 @@
+     top = pivotPrice
+     bottom = pivotPrice - zh
+     vScore = volScore[lenRight]
++    lastLowPivot := pl
+
+     // V2: Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
+     bool isSniperOB = isStrongLow and array.size(fairValueGaps) > 0 and fairValueGaps.get(0).bias == BULLISH and fairValueGaps.get(0).bottom <= top

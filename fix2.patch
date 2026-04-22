@@ -1,0 +1,20 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -382,10 +382,12 @@
+     newTimeframe = fairValueGapsTimeframeInput == "" ? true : timeframe.change(fairValueGapsTimeframeInput)
+     threshold = fairValueGapsThresholdInput ? ta.cum(math.abs(newTimeframe ? barDeltaPercent : 0)) / bar_index * 2 : 0
+
+-    // V2 Size Filter
+-    fvgSize = math.abs(last2High - currentLow)
+-    isLargeEnough = fvgSize > (atr14 * fvgSizeMult)
++    // V2 Size Filter: Compare the displacement of the candle that created the FVG to the ATR
++    // For Bullish: candle was lastTime. For Bearish: candle was lastTime.
++    bullishCandleBody = lastClose - lastOpen
++    bearishCandleBody = lastOpen - lastClose
+
+-    bullishFairValueGap = currentLow > last2High and lastClose > last2High and barDeltaPercent > threshold and newTimeframe and isLargeEnough
+-    bearishFairValueGap = currentHigh < last2Low and lastClose < last2Low and -barDeltaPercent > threshold and newTimeframe and isLargeEnough
++    bullishFairValueGap = currentLow > last2High and lastClose > last2High and barDeltaPercent > threshold and newTimeframe and (bullishCandleBody > (atr14 * fvgSizeMult))
++    bearishFairValueGap = currentHigh < last2Low and lastClose < last2Low and -barDeltaPercent > threshold and newTimeframe and (bearishCandleBody > (atr14 * fvgSizeMult))
+     if bullishFairValueGap
+         fairValueGaps.unshift(fairValueGap.new(currentLow,last2High,BULLISH,fairValueGapBox(lastTime,currentTime,currentLow,math.avg(currentLow,last2High),fairValueGapBullishColor),fairValueGapBox(lastTime,currentTime,math.avg(currentLow,last2High),last2High,fairValueGapBullishColor), false, na))

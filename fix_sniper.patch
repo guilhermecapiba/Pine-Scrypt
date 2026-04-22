@@ -1,0 +1,41 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -467,8 +467,8 @@
+     bottom = pivotPrice
+     vScore = volScore[lenRight]
+
+-    // Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
+-    bool isSniperOB = false // simplified
++    // V2: Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
++    bool isSniperOB = isStrongHigh and array.size(fairValueGaps) > 0 and fairValueGaps.get(0).bias == BEARISH and fairValueGaps.get(0).top >= bottom
+
+     // Check if in golden zone (0.382 to 0.618)
+     swingDist = trailing.top - trailing.bottom
+@@ -496,7 +496,7 @@
+                 break
+
+     if not merged
+-        borderColor = isStrongHigh ? colGolden : na
++        borderColor = isSniperOB ? colGolden : (isStrongHigh ? colGolden : na)
+         borderWidth = isStrongHigh ? 2 : 1
+         b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=borderColor, border_width=borderWidth, bgcolor=colBear)
+         if inGoldenZone
+@@ -515,6 +515,9 @@
+     bottom = pivotPrice - zh
+     vScore = volScore[lenRight]
+
++    // V2: Check sniper OB rule: Did pivot sweep previous liquidity and leave FVG?
++    bool isSniperOB = isStrongLow and array.size(fairValueGaps) > 0 and fairValueGaps.get(0).bias == BULLISH and fairValueGaps.get(0).bottom <= top
++
+     swingDist = trailing.top - trailing.bottom
+     goldenTop = trailing.bottom + (swingDist * 0.618)
+     goldenBot = trailing.bottom + (swingDist * 0.382)
+@@ -541,7 +544,7 @@
+                 break
+
+     if not merged
+-        borderColor = isStrongLow ? colGolden : na
++        borderColor = isSniperOB ? colGolden : (isStrongLow ? colGolden : na)
+         borderWidth = isStrongLow ? 2 : 1
+         b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=borderColor, border_width=borderWidth, bgcolor=colBull)
+         if inGoldenZone
