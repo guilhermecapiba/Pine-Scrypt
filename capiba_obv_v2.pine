@@ -86,5 +86,5 @@ plot(v_ma1, title="MA 1 (20)", color=color.new(color.yellow, 30), linewidth=2)
 plot(v_obv, title="OBV", color=obvColor, linewidth=2)
 
 // Divergence plots
-plotshape(bullDiv ? v_obv[pivot_len] : na, title="Bullish Divergence", style=shape.labelup,   location=location.absolute, color=color.green, size=size.tiny, offset=-pivot_len, text="DIV", textcolor=color.white)
-plotshape(bearDiv ? v_obv[pivot_len] : na, title="Bearish Divergence", style=shape.labeldown, location=location.absolute, color=color.red,   size=size.tiny, offset=-pivot_len, text="DIV", textcolor=color.white)
+plotshape(bullDiv, title="Bullish Divergence", style=shape.labelup, location=location.bottom, color=color.green, size=size.tiny, text="DIV ↑", textcolor=color.white)
+plotshape(bearDiv, title="Bearish Divergence", style=shape.labeldown, location=location.top, color=color.red, size=size.tiny, text="DIV ↓", textcolor=color.white)
