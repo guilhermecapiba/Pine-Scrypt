@@ -102,19 +102,13 @@ updateTrend(bool internal) =>
     // Check for Bullish Break (Price crosses above High Pivot)
     if ta.crossover(close, p_ivotHigh.currentLevel) and not p_ivotHigh.crossed
         p_ivotHigh.crossed := true
-        if t_rend.bias == BULLISH
-            t_rend.bosCount += 1
-        else
-            t_rend.bosCount := 0
+        t_rend.bosCount := t_rend.bias == BULLISH ? t_rend.bosCount + 1 : 1
         t_rend.bias        := BULLISH
 
     // Check for Bearish Break (Price crosses below Low Pivot)
     if ta.crossunder(close, p_ivotLow.currentLevel) and not p_ivotLow.crossed
         p_ivotLow.crossed := true
-        if t_rend.bias == BEARISH
-            t_rend.bosCount += 1
-        else
-            t_rend.bosCount := 0
+        t_rend.bosCount := t_rend.bias == BEARISH ? t_rend.bosCount + 1 : 1
         t_rend.bias       := BEARISH
 
 // Execution
@@ -146,8 +140,12 @@ minBody = atr14 * 0.3
 strongClose = math.abs(close - open) > minBody
 
 // Signals for Confluence Start
-bool validBullConfl = isBullConfluence and not isBullConfluence[1] and strongClose
-bool validBearConfl = isBearConfluence and not isBearConfluence[1] and strongClose
+bool bullConflStart = isBullConfluence and not isBullConfluence[1]
+bool bearConflStart = isBearConfluence and not isBearConfluence[1]
+
+// Momentum check can occur on the onset bar, or the bar immediately following
+bool validBullConfl = (bullConflStart and strongClose) or (isBullConfluence and isBullConfluence[1] and not isBullConfluence[2] and strongClose and not strongClose[1])
+bool validBearConfl = (bearConflStart and strongClose) or (isBearConfluence and isBearConfluence[1] and not isBearConfluence[2] and strongClose and not strongClose[1])
 
 plotshape(validBullConfl and swingTrend.bosCount >= 2, "Bullish Confluence Start (Strong)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.large)
 plotshape(validBullConfl and swingTrend.bosCount < 2, "Bullish Confluence Start (Normal)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.small)
@@ -170,10 +168,3 @@ plotshape(swingBearStart, "Swing Bearish Start", shape.triangledown, location.ab
 
 plotshape(internalBullStart, "Internal Bullish Start", shape.triangleup, location.belowbar, color.blue, 0, "INT BULL", color.white)
 plotshape(internalBearStart, "Internal Bearish Start", shape.triangledown, location.abovebar, color.yellow, 0, "INT BEAR", color.white)
-
-// Degradation Warnings
-bool bullDegradation = swingTrend.bias == BEARISH and internalTrend.bias == BULLISH
-bool bearDegradation = swingTrend.bias == BULLISH and internalTrend.bias == BEARISH
-
-plotshape(bullDegradation, "Bullish Degradation Warning", shape.circle, location.belowbar, color.yellow, 0, "", na, size=size.tiny)
-plotshape(bearDegradation, "Bearish Degradation Warning", shape.circle, location.abovebar, color.yellow, 0, "", na, size=size.tiny)
