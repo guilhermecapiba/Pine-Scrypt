@@ -15,6 +15,7 @@ len2 = input.int(200, title="Período MA 2", minval=1, group="Médias Móveis")
 
 // Divergence Settings
 pivot_len = input.int(5, title="Período de Pivot (Divergências)", minval=1, group="Divergências", tooltip="Período de verificação para encontrar topos e fundos reais.")
+minBarsApart = input.int(10, title="Barras mínimas entre pivots", minval=1, group="Divergências")
 
 // --- Calculation ---
 
@@ -37,46 +38,45 @@ calc_data() =>
 // --- Coloração Dinâmica do OBV ---
 color_bullish = #006400 // Dark Green
 color_bearish = #8B0000 // Dark Red
-color_divergent = color.orange
 
-obvColor = if (v_obv > v_ma1 and v_ma1 > v_ma2)
-    color_bullish
-else if (v_obv < v_ma1 and v_ma1 < v_ma2)
-    color_bearish
-else
-    color_divergent
+obvColor = v_obv >= v_ma1 ? color_bullish : color_bearish
 
 // --- Detecção Explícita de Divergências (Price vs OBV) ---
-// Global scope calculation for pivot points
-ph_valid = not na(ta.pivothigh(high, pivot_len, pivot_len))
-pl_valid = not na(ta.pivotlow(low, pivot_len, pivot_len))
+var float lastPH_price = na
+var float lastPH_obv   = na
+var int   lastPH_bar   = na
 
-var float prev_price_ph = na
-var float prev_obv_ph   = na
-var float prev_price_pl = na
-var float prev_obv_pl   = na
+var float lastPL_price = na
+var float lastPL_obv   = na
+var int   lastPL_bar   = na
 
-bullDiv = false
+ph = ta.pivothigh(high, pivot_len, pivot_len)
+pl = ta.pivotlow(low, pivot_len, pivot_len)
+
 bearDiv = false
+bullDiv = false
 
-if ph_valid
-    curr_price_ph = high[pivot_len]
-    curr_obv_ph   = v_obv[pivot_len]
-    if not na(prev_price_ph) and curr_price_ph > prev_price_ph and curr_obv_ph < prev_obv_ph
-        bearDiv := true
-    prev_price_ph := curr_price_ph
-    prev_obv_ph   := curr_obv_ph
+if not na(ph)
+    curr_bar = bar_index - pivot_len
+    // Só compara se o pivot anterior está pelo menos minBarsApart atrás
+    if not na(lastPH_bar) and (curr_bar - lastPH_bar) >= minBarsApart
+        if ph > lastPH_price and v_obv[pivot_len] < lastPH_obv
+            bearDiv := true
+    lastPH_price := ph
+    lastPH_obv   := v_obv[pivot_len]
+    lastPH_bar   := curr_bar
 
-if pl_valid
-    curr_price_pl = low[pivot_len]
-    curr_obv_pl   = v_obv[pivot_len]
-    if not na(prev_price_pl) and curr_price_pl < prev_price_pl and curr_obv_pl > prev_obv_pl
-        bullDiv := true
-    prev_price_pl := curr_price_pl
-    prev_obv_pl   := curr_obv_pl
+if not na(pl)
+    curr_bar = bar_index - pivot_len
+    if not na(lastPL_bar) and (curr_bar - lastPL_bar) >= minBarsApart
+        if pl < lastPL_price and v_obv[pivot_len] > lastPL_obv
+            bullDiv := true
+    lastPL_price := pl
+    lastPL_obv   := v_obv[pivot_len]
+    lastPL_bar   := curr_bar
 
 // --- Plotting ---
-// MA 2: White, Width 1, Dashed (Simulated with circles since dashed isn't an option for plot dynamic style if it were dynamic, but since it's fixed we can use style_circles or cross)
+// MA 2: White, Width 1, Dashed (Simulated with circles)
 plot(v_ma2, title="MA 2 (200)", color=color.white, linewidth=1, style=plot.style_circles)
 
 // MA 1: Light Yellow, Width 2
