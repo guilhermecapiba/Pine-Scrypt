@@ -12,6 +12,7 @@ internalLengthInput = input.int(10, "Internal Structure Length", group = grp_str
 // Colors
 colorBull = input.color(color.green, "Bullish Color", group = "Visuals")
 colorBear = input.color(color.red, "Bearish Color", group = "Visuals")
+volMultiplier = input.float(1.5, "Volume Spike Multiplier", group="Visuals")
 
 // Constants
 BULLISH_LEG = 1
@@ -48,6 +49,9 @@ var trend internalTrend = trend.new(0, 0)
 
 var int swingLegState = 0
 var int internalLegState = 0
+
+var bool hadBullishSweep = false
+var bool hadBearishSweep = false
 
 //---------------------------------------------------------------------------------------------------------------------}
 // HELPER FUNCTIONS
@@ -118,6 +122,17 @@ internalLegState := getCurrentStructure(internalLengthInput, true) // Calculate 
 updateTrend(false) // Update Swing Trend
 updateTrend(true)  // Update Internal Trend
 
+// Sweep Logic update
+if swingTrend.bias != swingTrend.bias[1]
+    hadBullishSweep := false
+    hadBearishSweep := false
+
+if low < internalLow.currentLevel and swingTrend.bias == BULLISH
+    hadBullishSweep := true
+
+if high > internalHigh.currentLevel and swingTrend.bias == BEARISH
+    hadBearishSweep := true
+
 //---------------------------------------------------------------------------------------------------------------------}
 // VISUALIZATION (COLORING & SIGNALS)
 //---------------------------------------------------------------------------------------------------------------------{
@@ -139,6 +154,10 @@ atr14 = ta.atr(14)
 minBody = atr14 * 0.3
 strongClose = math.abs(close - open) > minBody
 
+// Volume Filter
+volMA20 = ta.sma(volume, 20)
+highVolume = volume > volMA20 * volMultiplier
+
 // Signals for Confluence Start
 bool bullConflStart = isBullConfluence and not isBullConfluence[1]
 bool bearConflStart = isBearConfluence and not isBearConfluence[1]
@@ -147,11 +166,25 @@ bool bearConflStart = isBearConfluence and not isBearConfluence[1]
 bool validBullConfl = (bullConflStart and strongClose) or (isBullConfluence and isBullConfluence[1] and not isBullConfluence[2] and strongClose and not strongClose[1])
 bool validBearConfl = (bearConflStart and strongClose) or (isBearConfluence and isBearConfluence[1] and not isBearConfluence[2] and strongClose and not strongClose[1])
 
-plotshape(validBullConfl and swingTrend.bosCount >= 2, "Bullish Confluence Start (Strong)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.large)
-plotshape(validBullConfl and swingTrend.bosCount < 2, "Bullish Confluence Start (Normal)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.small)
+bool bullLvl3 = validBullConfl and swingTrend.bosCount >= 2 and hadBullishSweep and highVolume
+bool bullLvl2 = validBullConfl and swingTrend.bosCount >= 2 and not hadBullishSweep and highVolume
+bool bullLvl1 = validBullConfl and swingTrend.bosCount >= 2 and not highVolume
+bool bullLvl0 = validBullConfl and swingTrend.bosCount < 2
 
-plotshape(validBearConfl and swingTrend.bosCount >= 2, "Bearish Confluence Start (Strong)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.large)
-plotshape(validBearConfl and swingTrend.bosCount < 2, "Bearish Confluence Start (Normal)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.small)
+plotshape(bullLvl3, "Bullish Confluence Start (Lvl 3)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.large)
+plotshape(bullLvl2, "Bullish Confluence Start (Lvl 2)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.normal)
+plotshape(bullLvl1, "Bullish Confluence Start (Lvl 1)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.small)
+plotshape(bullLvl0, "Bullish Confluence Start (Normal)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.tiny)
+
+bool bearLvl3 = validBearConfl and swingTrend.bosCount >= 2 and hadBearishSweep and highVolume
+bool bearLvl2 = validBearConfl and swingTrend.bosCount >= 2 and not hadBearishSweep and highVolume
+bool bearLvl1 = validBearConfl and swingTrend.bosCount >= 2 and not highVolume
+bool bearLvl0 = validBearConfl and swingTrend.bosCount < 2
+
+plotshape(bearLvl3, "Bearish Confluence Start (Lvl 3)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.large)
+plotshape(bearLvl2, "Bearish Confluence Start (Lvl 2)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.normal)
+plotshape(bearLvl1, "Bearish Confluence Start (Lvl 1)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.small)
+plotshape(bearLvl0, "Bearish Confluence Start (Normal)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.tiny)
 
 // Individual Trend Signals
 int swingBias = swingTrend.bias
