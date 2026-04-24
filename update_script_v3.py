@@ -1,4 +1,5 @@
-//@version=6
+with open('capiba_trend_lite_v2.pine', 'w') as f:
+    f.write('''//@version=6
 indicator("Capiba Trend Lite v2", shorttitle="Trend Lite v2", overlay=true)
 
 //---------------------------------------------------------------------------------------------------------------------}
@@ -188,9 +189,9 @@ bool bullLvl1_sweep = validBullConfl and swingTrend.bosCount >= 2 and hadBullish
 bool bullLvl1_nosweep = validBullConfl and swingTrend.bosCount >= 2 and not hadBullishSweep and not highVolume
 bool bullLvl0 = validBullConfl and swingTrend.bosCount < 2
 
-plotshape(bullLvl3, "Bullish Confl (Vol+Sweep)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL\n(+Vol & Sweep)", color.white, size=size.large)
-plotshape(bullLvl2, "Bullish Confl (Vol)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL\n(+Vol)", color.white, size=size.normal)
-plotshape(bullLvl1_sweep, "Bullish Confl (Sweep)", shape.labelup, location.belowbar, color.blue, 0, "STRONG BULL\n(+Sweep)", color.white, size=size.small)
+plotshape(bullLvl3, "Bullish Confl (Vol+Sweep)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL\\n(+Vol & Sweep)", color.white, size=size.large)
+plotshape(bullLvl2, "Bullish Confl (Vol)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL\\n(+Vol)", color.white, size=size.normal)
+plotshape(bullLvl1_sweep, "Bullish Confl (Sweep)", shape.labelup, location.belowbar, color.blue, 0, "STRONG BULL\\n(+Sweep)", color.white, size=size.small)
 plotshape(bullLvl1_nosweep, "Bullish Confl (No Vol/Sweep)", shape.labelup, location.belowbar, colorBull, 0, "STRONG BULL", color.white, size=size.small)
 plotshape(bullLvl0, "Bullish Confl (Normal)", shape.labelup, location.belowbar, colorBull, 0, "BULL", color.white, size=size.tiny)
 
@@ -200,8 +201,10 @@ bool bearLvl1_sweep = validBearConfl and swingTrend.bosCount >= 2 and hadBearish
 bool bearLvl1_nosweep = validBearConfl and swingTrend.bosCount >= 2 and not hadBearishSweep and not highVolume
 bool bearLvl0 = validBearConfl and swingTrend.bosCount < 2
 
-plotshape(bearLvl3, "Bearish Confl (Vol+Sweep)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR\n(+Vol & Sweep)", color.white, size=size.large)
-plotshape(bearLvl2, "Bearish Confl (Vol)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR\n(+Vol)", color.white, size=size.normal)
-plotshape(bearLvl1_sweep, "Bearish Confl (Sweep)", shape.labeldown, location.abovebar, color.orange, 0, "STRONG BEAR\n(+Sweep)", color.white, size=size.small)
+plotshape(bearLvl3, "Bearish Confl (Vol+Sweep)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR\\n(+Vol & Sweep)", color.white, size=size.large)
+plotshape(bearLvl2, "Bearish Confl (Vol)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR\\n(+Vol)", color.white, size=size.normal)
+plotshape(bearLvl1_sweep, "Bearish Confl (Sweep)", shape.labeldown, location.abovebar, color.orange, 0, "STRONG BEAR\\n(+Sweep)", color.white, size=size.small)
 plotshape(bearLvl1_nosweep, "Bearish Confl (No Vol/Sweep)", shape.labeldown, location.abovebar, colorBear, 0, "STRONG BEAR", color.white, size=size.small)
 plotshape(bearLvl0, "Bearish Confl (Normal)", shape.labeldown, location.abovebar, colorBear, 0, "BEAR", color.white, size=size.tiny)
+
+''')
