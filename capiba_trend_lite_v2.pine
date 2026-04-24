@@ -108,14 +108,17 @@ updateTrend(bool internal) =>
     pivot p_ivotLow  = internal ? internalLow : swingLow
     trend t_rend     = internal ? internalTrend : swingTrend
 
+    float currHigh = p_ivotHigh.currentLevel
+    float currLow = p_ivotLow.currentLevel
+
     // Check for Bullish Break (Price crosses above High Pivot)
-    if ta.crossover(close, p_ivotHigh.currentLevel) and not p_ivotHigh.crossed
+    if ta.crossover(close, currHigh) and not p_ivotHigh.crossed
         p_ivotHigh.crossed := true
         t_rend.bosCount := t_rend.bias == BULLISH ? t_rend.bosCount + 1 : 1
         t_rend.bias        := BULLISH
 
     // Check for Bearish Break (Price crosses below Low Pivot)
-    if ta.crossunder(close, p_ivotLow.currentLevel) and not p_ivotLow.crossed
+    if ta.crossunder(close, currLow) and not p_ivotLow.crossed
         p_ivotLow.crossed := true
         t_rend.bosCount := t_rend.bias == BEARISH ? t_rend.bosCount + 1 : 1
         t_rend.bias       := BEARISH
