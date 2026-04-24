@@ -143,6 +143,7 @@ type sweepEvent
     bool hasDisplacement
     box areaBox
     string signalType
+    float entryClose
 
 var sweepEvent[] activeSweeps = array.new<sweepEvent>()
 
@@ -152,6 +153,12 @@ var pivot internalHigh = pivot.new(na,na,false)
 var pivot internalLow = pivot.new(na,na,false)
 var trend swingTrend = trend.new(0)
 var trend internalTrend = trend.new(0)
+
+// V3 IDM Tracking
+var float pendingIdmHighLevel = na
+var float pendingIdmLowLevel = na
+var label pendingIdmHighLabel = na
+var label pendingIdmLowLabel = na
 
 var array<fairValueGap> fairValueGaps = array.new<fairValueGap>()
 var array<float> parsedHighs = array.new<float>()
@@ -335,16 +342,23 @@ displayStructureInternal() =>
     if ta.crossover(close,p_ivot_high.currentLevel) and not p_ivot_high.crossed and extraCondition_high
         string tag = t_rend.bias == BEARISH ? CHOCH : BOS
 
-        // V3 Inducement (IDM) Logic
-        // If internal structure breaks high but swing is BEARISH, or if it's just a CHOCH before a BOS
-        if showIdm and tag == CHOCH and swingTrend.bias == BEARISH
-            tag := "IDM"
-
         p_ivot_high.crossed := true
         t_rend.bias := BULLISH
         displayCondition = showInternalsInput and (showInternalBullInput == ALL or (showInternalBullInput == BOS and tag != CHOCH) or (showInternalBullInput == CHOCH and tag == CHOCH))
         if displayCondition
-            drawStructureInternal(p_ivot_high,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+            // We temporarily store the label to potentially rename it to IDM later
+            var line l_ine_int = line.new(na,na,na,na,xloc = xloc.bar_time)
+            var label l_abel_int = label.new(na,na)
+            if modeInput == PRESENT
+                l_ine_int.delete()
+                l_abel_int.delete()
+            l_ine_int := line.new(chart.point.new(p_ivot_high.barTime,na,p_ivot_high.currentLevel), chart.point.new(time,na,p_ivot_high.currentLevel), xloc.bar_time, color=bullishColor, style=lineStyle)
+            l_abel_int := label.new(chart.point.new(na,math.round(0.5*(p_ivot_high.barIndex+bar_index)),p_ivot_high.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=bullishColor, style=label.style_label_down, size = labelSize)
+
+            // IDM tracking: if this was a CHOCH going against a BEARISH swing trend, this is a potential IDM
+            if tag == CHOCH and swingTrend.bias == BEARISH
+                pendingIdmHighLevel := p_ivot_high.currentLevel
+                pendingIdmHighLabel := l_abel_int
 
     pivot p_ivot_low = internalLow
     extraCondition_low = internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
@@ -353,15 +367,22 @@ displayStructureInternal() =>
     if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition_low
         string tag = t_rend.bias == BULLISH ? CHOCH : BOS
 
-        // V3 Inducement (IDM) Logic
-        if showIdm and tag == CHOCH and swingTrend.bias == BULLISH
-            tag := "IDM"
-
         p_ivot_low.crossed := true
         t_rend.bias := BEARISH
         displayCondition = showInternalsInput and (showInternalBearInput == ALL or (showInternalBearInput == BOS and tag != CHOCH) or (showInternalBearInput == CHOCH and tag == CHOCH))
         if displayCondition
-            drawStructureInternal(p_ivot_low,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+            var line l_ine_int_l = line.new(na,na,na,na,xloc = xloc.bar_time)
+            var label l_abel_int_l = label.new(na,na)
+            if modeInput == PRESENT
+                l_ine_int_l.delete()
+                l_abel_int_l.delete()
+            l_ine_int_l := line.new(chart.point.new(p_ivot_low.barTime,na,p_ivot_low.currentLevel), chart.point.new(time,na,p_ivot_low.currentLevel), xloc.bar_time, color=bearishColor, style=lineStyle)
+            l_abel_int_l := label.new(chart.point.new(na,math.round(0.5*(p_ivot_low.barIndex+bar_index)),p_ivot_low.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=bearishColor, style=label.style_label_up, size = labelSize)
+
+            // IDM tracking: if this was a CHOCH going against a BULLISH swing trend, this is a potential IDM
+            if tag == CHOCH and swingTrend.bias == BULLISH
+                pendingIdmLowLevel := p_ivot_low.currentLevel
+                pendingIdmLowLabel := l_abel_int_l
 
 displayStructureSwing() =>
     var bullishBar_sw = true
@@ -376,6 +397,13 @@ displayStructureSwing() =>
 
     if ta.crossover(close,p_ivot_high.currentLevel) and not p_ivot_high.crossed and extraCondition
         string tag = t_rend.bias == BEARISH ? CHOCH : BOS
+
+        // V3 IDM confirmation: If this swing BOS swept our pending IDM high, retroactively label the IDM
+        if showIdm and tag == BOS and not na(pendingIdmHighLevel) and not na(pendingIdmHighLabel)
+            label.set_text(pendingIdmHighLabel, "IDM")
+            pendingIdmHighLevel := na
+            pendingIdmHighLabel := na
+
         p_ivot_high.crossed := true
         t_rend.bias := BULLISH
         displayCondition = showStructureInput and (showSwingBullInput == ALL or (showSwingBullInput == BOS and tag != CHOCH) or (showSwingBullInput == CHOCH and tag == CHOCH))
@@ -387,6 +415,13 @@ displayStructureSwing() =>
 
     if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition
         string tag = t_rend.bias == BULLISH ? CHOCH : BOS
+
+        // V3 IDM confirmation: If this swing BOS swept our pending IDM low, retroactively label the IDM
+        if showIdm and tag == BOS and not na(pendingIdmLowLevel) and not na(pendingIdmLowLabel)
+            label.set_text(pendingIdmLowLabel, "IDM")
+            pendingIdmLowLevel := na
+            pendingIdmLowLabel := na
+
         p_ivot_low.crossed := true
         t_rend.bias := BEARISH
         displayCondition = showStructureInput and (showSwingBearInput == ALL or (showSwingBearInput == BOS and tag != CHOCH) or (showSwingBearInput == CHOCH and tag == CHOCH))
@@ -659,13 +694,13 @@ if reqDisplacement
     for i = array.size(activeSweeps) - 1 to 0
         se = array.get(activeSweeps, i)
         if bar_index > se.barIndex and not se.hasDisplacement
-            if se.bias == BEARISH and close < (open[bar_index - se.barIndex] - atr14 * dispAtrMult)
+            if se.bias == BEARISH and close < (se.entryClose - atr14 * dispAtrMult)
                 se.hasDisplacement := true
                 if showSignals and canSell
                     color lblCol = color.red
                     label.new(se.barIndex, se.priceLevel, "SELL (Disp)", color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
                 array.remove(activeSweeps, i)
-            else if se.bias == BULLISH and close > (open[bar_index - se.barIndex] + atr14 * dispAtrMult)
+            else if se.bias == BULLISH and close > (se.entryClose + atr14 * dispAtrMult)
                 se.hasDisplacement := true
                 if showSignals and canBuy
                     color lblCol = color.green
@@ -734,7 +769,7 @@ if array.size(activeBearBoxes) > 0
                         lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
                 else if isSignal and reqDisplacement
                     // Queue for displacement check
-                    array.push(activeSweeps, sweepEvent.new(bar_index, high, BEARISH, false, na, txt))
+                    array.push(activeSweeps, sweepEvent.new(bar_index, high, BEARISH, false, na, txt, close))
                     if showSignalHistory
                         label.new(bar_index, high, "SWEEP", color=color.yellow, style=label.style_label_down, textcolor=color.white, size=lblSize)
 
@@ -774,7 +809,7 @@ if array.size(activeBearBoxes) > 0
                             lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
                     else if isSignal and reqDisplacement
                         // Queue for displacement check
-                        array.push(activeSweeps, sweepEvent.new(bar_index, high, BEARISH, false, na, txt))
+                        array.push(activeSweeps, sweepEvent.new(bar_index, high, BEARISH, false, na, txt, close))
                         if showSignalHistory
                             label.new(bar_index, high, "SWEEP", color=color.yellow, style=label.style_label_down, textcolor=color.white, size=lblSize)
 
@@ -860,7 +895,7 @@ if array.size(activeBullBoxes) > 0
                         label.delete(lastSweepLabel)
                         lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
                 else if isSignal and reqDisplacement
-                    array.push(activeSweeps, sweepEvent.new(bar_index, low, BULLISH, false, na, txt))
+                    array.push(activeSweeps, sweepEvent.new(bar_index, low, BULLISH, false, na, txt, close))
                     if showSignalHistory
                         label.new(bar_index, low, "SWEEP", color=color.blue, style=label.style_label_up, textcolor=color.white, size=lblSize)
 
@@ -899,7 +934,7 @@ if array.size(activeBullBoxes) > 0
                             label.delete(lastSweepLabel)
                             lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
                     else if isSignal and reqDisplacement
-                        array.push(activeSweeps, sweepEvent.new(bar_index, low, BULLISH, false, na, txt))
+                        array.push(activeSweeps, sweepEvent.new(bar_index, low, BULLISH, false, na, txt, close))
                         if showSignalHistory
                             label.new(bar_index, low, "SWEEP", color=color.blue, style=label.style_label_up, textcolor=color.white, size=lblSize)
 
