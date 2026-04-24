@@ -691,7 +691,7 @@ bool canBuy = useTrendConfluence ? (swingTrend.bias == BULLISH and internalTrend
 bool canSell = useTrendConfluence ? (swingTrend.bias == BEARISH and internalTrend.bias == BEARISH) : true
 
 // V3 Displacement Tracking
-if reqDisplacement
+if reqDisplacement and array.size(activeSweeps) > 0
     for i = array.size(activeSweeps) - 1 to 0
         se = array.get(activeSweeps, i)
         if bar_index > se.barIndex and not se.hasDisplacement
