@@ -154,11 +154,14 @@ var pivot internalLow = pivot.new(na,na,false)
 var trend swingTrend = trend.new(0)
 var trend internalTrend = trend.new(0)
 
-// V3 IDM Tracking
-var float pendingIdmHighLevel = na
-var float pendingIdmLowLevel = na
-var label pendingIdmHighLabel = na
-var label pendingIdmLowLabel = na
+// V3 IDM Tracking (Using type to allow modification in functions)
+type idmTracker
+    float highLevel = na
+    float lowLevel = na
+    label highLabel = na
+    label lowLabel = na
+
+var idmTracker idm = idmTracker.new()
 
 var array<fairValueGap> fairValueGaps = array.new<fairValueGap>()
 var array<float> parsedHighs = array.new<float>()
@@ -222,9 +225,7 @@ rsi20 = ta.rsi(close, rsiLen)
 
 // V3 VWAP / POC
 vwap_d = ta.vwap(close)
-
-if showVWAP
-    plot(vwap_d, title="Daily VWAP (POC)", color=color.new(color.orange, 0), linewidth=2)
+plot(showVWAP ? vwap_d : na, title="Daily VWAP (POC)", color=color.new(color.orange, 0), linewidth=2)
 
 legInternal(int size) =>
     var leg_int = 0
@@ -357,8 +358,8 @@ displayStructureInternal() =>
 
             // IDM tracking: if this was a CHOCH going against a BEARISH swing trend, this is a potential IDM
             if tag == CHOCH and swingTrend.bias == BEARISH
-                pendingIdmHighLevel := p_ivot_high.currentLevel
-                pendingIdmHighLabel := l_abel_int
+                idm.highLevel := p_ivot_high.currentLevel
+                idm.highLabel := l_abel_int
 
     pivot p_ivot_low = internalLow
     extraCondition_low = internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
@@ -381,8 +382,8 @@ displayStructureInternal() =>
 
             // IDM tracking: if this was a CHOCH going against a BULLISH swing trend, this is a potential IDM
             if tag == CHOCH and swingTrend.bias == BULLISH
-                pendingIdmLowLevel := p_ivot_low.currentLevel
-                pendingIdmLowLabel := l_abel_int_l
+                idm.lowLevel := p_ivot_low.currentLevel
+                idm.lowLabel := l_abel_int_l
 
 displayStructureSwing() =>
     var bullishBar_sw = true
@@ -399,10 +400,10 @@ displayStructureSwing() =>
         string tag = t_rend.bias == BEARISH ? CHOCH : BOS
 
         // V3 IDM confirmation: If this swing BOS swept our pending IDM high, retroactively label the IDM
-        if showIdm and tag == BOS and not na(pendingIdmHighLevel) and not na(pendingIdmHighLabel)
-            label.set_text(pendingIdmHighLabel, "IDM")
-            pendingIdmHighLevel := na
-            pendingIdmHighLabel := na
+        if showIdm and tag == BOS and not na(idm.highLevel) and not na(idm.highLabel)
+            label.set_text(idm.highLabel, "IDM")
+            idm.highLevel := na
+            idm.highLabel := na
 
         p_ivot_high.crossed := true
         t_rend.bias := BULLISH
@@ -417,10 +418,10 @@ displayStructureSwing() =>
         string tag = t_rend.bias == BULLISH ? CHOCH : BOS
 
         // V3 IDM confirmation: If this swing BOS swept our pending IDM low, retroactively label the IDM
-        if showIdm and tag == BOS and not na(pendingIdmLowLevel) and not na(pendingIdmLowLabel)
-            label.set_text(pendingIdmLowLabel, "IDM")
-            pendingIdmLowLevel := na
-            pendingIdmLowLabel := na
+        if showIdm and tag == BOS and not na(idm.lowLevel) and not na(idm.lowLabel)
+            label.set_text(idm.lowLabel, "IDM")
+            idm.lowLevel := na
+            idm.lowLabel := na
 
         p_ivot_low.crossed := true
         t_rend.bias := BEARISH
