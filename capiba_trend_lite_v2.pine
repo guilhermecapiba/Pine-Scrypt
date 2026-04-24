@@ -132,11 +132,15 @@ updateTrend(true)  // Update Internal Trend
 
 // Safe History References for Types
 int currentSwingBias = swingTrend.bias
-int prevSwingBias = (swingTrend[1]).bias
-float prevIntLow1 = (internalLow[1]).currentLevel
-float prevIntLow2 = (internalLow[2]).currentLevel
-float prevIntHigh1 = (internalHigh[1]).currentLevel
-float prevIntHigh2 = (internalHigh[2]).currentLevel
+int prevSwingBias = currentSwingBias[1]
+
+float currentIntLowLevel = internalLow.currentLevel
+float prevIntLow1 = currentIntLowLevel[1]
+float prevIntLow2 = currentIntLowLevel[2]
+
+float currentIntHighLevel = internalHigh.currentLevel
+float prevIntHigh1 = currentIntHighLevel[1]
+float prevIntHigh2 = currentIntHighLevel[2]
 
 // Sweep Logic update (Inducement tracking)
 bool swingJustChanged = currentSwingBias != prevSwingBias
