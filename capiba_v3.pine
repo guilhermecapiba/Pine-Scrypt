@@ -595,28 +595,29 @@ if array.size(activeBearBoxes) > 0
     for i = array.size(activeBearBoxes) - 1 to 0
         b = array.get(activeBearBoxes, i)
         bBottom = box.get_bottom(b)
+        bTop = box.get_top(b)
 
         bool mitigated = false
         if mitigateMethod == "Close"
-            mitigated := close > bBottom
+            mitigated := close > bTop
         else
-            mitigated := high > bBottom
+            mitigated := high > bTop
 
         bool isSweep = false
         // V2: Wicks as Breaks for weak levels
-        if not isStrongHigh and high > bBottom
+        if not isStrongHigh and high > bTop
             mitigated := true
             // V2: SFP Check
-            if close < bBottom
+            if close < bTop
                 isSweep := true
 
-        if not (close > bBottom) and (high > bBottom)
+        if not (close > bTop) and (high > bTop)
             isSweep := true
             if showSweepArea
-                box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50))
+                box.new(bar_index, high, bar_index, bTop, border_color=na, bgcolor=color.new(color.red, 50))
 
         bool absorbed = false
-        if mitigateMethod == "Close" and not mitigated and high > bBottom
+        if mitigateMethod == "Close" and not mitigated and high > bTop
             if volume > (volMA * absorbVolMult)
                 absorbed := true
 
@@ -624,7 +625,7 @@ if array.size(activeBearBoxes) > 0
             array.set(activeBearTouches, i, tCount + 1)
 
         if mitigated
-            if mitigateMethod == "Wick" and close < bBottom
+            if mitigateMethod == "Wick" and close < bTop
                 string txt = "SWEEP"
                 bool isSignal = false
                 if showSignals and canSell
@@ -710,27 +711,28 @@ if array.size(activeBullBoxes) > 0
     for i = array.size(activeBullBoxes) - 1 to 0
         b = array.get(activeBullBoxes, i)
         bTop = box.get_top(b)
+        bBottom = box.get_bottom(b)
 
         bool mitigated = false
         if mitigateMethod == "Close"
-            mitigated := close < bTop
+            mitigated := close < bBottom
         else
-            mitigated := low < bTop
+            mitigated := low < bBottom
 
         bool isSweep = false
-        if not isStrongLow and low < bTop
+        if not isStrongLow and low < bBottom
             mitigated := true
             // V2: SFP Check
-            if close > bTop
+            if close > bBottom
                 isSweep := true
 
-        if not (close < bTop) and (low < bTop)
+        if not (close < bBottom) and (low < bBottom)
             isSweep := true
             if showSweepArea
-                box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+                box.new(bar_index, bBottom, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
 
         bool absorbed = false
-        if mitigateMethod == "Close" and not mitigated and low < bTop
+        if mitigateMethod == "Close" and not mitigated and low < bBottom
             if volume > (volMA * absorbVolMult)
                 absorbed := true
 
@@ -738,7 +740,7 @@ if array.size(activeBullBoxes) > 0
             array.set(activeBullTouches, i, tCount + 1)
 
         if mitigated
-            if mitigateMethod == "Wick" and close > bTop
+            if mitigateMethod == "Wick" and close > bBottom
 
                 string txt = "SWEEP"
                 bool isSignal = false
