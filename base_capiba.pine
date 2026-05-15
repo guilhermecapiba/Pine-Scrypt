@@ -1,0 +1,832 @@
+//@version=5
+indicator("Capiba Liquidity + SMC", shorttitle="Capiba Liq + SMC", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=500)
+
+// --- Inputs ---
+grp_sett = "Settings"
+grp_vis = "Visuals"
+grp_logic = "Order Flow Logic"
+
+lenLeft   = input.int(12, "Pivot Lookback Left", minval=1, group=grp_sett, tooltip="Number of bars to the left to check for a pivot.")
+lenRight  = input.int(12, "Pivot Lookback Right", minval=1, group=grp_sett, tooltip="Number of bars to the right to confirm a pivot.")
+zoneType  = input.string("ATR", "Zone Height Calculation", options=["ATR", "Percent"], group=grp_sett, tooltip="Method to determine the vertical size of the liquidity zone.")
+atrLen    = input.int(24, "ATR Length", minval=1, group=grp_sett)
+atrMult   = input.float(1.0, "ATR Multiplier", minval=0.1, step=0.1, group=grp_sett)
+pctSize   = input.float(0.5, "Zone % Size", minval=0.01, step=0.1, group=grp_sett, tooltip="Height as % of price (if Type is Percent).")
+
+colBear      = input.color(color.new(color.red, 80), "Bearish Liquidity (Highs)", group=grp_vis)
+colBull      = input.color(color.new(color.green, 80), "Bullish Liquidity (Lows)", group=grp_vis)
+colMitigated = input.color(color.new(color.gray, 90), "Mitigated Zone", group=grp_vis)
+colAbsorb    = input.color(color.new(color.orange, 0), "Absorption (Wick Only)", group=grp_vis)
+showSweepArea = input.bool(true, "Show Sweep Capture Area", group=grp_vis, tooltip="Visualizes the exact wick area that captured liquidity.")
+signalSize    = input.string("Small", "Signal Label Size", options=["Tiny", "Small", "Normal", "Large", "Huge"], group=grp_vis)
+
+// Entry Signals
+grp_sig = "Entry Signals"
+showSignals = input.bool(true, "Show Entry Signals", group=grp_sig)
+reqRejection = input.bool(true, "Require Candle Color Rejection", group=grp_sig, tooltip="For Bearish Sweep (Highs), requires Red candle. For Bullish Sweep (Lows), requires Green candle.")
+showSignalHistory = input.bool(true, "Keep Signal History", group=grp_sig, tooltip="If enabled, BUY/SELL signals will remain on the chart. If disabled, only the last signal/sweep is shown.")
+
+// v3/v4 Logic Inputs
+mitigateMethod = input.string("Close", "Mitigation Condition", options=["Close", "Wick"], group=grp_logic, tooltip="Close: Zone breaks only on candle close. Wick: Zone breaks on any touch.")
+mergeThresh    = input.float(0.5, "Cluster Merge Threshold (%)", step=0.05, group=grp_logic, tooltip="If a new pivot is within X% of an active zone, merge it instead of creating a new one.")
+absorbVolMult  = input.float(2.0, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption (wick rejection).")
+
+
+//---------------------------------------------------------------------------------------------------------------------}
+// SMC CONSTANTS & STRINGS & INPUTS
+//---------------------------------------------------------------------------------------------------------------------{
+BULLISH_LEG                     = 1
+BEARISH_LEG                     = 0
+
+BULLISH                         = +1
+BEARISH                         = -1
+
+SMC_GREEN                       = #089981
+SMC_RED                         = #F23645
+SMC_WHITE                       = #FFFFFF
+
+HISTORICAL                      = 'Historical'
+PRESENT                         = 'Present'
+
+COLORED                         = 'Colored'
+MONOCHROME                      = 'Monochrome'
+
+ALL                             = 'All'
+BOS                             = 'BOS'
+CHOCH                           = 'CHoCH'
+
+TINY                            = size.tiny
+SMALL                           = size.small
+NORMAL                          = size.normal
+
+ATR                             = 'Atr'
+RANGE                           = 'Cumulative Mean Range'
+
+CLOSE                           = 'Close'
+HIGHLOW                         = 'High/Low'
+
+SOLID                           = '⎯⎯⎯'
+DASHED                          = '----'
+DOTTED                          = '····'
+
+INTERNAL_GROUP                  = 'Real Time Internal Structure'
+SWING_GROUP                     = 'Real Time Swing Structure'
+GAPS_GROUP                      = 'Fair Value Gaps'
+ZONES_GROUP                     = 'Premium & Discount Zones'
+
+modeInput                       = HISTORICAL
+styleInput                      = COLORED
+
+// Real time internal Structure
+showInternalsInput              = input(        true,       'Show Internal Structure',  group = INTERNAL_GROUP)
+showInternalBullInput           = input.string( ALL,        'Bullish Structure',        group = INTERNAL_GROUP, inline = 'ibull', options = [ALL,BOS,CHOCH])
+internalBullColorInput          = input(        SMC_GREEN,  '',                         group = INTERNAL_GROUP, inline = 'ibull')
+showInternalBearInput           = input.string( ALL,        'Bearish Structure' ,       group = INTERNAL_GROUP, inline = 'ibear', options = [ALL,BOS,CHOCH])
+internalBearColorInput          = input(        SMC_RED,    '',                         group = INTERNAL_GROUP, inline = 'ibear')
+internalFilterConfluenceInput   = input(        false,      'Confluence Filter',        group = INTERNAL_GROUP)
+internalStructureSize           = input.string( NORMAL,     'Internal Label Size',      group = INTERNAL_GROUP, options = [TINY,SMALL,NORMAL])
+
+// Real Time Swing Structure
+showStructureInput              = input(        false,      'Show Swing Structure',     group = SWING_GROUP)
+showSwingBullInput              = input.string( ALL,        'Bullish Structure',        group = SWING_GROUP,    inline = 'bull',    options = [ALL,BOS,CHOCH])
+swingBullColorInput             = input(        SMC_GREEN,  '',                         group = SWING_GROUP,    inline = 'bull')
+showSwingBearInput              = input.string( ALL,        'Bearish Structure',        group = SWING_GROUP,    inline = 'bear',    options = [ALL,BOS,CHOCH])
+swingBearColorInput             = input(        SMC_RED,    '',                         group = SWING_GROUP,    inline = 'bear')
+swingStructureSize              = input.string( NORMAL,     'Swing Label Size',         group = SWING_GROUP,    options = [TINY,SMALL,NORMAL])
+showSwingsInput                 = input(        true,       'Show Swings Points',       group = SWING_GROUP,    inline = 'swings')
+swingsLengthInput               = input.int(    20,         '',                         group = SWING_GROUP,    minval = 10,        inline = 'swings')
+showHighLowSwingsInput          = input(        true,       'Show Strong/Weak High/Low',group = SWING_GROUP)
+
+// Fair Value Gaps
+showFairValueGapsInput          = input(        true,       'Fair Value Gaps',          group = GAPS_GROUP)
+fairValueGapsThresholdInput     = input(        true,       'Auto Threshold',           group = GAPS_GROUP)
+fairValueGapsTimeframeInput     = input.timeframe('',       'Timeframe',                group = GAPS_GROUP)
+fairValueGapsBullColorInput     = input.color(color.new(SMC_GREEN, 70), 'Bullish FVG' , group = GAPS_GROUP)
+fairValueGapsBearColorInput     = input.color(color.new(SMC_RED, 70), 'Bearish FVG' ,   group = GAPS_GROUP)
+fairValueGapsExtendInput        = input.int(    7,          'Extend FVG',               group = GAPS_GROUP,     minval = 0)
+
+// Premium & Discount Zones
+showPremiumDiscountZonesInput   = input(        true,       'Premium/Discount Zones',   group = ZONES_GROUP)
+premiumZoneColorInput           = input.color(  SMC_RED,    'Premium Zone',             group = ZONES_GROUP)
+equilibriumZoneColorInput       = input.color(  SMC_WHITE,  'Equilibrium Zone',         group = ZONES_GROUP)
+discountZoneColorInput          = input.color(  SMC_GREEN,  'Discount Zone',            group = ZONES_GROUP)
+
+// SMC TYPES AND STATE
+type trailingExtremes
+    float top
+    float bottom
+    int barTime
+    int barIndex
+    int lastTopTime
+    int lastBottomTime
+
+type fairValueGap
+    float top
+    float bottom
+    int bias
+    box topBox
+    box bottomBox
+
+type trend
+    int bias
+
+type pivot
+    float currentLevel
+    float lastLevel
+    bool crossed
+    int barTime     = time
+    int barIndex    = bar_index
+
+var pivot swingHigh                 = pivot.new(na,na,false)
+var pivot swingLow                  = pivot.new(na,na,false)
+var pivot internalHigh              = pivot.new(na,na,false)
+var pivot internalLow               = pivot.new(na,na,false)
+var trend swingTrend                = trend.new(0)
+var trend internalTrend             = trend.new(0)
+
+var array<fairValueGap> fairValueGaps = array.new<fairValueGap>()
+var array<float> parsedHighs        = array.new<float>()
+var array<float> parsedLows         = array.new<float>()
+var array<float> highs              = array.new<float>()
+var array<float> lows               = array.new<float>()
+var array<int> times                = array.new<int>()
+var trailingExtremes trailing       = trailingExtremes.new()
+
+var swingBullishColor               = swingBullColorInput
+var swingBearishColor               = swingBearColorInput
+var fairValueGapBullishColor        = fairValueGapsBullColorInput
+var fairValueGapBearishColor        = fairValueGapsBearColorInput
+var premiumZoneColor                = premiumZoneColorInput
+var discountZoneColor               = discountZoneColorInput
+
+varip int currentBarIndex           = bar_index
+varip int lastBarIndex              = bar_index
+var initialTime                     = time
+
+// High Volatility Bar check for structures
+atrMeasure                          = ta.atr(200)
+volatilityMeasure                   = atrMeasure
+highVolatilityBar                   = (high - low) >= (2 * volatilityMeasure)
+parsedHigh                          = highVolatilityBar ? low : high
+parsedLow                           = highVolatilityBar ? high : low
+
+parsedHighs.push(parsedHigh)
+parsedLows.push(parsedLow)
+highs.push(high)
+lows.push(low)
+times.push(time)
+
+
+// Variable to track the single last sweep label to avoid clutter
+var label lastSweepLabel = na
+
+// Map string size to internal size const
+getSize(s) =>
+    switch s
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Normal" => size.normal
+        "Large" => size.large
+        "Huge" => size.huge
+        => size.small
+
+lblSize = getSize(signalSize)
+
+// --- Arrays to track ACTIVE zones ---
+var box[] activeBearBoxes = array.new_box()
+var box[] activeBullBoxes = array.new_box()
+
+// Parallel arrays to track Volume Scores
+var float[] activeBearScores = array.new_float()
+var float[] activeBullScores = array.new_float()
+var int[]   activeBearTouches = array.new_int()
+var int[]   activeBullTouches = array.new_int()
+
+// Helper: Calculate Volume Score (0-50)
+volMA = ta.sma(volume, 50)
+relVol = volume / volMA
+volScore = math.min(relVol, 3.0) / 3.0 * 50
+
+
+
+//---------------------------------------------------------------------------------------------------------------------}
+// SMC FUNCTIONS
+//---------------------------------------------------------------------------------------------------------------------{
+legInternal(int size) =>
+    var leg_int     = 0
+    newLegHigh  = high[size] > ta.highest(size)
+    newLegLow   = low[size]  < ta.lowest(size)
+    if newLegHigh
+        leg_int := BEARISH_LEG
+    else if newLegLow
+        leg_int := BULLISH_LEG
+    leg_int
+
+legSwing(int size) =>
+    var leg_sw     = 0
+    newLegHigh  = high[size] > ta.highest(size)
+    newLegLow   = low[size]  < ta.lowest(size)
+    if newLegHigh
+        leg_sw := BEARISH_LEG
+    else if newLegLow
+        leg_sw := BULLISH_LEG
+    leg_sw
+
+startOfNewLeg(int leg)      => ta.change(leg) != 0
+startOfBearishLeg(int leg)  => ta.change(leg) == -1
+startOfBullishLeg(int leg)  => ta.change(leg) == +1
+
+drawLabel(int labelTime, float labelPrice, string tag, color labelColor, string labelStyle) =>
+    var label l_abel = na
+    if modeInput == PRESENT
+        l_abel.delete()
+    l_abel := label.new(chart.point.new(labelTime,na,labelPrice),tag,xloc.bar_time,color=color(na),textcolor=labelColor,style = labelStyle,size = size.small)
+
+
+getCurrentStructureInternal(int size) =>
+    currentLeg              = legInternal(size)
+    newPivot                = startOfNewLeg(currentLeg)
+    pivotLow                = startOfBullishLeg(currentLeg)
+    pivotHigh               = startOfBearishLeg(currentLeg)
+    if newPivot
+        if pivotLow
+            internalLow.lastLevel    := internalLow.currentLevel
+            internalLow.currentLevel := low[size]
+            internalLow.crossed      := false
+            internalLow.barTime      := time[size]
+            internalLow.barIndex     := bar_index[size]
+        else
+            internalHigh.lastLevel    := internalHigh.currentLevel
+            internalHigh.currentLevel := high[size]
+            internalHigh.crossed      := false
+            internalHigh.barTime      := time[size]
+            internalHigh.barIndex     := bar_index[size]
+
+getCurrentStructureSwing(int size) =>
+    currentLeg              = legSwing(size)
+    newPivot                = startOfNewLeg(currentLeg)
+    pivotLow                = startOfBullishLeg(currentLeg)
+    pivotHigh               = startOfBearishLeg(currentLeg)
+    if newPivot
+        if pivotLow
+            swingLow.lastLevel    := swingLow.currentLevel
+            swingLow.currentLevel := low[size]
+            swingLow.crossed      := false
+            swingLow.barTime      := time[size]
+            swingLow.barIndex     := bar_index[size]
+            trailing.bottom         := swingLow.currentLevel
+            trailing.barTime        := swingLow.barTime
+            trailing.barIndex       := swingLow.barIndex
+            trailing.lastBottomTime := swingLow.barTime
+            if showSwingsInput
+                drawLabel(time[size], swingLow.currentLevel, swingLow.currentLevel < swingLow.lastLevel ? 'LL' : 'HL', swingBullishColor, label.style_label_up)
+        else
+            swingHigh.lastLevel    := swingHigh.currentLevel
+            swingHigh.currentLevel := high[size]
+            swingHigh.crossed      := false
+            swingHigh.barTime      := time[size]
+            swingHigh.barIndex     := bar_index[size]
+            trailing.top            := swingHigh.currentLevel
+            trailing.barTime        := swingHigh.barTime
+            trailing.barIndex       := swingHigh.barIndex
+            trailing.lastTopTime    := swingHigh.barTime
+            if showSwingsInput
+                drawLabel(time[size], swingHigh.currentLevel, swingHigh.currentLevel > swingHigh.lastLevel ? 'HH' : 'LH', swingBearishColor, label.style_label_down)
+
+
+
+drawStructureInternal(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+    var line l_ine_int      = line.new(na,na,na,na,xloc = xloc.bar_time)
+    var label l_abel_int    = label.new(na,na)
+    if modeInput == PRESENT
+        l_ine_int.delete()
+        l_abel_int.delete()
+    l_ine_int   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
+    l_abel_int  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize)
+
+drawStructureSwing(pivot p_ivot, string tag, color structureColor, string lineStyle, string labelStyle, string labelSize) =>
+    var line l_ine_sw      = line.new(na,na,na,na,xloc = xloc.bar_time)
+    var label l_abel_sw    = label.new(na,na)
+    if modeInput == PRESENT
+        l_ine_sw.delete()
+        l_abel_sw.delete()
+    l_ine_sw   := line.new(chart.point.new(p_ivot.barTime,na,p_ivot.currentLevel), chart.point.new(time,na,p_ivot.currentLevel), xloc.bar_time, color=structureColor, style=lineStyle)
+    l_abel_sw  := label.new(chart.point.new(na,math.round(0.5*(p_ivot.barIndex+bar_index)),p_ivot.currentLevel), tag, xloc.bar_index, color=color(na), textcolor=structureColor, style=labelStyle, size = labelSize)
+
+
+
+displayStructureInternal() =>
+    var bullishBar_int = true
+    var bearishBar_int = true
+    if internalFilterConfluenceInput
+        bullishBar_int := high - math.max(close, open) > math.min(close, open - low)
+        bearishBar_int := high - math.max(close, open) < math.min(close, open - low)
+
+    pivot p_ivot_high    = internalHigh
+    trend t_rend    = internalTrend
+    lineStyle       = line.style_dashed
+    labelSize       = internalStructureSize
+    extraCondition_high  = internalHigh.currentLevel != swingHigh.currentLevel and bullishBar_int
+    bullishColor    = internalBullColorInput
+
+    if ta.crossover(close,p_ivot_high.currentLevel) and not p_ivot_high.crossed and extraCondition_high
+        string tag = t_rend.bias == BEARISH ? CHOCH : BOS
+        p_ivot_high.crossed  := true
+        t_rend.bias     := BULLISH
+        displayCondition = showInternalsInput and (showInternalBullInput == ALL or (showInternalBullInput == BOS and tag != CHOCH) or (showInternalBullInput == CHOCH and tag == CHOCH))
+        if displayCondition
+            drawStructureInternal(p_ivot_high,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+
+    pivot p_ivot_low          = internalLow
+    extraCondition_low  = internalLow.currentLevel != swingLow.currentLevel and bearishBar_int
+    bearishColor    = internalBearColorInput
+
+    if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition_low
+        string tag = t_rend.bias == BULLISH ? CHOCH : BOS
+        p_ivot_low.crossed := true
+        t_rend.bias := BEARISH
+        displayCondition = showInternalsInput and (showInternalBearInput == ALL or (showInternalBearInput == BOS and tag != CHOCH) or (showInternalBearInput == CHOCH and tag == CHOCH))
+        if displayCondition
+            drawStructureInternal(p_ivot_low,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+
+displayStructureSwing() =>
+    var bullishBar_sw = true
+    var bearishBar_sw = true
+
+    pivot p_ivot_high    = swingHigh
+    trend t_rend    = swingTrend
+    lineStyle       = line.style_solid
+    labelSize       = swingStructureSize
+    extraCondition  = true
+    bullishColor    = swingBullColorInput
+
+    if ta.crossover(close,p_ivot_high.currentLevel) and not p_ivot_high.crossed and extraCondition
+        string tag = t_rend.bias == BEARISH ? CHOCH : BOS
+        p_ivot_high.crossed  := true
+        t_rend.bias     := BULLISH
+        displayCondition = showStructureInput and (showSwingBullInput == ALL or (showSwingBullInput == BOS and tag != CHOCH) or (showSwingBullInput == CHOCH and tag == CHOCH))
+        if displayCondition
+            drawStructureSwing(p_ivot_high,tag,bullishColor,lineStyle,label.style_label_down,labelSize)
+
+    pivot p_ivot_low          = swingLow
+    bearishColor    = swingBearColorInput
+
+    if ta.crossunder(close,p_ivot_low.currentLevel) and not p_ivot_low.crossed and extraCondition
+        string tag = t_rend.bias == BULLISH ? CHOCH : BOS
+        p_ivot_low.crossed := true
+        t_rend.bias := BEARISH
+        displayCondition = showStructureInput and (showSwingBearInput == ALL or (showSwingBearInput == BOS and tag != CHOCH) or (showSwingBearInput == CHOCH and tag == CHOCH))
+        if displayCondition
+            drawStructureSwing(p_ivot_low,tag,bearishColor,lineStyle,label.style_label_up,labelSize)
+
+fairValueGapBox(leftTime,rightTime,topPrice,bottomPrice,boxColor) => box.new(chart.point.new(leftTime,na,topPrice),chart.point.new(rightTime + fairValueGapsExtendInput * (time-time[1]),na,bottomPrice), xloc=xloc.bar_time, border_color = boxColor, bgcolor = boxColor)
+
+deleteFairValueGaps() =>
+    for [index,eachFairValueGap] in fairValueGaps
+        if (low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH)
+            eachFairValueGap.topBox.delete()
+            eachFairValueGap.bottomBox.delete()
+            fairValueGaps.remove(index)
+
+drawFairValueGaps() =>
+    [lastClose, lastOpen, lastTime, currentHigh, currentLow, currentTime, last2High, last2Low] = request.security(syminfo.tickerid, fairValueGapsTimeframeInput, [close[1], open[1], time[1], high[0], low[0], time[0], high[2], low[2]],lookahead = barmerge.lookahead_on)
+    barDeltaPercent     = (lastClose - lastOpen) / (lastOpen * 100)
+    newTimeframe        = fairValueGapsTimeframeInput == "" ? true : timeframe.change(fairValueGapsTimeframeInput)
+    threshold           = fairValueGapsThresholdInput ? ta.cum(math.abs(newTimeframe ? barDeltaPercent : 0)) / bar_index * 2 : 0
+    bullishFairValueGap = currentLow > last2High and lastClose > last2High and barDeltaPercent > threshold and newTimeframe
+    bearishFairValueGap = currentHigh < last2Low and lastClose < last2Low and -barDeltaPercent > threshold and newTimeframe
+    if bullishFairValueGap
+        fairValueGaps.unshift(fairValueGap.new(currentLow,last2High,BULLISH,fairValueGapBox(lastTime,currentTime,currentLow,math.avg(currentLow,last2High),fairValueGapBullishColor),fairValueGapBox(lastTime,currentTime,math.avg(currentLow,last2High),last2High,fairValueGapBullishColor)))
+    if bearishFairValueGap
+        fairValueGaps.unshift(fairValueGap.new(currentHigh,last2Low,BEARISH,fairValueGapBox(lastTime,currentTime,currentHigh,math.avg(currentHigh,last2Low),fairValueGapBearishColor),fairValueGapBox(lastTime,currentTime,math.avg(currentHigh,last2Low),last2Low,fairValueGapBearishColor)))
+
+updateTrailingExtremes() =>
+    trailing.top            := math.max(high,trailing.top)
+    trailing.lastTopTime    := trailing.top == high ? time : trailing.lastTopTime
+    trailing.bottom         := math.min(low,trailing.bottom)
+    trailing.lastBottomTime := trailing.bottom == low ? time : trailing.lastBottomTime
+
+drawHighLowSwings() =>
+    var line topLine        = line.new(na, na, na, na, color = swingBearishColor, xloc = xloc.bar_time, width=2)
+    var line bottomLine     = line.new(na, na, na, na, color = swingBullishColor, xloc = xloc.bar_time, width=2)
+    var label topLabel      = label.new(na, na, color=color(na), textcolor = swingBearishColor, xloc = xloc.bar_time, style = label.style_label_down, size = size.tiny)
+    var label bottomLabel   = label.new(na, na, color=color(na), textcolor = swingBullishColor, xloc = xloc.bar_time, style = label.style_label_up, size = size.tiny)
+    rightTimeBar            = last_bar_time + 20 * (time - time[1])
+    topLine.set_first_point(    chart.point.new(trailing.lastTopTime, na, trailing.top))
+    topLine.set_second_point(   chart.point.new(rightTimeBar, na, trailing.top))
+    topLabel.set_point(         chart.point.new(rightTimeBar, na, trailing.top))
+    topLabel.set_text(          swingTrend.bias == BEARISH ? 'Strong High' : 'Weak High')
+    bottomLine.set_first_point( chart.point.new(trailing.lastBottomTime, na, trailing.bottom))
+    bottomLine.set_second_point(chart.point.new(rightTimeBar, na, trailing.bottom))
+    bottomLabel.set_point(      chart.point.new(rightTimeBar, na, trailing.bottom))
+    bottomLabel.set_text(       swingTrend.bias == BULLISH ? 'Strong Low' : 'Weak Low')
+
+drawZone(float labelLevel, int labelIndex, float top, float bottom, string tag, color zoneColor, string style) =>
+    var label l_abel    = label.new(na,na,text = tag, color=color(na),textcolor = zoneColor, style = style, size = size.small)
+    var box b_ox        = box.new(na,na,na,na,bgcolor = color.new(zoneColor,80),border_color = color(na), xloc = xloc.bar_time)
+    b_ox.set_top_left_point(    chart.point.new(trailing.barTime,na,top))
+    b_ox.set_bottom_right_point(chart.point.new(last_bar_time,na,bottom))
+    l_abel.set_point(           chart.point.new(na,labelIndex,labelLevel))
+
+drawPremiumDiscountZones() =>
+    drawZone(trailing.top, math.round(0.5*(trailing.barIndex + last_bar_index)), trailing.top, 0.95*trailing.top + 0.05*trailing.bottom, 'Premium', premiumZoneColor, label.style_label_down)
+    equilibriumLevel = math.avg(trailing.top, trailing.bottom)
+    drawZone(equilibriumLevel, last_bar_index, 0.525*trailing.top + 0.475*trailing.bottom, 0.525*trailing.bottom + 0.475*trailing.top, 'Equilibrium', equilibriumZoneColorInput, label.style_label_left)
+    drawZone(trailing.bottom, math.round(0.5*(trailing.barIndex + last_bar_index)), 0.95*trailing.bottom + 0.05*trailing.top, trailing.bottom, 'Discount', discountZoneColor, label.style_label_up)
+
+
+// --- Calculations ---
+ph = ta.pivothigh(high, lenLeft, lenRight)
+pl = ta.pivotlow(low, lenLeft, lenRight)
+
+atrVal = ta.atr(atrLen)
+currentZoneHeight = zoneType == "ATR" ? atrVal : close * (pctSize / 100)
+
+// --- Logic: Create Zones ---
+
+if not na(ph)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = ph
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+    top = pivotPrice + zh
+    bottom = pivotPrice
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBearBoxes) > 0
+        for i = 0 to array.size(activeBearBoxes) - 1
+            existingBox = array.get(activeBearBoxes, i)
+            eBottom = box.get_bottom(existingBox)
+            eTop    = box.get_top(existingBox)
+            distPct = math.abs(pivotPrice - eBottom) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(existingBox, newTop)
+                box.set_bottom(existingBox, newBottom)
+                currentScore = array.get(activeBearScores, i)
+                newScore = currentScore + (vScore * 0.5)
+                array.set(activeBearScores, i, math.min(newScore, 100))
+                break
+
+    if not merged
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBear)
+        array.push(activeBearBoxes, b)
+        array.push(activeBearScores, vScore)
+        array.push(activeBearTouches, 0)
+
+if not na(pl)
+    pivotIndex = bar_index[lenRight]
+    pivotPrice = pl
+    zh = currentZoneHeight[lenRight] * (zoneType == "ATR" ? atrMult : 1.0)
+    top = pivotPrice
+    bottom = pivotPrice - zh
+    vScore = volScore[lenRight]
+
+    bool merged = false
+    if array.size(activeBullBoxes) > 0
+        for i = 0 to array.size(activeBullBoxes) - 1
+            existingBox = array.get(activeBullBoxes, i)
+            eTop    = box.get_top(existingBox)
+            eBottom = box.get_bottom(existingBox)
+            distPct = math.abs(pivotPrice - eTop) / pivotPrice * 100
+
+            if distPct < mergeThresh
+                merged := true
+                newTop = math.max(top, eTop)
+                newBottom = math.min(bottom, eBottom)
+                box.set_top(existingBox, newTop)
+                box.set_bottom(existingBox, newBottom)
+                currentScore = array.get(activeBullScores, i)
+                newScore = currentScore + (vScore * 0.5)
+                array.set(activeBullScores, i, math.min(newScore, 100))
+                break
+
+    if not merged
+        b = box.new(left=pivotIndex, top=top, right=bar_index + 5, bottom=bottom, border_color=na, bgcolor=colBull)
+        array.push(activeBullBoxes, b)
+        array.push(activeBullScores, vScore)
+        array.push(activeBullTouches, 0)
+
+// --- Logic: Manage Zones (Extend, Mitigate, Absorb, Sweep) ---
+
+if array.size(activeBearBoxes) > 0
+    for i = array.size(activeBearBoxes) - 1 to 0
+        b = array.get(activeBearBoxes, i)
+        bBottom = box.get_bottom(b)
+
+        // Mitigation
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close > bBottom
+        else
+            mitigated := high > bBottom
+
+        // Sweep Logic (Single-Bar Reclaim)
+        // If High broke box (mitigated), but Close < Box (reclaimed) -> Pinbar/Sweep
+        bool isSweep = false
+        // Only detect sweep if mitigation just happened (or is happening)
+        // Logic: Mitigated (touched) AND NOT Closed Above
+        if not (close > bBottom) and (high > bBottom)
+            isSweep := true
+            // In Close Mode, this is naturally handled as "Absorbed" or active.
+            // BUT if mitigatedMethod="Wick", the zone breaks on touch.
+            // If Wick mode is used, we need to label the sweep before removal.
+            // If Close mode is used, the zone stays active (Absorbed).
+
+            // Sweep Area Visualization
+            if showSweepArea
+                box.new(bar_index, high, bar_index, bBottom, border_color=na, bgcolor=color.new(color.red, 50))
+
+        // Absorption Logic (Close Mode Only mostly)
+        bool absorbed = false
+        if mitigateMethod == "Close" and not mitigated and high > bBottom
+            if volume > (volMA * absorbVolMult)
+                absorbed := true
+
+            // Track Touches
+            tCount = array.get(activeBearTouches, i)
+            array.set(activeBearTouches, i, tCount + 1)
+
+        if mitigated
+            // If mitigated (broken), check for SFP Label before removal
+            // For Bear: Mitigated means Price > Bottom.
+            // Sweep means Price > Bottom (Touched) BUT Close < Bottom (Reclaimed).
+            // Wait, if Close < Bottom, mitigated is FALSE in Close Mode. So this block only runs if Close > Bottom.
+            // Thus, in Close Mode, a mitigated zone is a Breakout, not a Sweep.
+            // In Wick Mode, mitigated is TRUE if High > Bottom.
+            if mitigateMethod == "Wick" and close < bBottom
+                // Wick Mode Sweep!
+
+                string txt = "SWEEP"
+                bool isSignal = false
+                if showSignals
+                    if (reqRejection and close < open) or (not reqRejection)
+                        txt := "SELL"
+                        isSignal := true
+                        alert("Bearish Entry Signal: Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
+
+                color lblCol = color.red
+                if txt == "SWEEP"
+                    lblCol := color.yellow // Yellow for Bearish Sweep
+                else if txt == "SELL"
+                    lblCol := color.red
+
+                if isSignal and showSignalHistory
+                    // Permanent Signal Label
+                    label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                else
+                    // Transient Sweep Label
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBearBoxes, i)
+            array.remove(activeBearScores, i)
+            array.remove(activeBearTouches, i)
+        else
+            box.set_right(b, bar_index + 5)
+
+            // Sweep in Close Mode = Absorption/Rejection
+            if isSweep and mitigateMethod == "Close"
+                // It touched but didn't close above. Effectively a sweep.
+                // Label it if volume is high (strong rejection)
+                if volume > (volMA * absorbVolMult)
+
+                    string txt = "SWEEP"
+                    bool isSignal = false
+                    if showSignals
+                        if (reqRejection and close < open) or (not reqRejection)
+                            txt := "SELL"
+                            isSignal := true
+                            alert("Bearish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(high), alert.freq_once_per_bar_close)
+
+                    color lblCol = color.red
+                    if txt == "SWEEP"
+                        lblCol := color.yellow
+                    else if txt == "SELL"
+                        lblCol := color.red
+
+                    if isSignal and showSignalHistory
+                        label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, high, txt, color=lblCol, style=label.style_label_down, textcolor=color.white, size=lblSize)
+
+            if absorbed
+                currentScore = array.get(activeBearScores, i)
+                newScore = math.min(currentScore + 10, 100)
+                array.set(activeBearScores, i, newScore)
+                box.set_border_color(b, colAbsorb)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 2)
+
+            // Visuals
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBearScores, i)
+            tCount = array.get(activeBearTouches, i)
+            tScore = math.min(tCount * 10, 30) // Max 30 points from touches
+
+            totalScore = ageScore + vScore + tScore
+            transp = 80 - (totalScore / 130 * 50)
+            box.set_bgcolor(b, color.new(color.red, transp))
+            if not absorbed and totalScore > 75
+                box.set_border_color(b, color.red)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
+if array.size(activeBullBoxes) > 0
+    for i = array.size(activeBullBoxes) - 1 to 0
+        b = array.get(activeBullBoxes, i)
+        bTop = box.get_top(b)
+
+        bool mitigated = false
+        if mitigateMethod == "Close"
+            mitigated := close < bTop
+        else
+            mitigated := low < bTop
+
+        bool isSweep = false
+        // Touched (Low < Top) but Reclaimed (Close > Top)
+        if not (close < bTop) and (low < bTop)
+            isSweep := true
+
+            // Sweep Area Visualization
+            if showSweepArea
+                box.new(bar_index, bTop, bar_index, low, border_color=na, bgcolor=color.new(color.green, 50))
+
+        bool absorbed = false
+        if mitigateMethod == "Close" and not mitigated and low < bTop
+            if volume > (volMA * absorbVolMult)
+                absorbed := true
+
+            // Track Touches
+            tCount = array.get(activeBullTouches, i)
+            array.set(activeBullTouches, i, tCount + 1)
+
+        if mitigated
+            if mitigateMethod == "Wick" and close > bTop
+
+                string txt = "SWEEP"
+                bool isSignal = false
+                if showSignals
+                    if (reqRejection and close > open) or (not reqRejection)
+                        txt := "BUY"
+                        isSignal := true
+                        alert("Bullish Entry Signal: Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
+
+                color lblCol = color.green
+                if txt == "SWEEP"
+                    lblCol := color.blue // Blue for Bullish Sweep
+                else if txt == "BUY"
+                    lblCol := color.green
+
+                if isSignal and showSignalHistory
+                    label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                else
+                    label.delete(lastSweepLabel)
+                    lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+
+            box.set_bgcolor(b, colMitigated)
+            box.set_border_color(b, na)
+            array.remove(activeBullBoxes, i)
+            array.remove(activeBullScores, i)
+            array.remove(activeBullTouches, i)
+        else
+            box.set_right(b, bar_index + 5)
+
+            if isSweep and mitigateMethod == "Close"
+                if volume > (volMA * absorbVolMult)
+
+                    string txt = "SWEEP"
+                    bool isSignal = false
+                    if showSignals
+                        if (reqRejection and close > open) or (not reqRejection)
+                            txt := "BUY"
+                            isSignal := true
+                            alert("Bullish Entry Signal (Absorption): Liquidity Sweep at " + str.tostring(low), alert.freq_once_per_bar_close)
+
+                    color lblCol = color.green
+                    if txt == "SWEEP"
+                        lblCol := color.blue // Blue for Bullish Sweep
+                    else if txt == "BUY"
+                        lblCol := color.green
+
+                    if isSignal and showSignalHistory
+                        label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+                    else
+                        label.delete(lastSweepLabel)
+                        lastSweepLabel := label.new(bar_index, low, txt, color=lblCol, style=label.style_label_up, textcolor=color.white, size=lblSize)
+
+            if absorbed
+                currentScore = array.get(activeBullScores, i)
+                newScore = math.min(currentScore + 10, 100)
+                array.set(activeBullScores, i, newScore)
+                box.set_border_color(b, colAbsorb)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 2)
+
+            boxLeft = box.get_left(b)
+            age = bar_index - boxLeft
+            ageScore = math.min(age, 200) / 200.0 * 50
+            vScore = array.get(activeBullScores, i)
+            tCount = array.get(activeBullTouches, i)
+            tScore = math.min(tCount * 10, 30) // Max 30 points
+
+            totalScore = ageScore + vScore + tScore
+            transp = 80 - (totalScore / 130 * 50)
+            box.set_bgcolor(b, color.new(color.green, transp))
+            if not absorbed and totalScore > 75
+                box.set_border_color(b, color.green)
+                box.set_border_style(b, line.style_solid)
+                box.set_border_width(b, 1)
+
+//---------------------------------------------------------------------------------------------------------------------}
+// SMC EXECUTION BLOCK
+//---------------------------------------------------------------------------------------------------------------------{
+
+if showHighLowSwingsInput or showPremiumDiscountZonesInput
+    updateTrailingExtremes()
+    if showHighLowSwingsInput
+        drawHighLowSwings()
+    if showPremiumDiscountZonesInput
+        drawPremiumDiscountZones()
+
+if showFairValueGapsInput
+    deleteFairValueGaps()
+
+getCurrentStructureSwing(swingsLengthInput)
+getCurrentStructureInternal(5)
+
+if showInternalsInput
+    displayStructureInternal()
+
+if showStructureInput or showHighLowSwingsInput
+    displayStructureSwing()
+
+if showFairValueGapsInput
+    drawFairValueGaps()
+
+lastBarIndex    := currentBarIndex
+currentBarIndex := bar_index
+
+// ==========================================
+// FUNÇÃO PARA CALCULAR O TIPO DE MÉDIA MÓVEL
+// ==========================================
+get_ma(type, src, len) =>
+    float ma = na
+    if type == "SMA"
+        ma := ta.sma(src, len)
+    else if type == "EMA"
+        ma := ta.ema(src, len)
+    else if type == "WMA"
+        ma := ta.wma(src, len)
+    else if type == "VWMA"
+        ma := ta.vwma(src, len)
+    else if type == "HMA"
+        ma := ta.hma(src, len)
+    else if type == "RMA"
+        ma := ta.rma(src, len)
+    ma
+
+// ==========================================
+// GRUPOS E INPUTS DE CADA MÉDIA MÓVEL
+// ==========================================
+
+// --- MA 1 ---
+grp1 = "Média Móvel 1"
+show1 = input.bool(true, title="Exibir", group=grp1, inline="ma1_1")
+type1 = input.string("EMA", title="Tipo", options=["SMA", "EMA", "WMA", "VWMA", "HMA", "RMA"], group=grp1, inline="ma1_1")
+len1  = input.int(10, title="Período", minval=1, group=grp1, inline="ma1_1")
+tf1   = input.timeframe("", title="Timeframe", group=grp1, inline="ma1_2")
+src1  = input.source(close, title="Fonte", group=grp1, inline="ma1_2")
+ma1_calc = get_ma(type1, src1, len1)
+ma1 = request.security(syminfo.tickerid, tf1 == "" ? timeframe.period : tf1, ma1_calc)
+plot(show1 ? ma1 : na, color=ma1 > ma1[1] ? color.green : color.red, linewidth=1, title="MA 1")
+
+// --- MA 2 ---
+grp2 = "Média Móvel 2"
+show2 = input.bool(true, title="Exibir", group=grp2, inline="ma2_1")
+type2 = input.string("EMA", title="Tipo", options=["SMA", "EMA", "WMA", "VWMA", "HMA", "RMA"], group=grp2, inline="ma2_1")
+len2  = input.int(20, title="Período", minval=1, group=grp2, inline="ma2_1")
+tf2   = input.timeframe("", title="Timeframe", group=grp2, inline="ma2_2")
+src2  = input.source(close, title="Fonte", group=grp2, inline="ma2_2")
+ma2_calc = get_ma(type2, src2, len2)
+ma2 = request.security(syminfo.tickerid, tf2 == "" ? timeframe.period : tf2, ma2_calc)
+plot(show2 ? ma2 : na, color=ma2 > ma2[1] ? color.green : color.red, linewidth=1, title="MA 2")
+
+// --- MA 3 ---
+grp3 = "Média Móvel 3"
+show3 = input.bool(true, title="Exibir", group=grp3, inline="ma3_1")
+type3 = input.string("EMA", title="Tipo", options=["SMA", "EMA", "WMA", "VWMA", "HMA", "RMA"], group=grp3, inline="ma3_1")
+len3  = input.int(30, title="Período", minval=1, group=grp3, inline="ma3_1")
+tf3   = input.timeframe("", title="Timeframe", group=grp3, inline="ma3_2")
+src3  = input.source(close, title="Fonte", group=grp3, inline="ma3_2")
+ma3_calc = get_ma(type3, src3, len3)
+ma3 = request.security(syminfo.tickerid, tf3 == "" ? timeframe.period : tf3, ma3_calc)
+plot(show3 ? ma3 : na, color=ma3 > ma3[1] ? color.green : color.red, linewidth=1, title="MA 3")

@@ -1,0 +1,23 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -62,8 +62,8 @@
+ absorbVolMult  = input.float(2.0, "Absorption Volume Multiplier", step=0.1, group=grp_logic, tooltip="Volume multiplier required to confirm absorption (wick rejection).")
+
+ // V2 Inputs
+-elephantMult = input.float(2.0, "Elephant Bar ATR Mult", group=grp_v2)
+-fvgSizeMult = input.float(1.0, "FVG Min Size (ATR Mult)", group=grp_v2)
++elephantMult = input.float(1.2, "Elephant Bar ATR Mult", group=grp_v2)
++fvgSizeMult = input.float(0.5, "FVG Min Size (ATR Mult)", group=grp_v2)
+ rsiLen = input.int(20, "RSI Length for Exhaustion", group=grp_v2)
+ useTrendConfluence = input.bool(true, "Trend Confluence Filter (Capiba Mode)", group=grp_v2)
+ ema20Len = input.int(20, "EMA 20 Length", group=grp_v2)
+@@ -357,8 +357,8 @@
+         bool invalidBull = eachFairValueGap.bias == BULLISH and close < midPrice
+         bool invalidBear = eachFairValueGap.bias == BEARISH and close > midPrice
+
+         if (low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH) or invalidBull or invalidBear
+-            if invalidBull or invalidBear and not eachFairValueGap.mitigated
++            if (invalidBull or invalidBear) and not eachFairValueGap.mitigated
+                 // Mitigate FVG
+                 eachFairValueGap.topBox.set_bgcolor(color.new(color.gray, 80))
+                 eachFairValueGap.bottomBox.set_bgcolor(color.new(color.gray, 80))

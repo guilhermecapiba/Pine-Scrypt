@@ -1,0 +1,15 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -432,6 +432,12 @@
+     drawZone(equilibriumLevel, last_bar_index, 0.525*trailing.top + 0.475*trailing.bottom, 0.525*trailing.bottom + 0.475*trailing.top, 'Equilibrium', equilibriumZoneColorInput, label.style_label_left)
+     drawZone(trailing.bottom, math.round(0.5*(trailing.barIndex + last_bar_index)), 0.95*trailing.bottom + 0.05*trailing.top, trailing.bottom, 'Discount', discountZoneColor, label.style_label_up)
+
++// V2 Reversal Signal based on EMA + RSI
++if rsi20 > 70 and close > ema20 * 1.05 and showSignals
++    label.new(bar_index, high, "EXHAUSTION (SELL)", color=color.red, style=label.style_label_down, textcolor=color.white, size=size.small)
++if rsi20 < 30 and close < ema20 * 0.95 and showSignals
++    label.new(bar_index, low, "EXHAUSTION (BUY)", color=color.green, style=label.style_label_up, textcolor=color.white, size=size.small)
++
+ // V2 Elephant Bar Logic
+ bodySize = math.abs(close - open)
+ isElephantBull = close > open and bodySize > (atr14 * elephantMult)

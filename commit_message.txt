@@ -1,0 +1,4 @@
+refactor: finish missing capiba v2 requirements
+
+- Disable deletion of active liquidity pools when mitigated, changing their color to gray instead to act as persistent consumed liquidity
+- Introduce 'FVG + SWEEP' entry trigger, searching for liquidity sweeps that happen exactly inside an active macro FVG zone

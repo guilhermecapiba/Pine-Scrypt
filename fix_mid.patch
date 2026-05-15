@@ -1,0 +1,10 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -375,6 +375,7 @@
+                 eachFairValueGap.topBox.set_border_color(color.new(color.gray, 80))
+                 eachFairValueGap.bottomBox.set_border_color(color.new(color.gray, 80))
+                 eachFairValueGap.mitigated := true
++
+             if fullyMitigatedBull or fullyMitigatedBear
+                 eachFairValueGap.topBox.delete()
+                 eachFairValueGap.bottomBox.delete()

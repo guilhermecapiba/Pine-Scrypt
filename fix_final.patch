@@ -1,0 +1,23 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -357,11 +357,14 @@
+         bool invalidBull = eachFairValueGap.bias == BULLISH and close < midPrice
+         bool invalidBear = eachFairValueGap.bias == BEARISH and close > midPrice
+
+-        if (low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH) or invalidBull or invalidBear
++        bool fullyMitigatedBull = eachFairValueGap.bias == BULLISH and low < eachFairValueGap.bottom
++        bool fullyMitigatedBear = eachFairValueGap.bias == BEARISH and high > eachFairValueGap.top
++
++        if fullyMitigatedBull or fullyMitigatedBear or invalidBull or invalidBear
+             if (invalidBull or invalidBear) and not eachFairValueGap.mitigated
+                 // Mitigate FVG
+                 eachFairValueGap.topBox.set_bgcolor(color.new(color.gray, 80))
+                 eachFairValueGap.bottomBox.set_bgcolor(color.new(color.gray, 80))
+                 eachFairValueGap.topBox.set_border_color(color.new(color.gray, 80))
+                 eachFairValueGap.bottomBox.set_border_color(color.new(color.gray, 80))
+                 eachFairValueGap.mitigated := true
+-            else if eachFairValueGap.mitigated and ((low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH))
++            else if fullyMitigatedBull or fullyMitigatedBear
+                 eachFairValueGap.topBox.delete()
+                 eachFairValueGap.bottomBox.delete()
+                 if not na(eachFairValueGap.midLine)

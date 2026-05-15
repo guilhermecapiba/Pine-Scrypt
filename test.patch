@@ -1,0 +1,13 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -355,8 +355,8 @@
+     for [index,eachFairValueGap] in fairValueGaps
+         // V2 50% Invalidation Logic
+         midPrice = (eachFairValueGap.top + eachFairValueGap.bottom) / 2
+-        bool invalidBull = eachFairValueGap.bias == BULLISH and close < eachFairValueGap.bottom
+-        bool invalidBear = eachFairValueGap.bias == BEARISH and close > eachFairValueGap.top
++        bool invalidBull = eachFairValueGap.bias == BULLISH and close < midPrice
++        bool invalidBear = eachFairValueGap.bias == BEARISH and close > midPrice
+
+         if (low < eachFairValueGap.bottom and eachFairValueGap.bias == BULLISH) or (high > eachFairValueGap.top and eachFairValueGap.bias == BEARISH) or invalidBull or invalidBear
+             if (invalidBull or invalidBear) and not eachFairValueGap.mitigated

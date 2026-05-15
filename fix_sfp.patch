@@ -1,0 +1,22 @@
+--- capiba_v2.pine
++++ capiba_v2.pine
+@@ -582,6 +582,9 @@
+         // V2: Wicks as Breaks for weak levels
+         if not isStrongHigh and high > bBottom
+             mitigated := true
++            // V2: SFP Check
++            if close < bBottom
++                isSweep := true
+
+         bool isSweep = false
+         if not (close > bBottom) and (high > bBottom)
+@@ -668,6 +671,9 @@
+
+         if not isStrongLow and low < bTop
+             mitigated := true
++            // V2: SFP Check
++            if close > bTop
++                isSweep := true
+
+         bool isSweep = false
+         if not (close < bTop) and (low < bTop)
