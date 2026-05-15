@@ -1,0 +1,90 @@
+//@version=5
+indicator("Capiba OBV com MAs v2", shorttitle="OBV com MAs v2", overlay=false)
+
+// --- Inputs ---
+// Timeframe: Default is chart timeframe ("")
+tf = input.timeframe("", title="Timeframe do OBV", group="Configurações Gerais")
+
+// MA 1 Settings (Default: EMA 20)
+type1 = input.string("EMA", title="Tipo MA 1", options=["SMA", "EMA"], group="Médias Móveis")
+len1 = input.int(20, title="Período MA 1", minval=1, group="Médias Móveis")
+
+// MA 2 Settings (Default: EMA 200)
+type2 = input.string("EMA", title="Tipo MA 2", options=["SMA", "EMA"], group="Médias Móveis")
+len2 = input.int(200, title="Período MA 2", minval=1, group="Médias Móveis")
+
+// Divergence Settings
+pivot_len = input.int(5, title="Período de Pivot (Divergências)", minval=1, group="Divergências", tooltip="Período de verificação para encontrar topos e fundos reais.")
+minBarsApart = input.int(10, title="Barras mínimas entre pivots", minval=1, group="Divergências")
+
+// --- Calculation ---
+
+// Helper function to select MA type
+get_ma(src, type, len) =>
+    type == "SMA" ? ta.sma(src, len) : ta.ema(src, len)
+
+// Function to calculate OBV and MAs in the requested timeframe context
+calc_data() =>
+    // Standard On Balance Volume
+    _obv = ta.obv
+    // Calculate MAs based on that OBV
+    _ma1 = get_ma(_obv, type1, len1)
+    _ma2 = get_ma(_obv, type2, len2)
+    [_obv, _ma1, _ma2]
+
+// request.security to get data from the chosen timeframe
+[v_obv, v_ma1, v_ma2] = request.security(syminfo.tickerid, tf, calc_data())
+
+// --- Coloração Dinâmica do OBV ---
+color_bullish = #006400 // Dark Green
+color_bearish = #8B0000 // Dark Red
+
+obvColor = v_obv >= v_ma1 ? color_bullish : color_bearish
+
+// --- Detecção Explícita de Divergências (Price vs OBV) ---
+var float lastPH_price = na
+var float lastPH_obv   = na
+var int   lastPH_bar   = na
+
+var float lastPL_price = na
+var float lastPL_obv   = na
+var int   lastPL_bar   = na
+
+ph = ta.pivothigh(high, pivot_len, pivot_len)
+pl = ta.pivotlow(low, pivot_len, pivot_len)
+
+bearDiv = false
+bullDiv = false
+
+if not na(ph)
+    curr_bar = bar_index - pivot_len
+    // Só compara se o pivot anterior está pelo menos minBarsApart atrás
+    if not na(lastPH_bar) and (curr_bar - lastPH_bar) >= minBarsApart
+        if ph > lastPH_price and v_obv[pivot_len] < lastPH_obv
+            bearDiv := true
+    lastPH_price := ph
+    lastPH_obv   := v_obv[pivot_len]
+    lastPH_bar   := curr_bar
+
+if not na(pl)
+    curr_bar = bar_index - pivot_len
+    if not na(lastPL_bar) and (curr_bar - lastPL_bar) >= minBarsApart
+        if pl < lastPL_price and v_obv[pivot_len] > lastPL_obv
+            bullDiv := true
+    lastPL_price := pl
+    lastPL_obv   := v_obv[pivot_len]
+    lastPL_bar   := curr_bar
+
+// --- Plotting ---
+// MA 2: White, Width 1, Dashed (Simulated with circles)
+plot(v_ma2, title="MA 2 (200)", color=color.white, linewidth=1, style=plot.style_circles)
+
+// MA 1: Light Yellow, Width 2
+plot(v_ma1, title="MA 1 (20)", color=color.new(color.yellow, 30), linewidth=2)
+
+// OBV: Dynamic color, Width 2
+plot(v_obv, title="OBV", color=obvColor, linewidth=2)
+
+// Divergence plots
+plotshape(bullDiv, title="Bullish Divergence", style=shape.labelup, location=location.bottom, color=color.green, size=size.tiny, text="DIV ↑", textcolor=color.white)
+plotshape(bearDiv, title="Bearish Divergence", style=shape.labeldown, location=location.top, color=color.red, size=size.tiny, text="DIV ↓", textcolor=color.white)
