@@ -1,0 +1,141 @@
+// @version=5
+indicator("Capiba RSI + Nuvem v.08.06.26", overlay=true)
+
+// >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> COLORAÇÃO DAS BARRAS E NUVEM >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+// === CONSTANTES DE CORES ===
+// Cores para Coloração de Candles
+color corSobrecompra = color.new(#2962FF, 0)
+color corSobrevenda  = color.new(#FFD600, 0)
+color corCandleAlta  = color.new(color.lime, 0)
+color corCandleBaixa = color.new(color.red, 0)
+color corCandleNeutra = color.new(color.white, 0)
+
+// Cores para a Nuvem de Médias
+color corMaCurta    = color.new(color.green, 0)
+color corMaLonga    = color.new(color.red, 0)
+color corNuvemAlta  = color.new(color.green, 80)
+color corNuvemBaixa = color.new(color.red, 80)
+
+// Cores para Sinais de Cruzamento
+color corSinalAlta  = color.new(color.green, 0)
+color corSinalBaixa = color.new(color.red, 0)
+
+
+// === PARÂMETROS DO RSI ULTIMATE ===
+string groupRSI = "1. Parâmetros do RSI Ultimate"
+rsiLength      = input.int(20, title="Período RSI", minval=2, group=groupRSI)
+rsiMethod      = input.string("EMA", title="Método de Suavização RSI", options=["EMA", "SMA", "RMA", "TMA"], group=groupRSI)
+rsiSrc         = input.source(hlc3, title="Fonte do RSI", group=groupRSI)
+rsiOversold    = input.float(20, title="Nível Sobrevendido", group=groupRSI)
+rsiOverbought  = input.float(80, title="Nível Sobrecomprado", group=groupRSI)
+momentumLength = input.int(20, title="Período Momentum EMA", minval=1, group=groupRSI)
+// NOVO: tipo de MA para o momentum do RSI
+rsiMomentumType = input.string("EMA", title="Tipo de MA do Momentum do RSI", options=["EMA", "SMA", "RMA", "TMA", "VWMA"], group=groupRSI)
+
+// === PARÂMETROS DA NUVEM DE MÉDIAS ===
+string groupMA = "2. Parâmetros da Nuvem de Médias"
+// NOVO: Timeframe para a nuvem
+maTimeframe    = input.timeframe("60", "Timeframe da Nuvem", group=groupMA)
+
+// ALTERADO: input.source para input.string para permitir MTF correto
+shortMaSrc     = input.string("HLC3", title="Fonte MA Curta", options=["HLC3", "Close", "Open", "High", "Low", "HL2", "OHLC4"], group=groupMA)
+shortMaType    = input.string("SMA", title="Tipo MA Curta", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+shortMaLength  = input.int(72, title="Período MA Curta", minval=1, group=groupMA)
+
+longMaSrc      = input.string("HLC3", title="Fonte MA Longa", options=["HLC3", "Close", "Open", "High", "Low", "HL2", "OHLC4"], group=groupMA)
+longMaType     = input.string("SMA", title="Tipo MA Longa", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMA)
+longMaLength   = input.int(216, title="Período MA Longa", minval=1, group=groupMA)
+
+// === PARÂMETROS DA TERCEIRA MÉDIA ===
+string groupMAExtra = "3. Parâmetros da Média Extra"
+extraMaTimeframe = input.timeframe("60", "Timeframe da Média Extra", group=groupMAExtra)
+extraMaSrc       = input.string("HLC3", title="Fonte Média Extra", options=["HLC3", "Close", "Open", "High", "Low", "HL2", "OHLC4"], group=groupMAExtra)
+extraMaType      = input.string("SMA", title="Tipo Média Extra", options=["VWMA", "EMA", "SMA", "RMA", "TMA"], group=groupMAExtra)
+extraMaLength    = input.int(480, title="Período Média Extra", minval=1, group=groupMAExtra)
+extraMaColor     = input.color(color.red, title="Cor Média Extra", group=groupMAExtra)
+extraMaWidth     = input.int(3, title="Espessura Média Extra", minval=1, group=groupMAExtra)
+
+// === FUNÇÃO DE MÉDIA FLEXÍVEL ===
+getMA(src, len, tipo) =>
+    switch tipo
+        "EMA"  => ta.ema(src, len)
+        "SMA"  => ta.sma(src, len)
+        "RMA"  => ta.rma(src, len)
+        "TMA"  => ta.sma(ta.sma(src, math.ceil(len / 2)), math.floor(len / 2) + 1)
+        "VWMA" => ta.vwma(src, len)
+        => na
+
+// === FUNÇÕES AUXILIARES MTF ===
+getSrc(srcType) =>
+    switch srcType
+        "HLC3"  => hlc3
+        "Close" => close
+        "Open"  => open
+        "High"  => high
+        "Low"   => low
+        "HL2"   => hl2
+        "OHLC4" => ohlc4
+        => hlc3
+
+calcMa(srcStr, len, type) =>
+    src = getSrc(srcStr)
+    getMA(src, len, type)
+
+// === CÁLCULO DO RSI ULTIMATE ===
+upper = ta.highest(rsiSrc, rsiLength)
+lower = ta.lowest(rsiSrc, rsiLength)
+rangeDelta = upper - lower
+delta = rsiSrc - rsiSrc[1]
+
+diff = upper > upper[1] ? rangeDelta :
+       lower < lower[1] ? -rangeDelta :
+       delta
+
+num = getMA(diff, rsiLength, rsiMethod)
+den = getMA(math.abs(diff), rsiLength, rsiMethod)
+
+rsiUltimate = den == 0 ? 50 : num / den * 50 + 50
+
+// USANDO A FUNÇÃO getMA PARA CALCULAR O MOMENTUM DO RSI (opção selecionável)
+rsiMomentum = getMA(rsiUltimate, momentumLength, rsiMomentumType)
+
+// === LÓGICA DE COLORAÇÃO DOS CANDLES ===
+// Regras: abaixo de 20 -> amarela; abaixo de 40 -> vermelha; entre 40 e 60 -> branca; acima de 60 -> verde; acima de 80 -> azul
+corAzul     = rsiUltimate > 80
+corAmarela  = rsiUltimate < 20
+corVerde    = rsiUltimate > 60 and rsiUltimate <= 80
+corVermelha = rsiUltimate >= 20 and rsiUltimate < 40
+corBranca   = rsiUltimate >= 40 and rsiUltimate <= 60
+
+corDoCandle = corAzul ? corSobrecompra :
+              corVerde ? corCandleAlta :
+              corVermelha ? corCandleBaixa :
+              corAmarela ? corSobrevenda :
+              corCandleNeutra
+
+barcolor(corDoCandle)
+
+// === NUVEM ENTRE MA CURTA E MA LONGA (COM SUPORTE A MTF) ===
+// maCurta = getMA(shortMaSrc, shortMaLength, shortMaType)
+// maLonga = getMA(longMaSrc, longMaLength, longMaType)
+
+[maCurta, maLonga, maExtra] = request.security(syminfo.tickerid, maTimeframe, [calcMa(shortMaSrc, shortMaLength, shortMaType), calcMa(longMaSrc, longMaLength, longMaType), calcMa(extraMaSrc, extraMaLength, extraMaType)])
+
+
+// Recalculando corretamente:
+[maCurtaRecalc, maLongaRecalc] = request.security(syminfo.tickerid, maTimeframe, [calcMa(shortMaSrc, shortMaLength, shortMaType), calcMa(longMaSrc, longMaLength, longMaType)])
+maExtraRecalc = request.security(syminfo.tickerid, extraMaTimeframe, calcMa(extraMaSrc, extraMaLength, extraMaType))
+
+plotCurta = plot(maCurtaRecalc, title="MA Curta", color=corMaCurta, linewidth=2)
+plotLonga = plot(maLongaRecalc, title="MA Longa", color=corMaLonga, linewidth=3)
+fill(plotCurta, plotLonga, color = maCurtaRecalc > maLongaRecalc ? corNuvemAlta : corNuvemBaixa, title="Nuvem MA Curta/Longa")
+
+plot(maExtraRecalc, title="MA Extra", color=extraMaColor, linewidth=extraMaWidth)
+
+// === SINAIS VISUAIS DE CRUZAMENTO RSI COM NÍVEL 50 ===
+cruzamentoAlta  = ta.crossover(rsiUltimate, rsiMomentum)
+cruzamentoBaixa = ta.crossunder(rsiUltimate, rsiMomentum)
+
+plotshape(cruzamentoAlta,  title="Cruzamento Alta RSI 50",  location=location.belowbar, color=corSinalAlta, style=shape.triangleup, size=size.normal)
+plotshape(cruzamentoBaixa, title="Cruzamento Baixa RSI 50", location=location.abovebar, color=corSinalBaixa, style=shape.triangledown, size=size.normal)
