@@ -1,0 +1,279 @@
+//@version=6
+indicator("🎯 BITCOIN CYCLE + DAILY SETUP [GUILHERME]", overlay=true, max_bars_back=5000)
+
+// ═══════════════════════════════════════════════════════════════════
+// 📊 SEÇÃO 1: INPUTS CUSTOMIZÁVEIS
+// ═══════════════════════════════════════════════════════════════════
+
+// === EMÁS LOCAIS (Gráfico 1D) ===
+group1 = "📈 EMAs LOCAIS (1D)"
+ema90_enabled = input(true, "EMA 90D ativada?", group=group1)
+ema90_length = input.int(90, "EMA 90D período", minval=1, maxval=500, group=group1)
+ema90_color = input.color(color.new(#FFD700, 0), "Cor EMA 90D", group=group1)
+ema90_width = input.int(2, "Espessura EMA 90D", minval=1, maxval=5, group=group1)
+
+// === EMÁS SEMANAIS (Request.security) ===
+group2 = "📊 EMAs SEMANAIS (1W)"
+ema200w_enabled = input(true, "EMA 200W ativada?", group=group2)
+ema200w_color = input.color(color.new(#FFFFFF, 0), "Cor EMA 200W", group=group2)
+ema200w_width = input.int(2, "Espessura EMA 200W", minval=1, maxval=5, group=group2)
+
+ema65w_enabled = input(true, "EMA 65W ativada?", group=group2)
+ema65w_color = input.color(color.new(#FFD700, 0), "Cor EMA 65W", group=group2)
+ema65w_width = input.int(2, "Espessura EMA 65W", minval=1, maxval=5, group=group2)
+
+// === RSI E DIVERGÊNCIA ===
+group3 = "📍 RSI E DIVERGÊNCIA"
+rsi_enabled = input(true, "RSI 14 ativado?", group=group3)
+rsi_length = input.int(14, "Período RSI", minval=1, maxval=50, group=group3)
+rsi_overbought = input.int(70, "RSI Sobrecompra", minval=50, maxval=100, group=group3)
+rsi_oversold = input.int(30, "RSI Sobrevenda", minval=0, maxval=50, group=group3)
+div_lookback = input.int(10, "Períodos divergência (semanal)", minval=5, maxval=50, group=group3)
+show_divergence = input(true, "Mostrar divergência bullish?", group=group3)
+
+// === SINAIS E CORES ===
+group4 = "🎨 CORES DE VELAS E SINAIS"
+color_buy_strong = input.color(color.new(#0066FF, 0), "Compra Forte (Azul)", group=group4)
+color_buy_weak = input.color(color.new(#00CC00, 0), "Compra Fraca (Verde)", group=group4)
+color_sell_weak = input.color(color.new(#FF3333, 0), "Venda Fraca (Vermelho)", group=group4)
+color_sell_strong = input.color(color.new(#FFD700, 0), "Venda Forte (Amarelo)", group=group4)
+color_neutral = input.color(color.new(#808080, 50), "Neutro (Cinza)", group=group4)
+
+// === LÓGICA DE SINAIS ===
+group5 = "⚙️ LÓGICA DE SINAIS"
+signal_type = input.string("AMBOS", "Tipo sinal", ["CICLO", "DIÁRIO", "AMBOS"], group=group5)
+show_signals = input(true, "Mostrar rótulos de sinais?", group=group5)
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔧 SEÇÃO 2: CÁLCULOS DE INDICADORES
+// ═══════════════════════════════════════════════════════════════════
+
+// === EMA LOCAIS (Diários) ===
+ema90 = ema90_enabled ? ta.ema(close, ema90_length) : na
+
+// Melhoria Estrutural: Consolidar cálculos semanais em uma única tupla
+[close_w, ema200w_raw, ema65w_raw, rsi_w_raw] = request.security(syminfo.tickerid, "W", [close, ta.ema(close, 200), ta.ema(close, 65), ta.rsi(close, rsi_length)])
+
+// === EMÁS SEMANAIS ===
+ema200w = ema200w_enabled ? ema200w_raw : na
+ema65w = ema65w_enabled ? ema65w_raw : na
+
+// === RSI ===
+rsi_daily = rsi_enabled ? ta.rsi(close, rsi_length) : na
+rsi_weekly = rsi_enabled ? rsi_w_raw : na
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔍 SEÇÃO 3: DETECÇÃO DE DIVERGÊNCIA RSI SEMANAL
+// ═══════════════════════════════════════════════════════════════════
+
+// Detectar fundo duplo (2 lows com RSI formando divergência)
+var float last_low_price = na
+var float last_low_rsi = na
+var bool divergence_bullish = false
+var int divergence_bar = na
+
+// Melhoria Estrutural: Identificar mudança de semana de forma limpa
+is_new_week = ta.change(time("W")) != 0
+
+// Atualizar a cada mudança semanal
+if is_new_week
+    // Se novo low em preço com RSI acima do low anterior = divergência
+    if close_w < last_low_price and rsi_weekly > last_low_rsi
+        divergence_bullish := true
+        divergence_bar := bar_index
+
+    last_low_price := close_w
+    last_low_rsi := rsi_weekly
+
+// ═══════════════════════════════════════════════════════════════════
+// 📊 SEÇÃO 4: LÓGICA DE SINAIS (CICLO + DIÁRIO)
+// ═══════════════════════════════════════════════════════════════════
+
+// === SINAIS CICLO (SEMANAL) ===
+sinal_ciclo = ""
+cor_sinal_ciclo = color.new(color.gray, 50)
+
+if ema65w_enabled and ema200w_enabled
+    if close > ema65w and close > ema200w
+        // COMPRA FORTE: Acima de ambas EMAs + RSI semanal em sobrevenda + divergência
+        if rsi_weekly < rsi_oversold and divergence_bullish
+            sinal_ciclo := "COMPRA MÁXIMA (CICLO)"
+            cor_sinal_ciclo := color_buy_strong
+        else if rsi_weekly < 40
+            sinal_ciclo := "COMPRA FRACA (CICLO)"
+            cor_sinal_ciclo := color_buy_weak
+
+    else if close < ema200w
+        // VENDA FORTE: Abaixo de 200W EMA
+        if rsi_weekly > rsi_overbought
+            sinal_ciclo := "VENDA FORTE (CICLO)"
+            cor_sinal_ciclo := color_sell_strong
+        else if rsi_weekly > 60
+            sinal_ciclo := "VENDA FRACA (CICLO)"
+            cor_sinal_ciclo := color_sell_weak
+
+// === SINAIS DIÁRIO ===
+sinal_diario = ""
+cor_sinal_diario = color.new(color.gray, 50)
+
+if ema90_enabled
+    if close > ema90
+        if rsi_daily < rsi_oversold
+            sinal_diario := "ENTRADA FORTE (1D)"
+            cor_sinal_diario := color_buy_strong
+        else if rsi_daily < 40
+            sinal_diario := "ENTRADA FRACA (1D)"
+            cor_sinal_diario := color_buy_weak
+
+    else if close < ema90
+        if rsi_daily > rsi_overbought
+            sinal_diario := "SAÍDA FORTE (1D)"
+            cor_sinal_diario := color_sell_strong
+        else if rsi_daily > 60
+            sinal_diario := "SAÍDA FRACA (1D)"
+            cor_sinal_diario := color_sell_weak
+
+// === SINAL COMBINADO ===
+sinal_final = sinal_ciclo
+if signal_type == "DIÁRIO"
+    sinal_final := sinal_diario
+else if signal_type == "AMBOS"
+    sinal_final := sinal_ciclo + (sinal_ciclo != "" and sinal_diario != "" ? " | " : "") + sinal_diario
+
+cor_final = cor_sinal_ciclo
+if signal_type == "DIÁRIO"
+    cor_final := cor_sinal_diario
+else if signal_type == "AMBOS"
+    if str.contains(sinal_ciclo, "COMPRA MÁXIMA") or str.contains(sinal_diario, "ENTRADA FORTE")
+        cor_final := color_buy_strong
+    else if str.contains(sinal_ciclo, "VENDA FORTE") or str.contains(sinal_diario, "SAÍDA FORTE")
+        cor_final := color_sell_strong
+    else
+        cor_final := cor_sinal_ciclo
+
+// ═══════════════════════════════════════════════════════════════════
+// 🎨 SEÇÃO 5: COLORAÇÃO DE VELAS
+// ═══════════════════════════════════════════════════════════════════
+
+cor_vela = color_neutral
+
+if sinal_final != ""
+    if str.contains(sinal_final, "COMPRA MÁXIMA") or str.contains(sinal_final, "ENTRADA FORTE")
+        cor_vela := color_buy_strong
+    else if str.contains(sinal_final, "COMPRA FRACA") or str.contains(sinal_final, "ENTRADA FRACA")
+        cor_vela := color_buy_weak
+    else if str.contains(sinal_final, "VENDA FRACA") or str.contains(sinal_final, "SAÍDA FRACA")
+        cor_vela := color_sell_weak
+    else if str.contains(sinal_final, "VENDA FORTE") or str.contains(sinal_final, "SAÍDA FORTE")
+        cor_vela := color_sell_strong
+
+barcolor(cor_vela)
+
+// ═══════════════════════════════════════════════════════════════════
+// 📈 SEÇÃO 6: PLOTAGEM DE INDICADORES
+// ═══════════════════════════════════════════════════════════════════
+
+// EMA 90D
+plot(ema90, "EMA 90D", color=ema90_color, linewidth=ema90_width, style=plot.style_line)
+
+// EMA 200W
+plot(ema200w, "EMA 200W", color=ema200w_color, linewidth=ema200w_width, style=plot.style_line)
+
+// EMA 65W
+plot(ema65w, "EMA 65W", color=ema65w_color, linewidth=ema65w_width, style=plot.style_line)
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔔 SEÇÃO 7: ALERTAS VISUAIS
+// ═══════════════════════════════════════════════════════════════════
+
+// Fix erro 1: O argumento correto no plotshape é "style" e não "shape"
+// Divergência bullish (setas no gráfico)
+if show_divergence and divergence_bullish and divergence_bar == bar_index
+    plotshape(divergence_bullish ? bar_index : na, title="Divergência Bullish",
+     location=location.belowbar, color=color_buy_strong, style=shape.triangleup, size=size.large, text="DIVERG ↑")
+
+// Melhoria: Plotar apenas quando o sinal muda para não poluir o gráfico
+mudou_sinal = sinal_final != "" and sinal_final != sinal_final[1]
+
+// Fix erro 2: Não existe label.style_label_box. Usaremos label.style_label_down
+// Sinais (rótulos acima das velas)
+if show_signals and mudou_sinal
+    label_y = high + (high * 0.005)
+    label.new(x=bar_index, y=label_y, text=sinal_final,
+     color=cor_final, textcolor=color.white, size=size.small, style=label.style_label_down)
+
+// ═══════════════════════════════════════════════════════════════════
+// 📊 SEÇÃO 8: PAINEL DE INFORMAÇÕES (TABELA)
+// ═══════════════════════════════════════════════════════════════════
+
+var table info_table = na
+
+if barstate.islast
+    if na(info_table)
+        // Melhoria: Apenas argumentos posicionais no table.new para evitar erro de versão
+        info_table := table.new(position.top_right, 2, 10, na, color.gray, 1, color.gray, 1)
+
+    // Linha 1: Preço
+    table.cell(info_table, 0, 0, "Preço", text_color=color.white, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 0, str.tostring(close), text_color=color.white, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 2: EMA 90D
+    ema90_val = na(ema90) ? "N/A" : str.tostring(math.round(ema90, 2))
+    table.cell(info_table, 0, 1, "EMA 90D", text_color=ema90_color, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 1, ema90_val, text_color=ema90_color, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 3: EMA 200W
+    ema200w_val = na(ema200w) ? "N/A" : str.tostring(math.round(ema200w, 2))
+    table.cell(info_table, 0, 2, "EMA 200W", text_color=ema200w_color, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 2, ema200w_val, text_color=ema200w_color, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 4: EMA 65W
+    ema65w_val = na(ema65w) ? "N/A" : str.tostring(math.round(ema65w, 2))
+    table.cell(info_table, 0, 3, "EMA 65W", text_color=ema65w_color, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 3, ema65w_val, text_color=ema65w_color, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 5: RSI Daily
+    rsi_d_val = na(rsi_daily) ? "N/A" : str.tostring(math.round(rsi_daily, 2))
+    table.cell(info_table, 0, 4, "RSI 1D", text_color=color.yellow, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 4, rsi_d_val, text_color=color.yellow, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 6: RSI Weekly
+    rsi_w_val = na(rsi_weekly) ? "N/A" : str.tostring(math.round(rsi_weekly, 2))
+    table.cell(info_table, 0, 5, "RSI 1W", text_color=color.orange, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 5, rsi_w_val, text_color=color.orange, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 7: Divergência
+    div_status = divergence_bullish ? "✓ SIM" : "✗ NÃO"
+    div_color = divergence_bullish ? color.green : color.red
+    table.cell(info_table, 0, 6, "Div. Bull?", text_color=div_color, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 6, div_status, text_color=div_color, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 8: Sinal Ciclo
+    table.cell(info_table, 0, 7, "Sinal Ciclo", text_color=cor_sinal_ciclo, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 7, sinal_ciclo != "" ? sinal_ciclo : "NEUTRO", text_color=cor_sinal_ciclo, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 9: Sinal Diário
+    table.cell(info_table, 0, 8, "Sinal 1D", text_color=cor_sinal_diario, bgcolor=color.new(#1a1a1a, 0))
+    table.cell(info_table, 1, 8, sinal_diario != "" ? sinal_diario : "NEUTRO", text_color=cor_sinal_diario, bgcolor=color.new(#1a1a1a, 0))
+
+    // Linha 10: Status Geral
+    status_color = cor_final
+    status_text = sinal_final != "" ? sinal_final : "AGUARDANDO"
+    table.cell(info_table, 0, 9, "📍 STATUS", text_color=color.white, bgcolor=color.new(#333333, 0))
+    table.cell(info_table, 1, 9, status_text, text_color=status_color, bgcolor=color.new(#1a1a1a, 0))
+
+// ═══════════════════════════════════════════════════════════════════
+// 🔔 SEÇÃO 9: ALERTAS (PARA NOTIFICAÇÕES)
+// ═══════════════════════════════════════════════════════════════════
+
+// Alerta quando compra forte é detectada
+if sinal_ciclo == "COMPRA MÁXIMA (CICLO)" or sinal_diario == "ENTRADA FORTE (1D)"
+    alert("🎯 COMPRA FORTE DETECTADA!\n" + sinal_final + "\nPreço: " + str.tostring(close), alert.freq_once_per_bar)
+
+// Alerta quando venda forte é detectada
+if sinal_ciclo == "VENDA FORTE (CICLO)" or sinal_diario == "SAÍDA FORTE (1D)"
+    alert("⚠️ VENDA FORTE DETECTADA!\n" + sinal_final + "\nPreço: " + str.tostring(close), alert.freq_once_per_bar)
+
+// Alerta quando divergência é detectada
+if divergence_bullish and divergence_bar == bar_index
+    alert("✨ DIVERGÊNCIA BULLISH SEMANAL DETECTADA!\nRSI formando fundo duplo", alert.freq_once_per_bar)
