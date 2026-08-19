@@ -8,14 +8,14 @@ len8   = input.int(8, title="EMA Curta", group="Médias Móveis")
 len20  = input.int(20, title="EMA Média", group="Médias Móveis")
 len200 = input.int(200, title="EMA Longa", group="Médias Móveis")
 
-enable_shorts = input.bool(true, title="Ativar Operações Short", group="Configurações de Estratégia")
+enable_shorts = input.bool(false, title="Ativar Operações Short", group="Configurações de Estratégia")
 
 adxlen = input.int(14, title="Período ADX", group="Filtro de Volatilidade (ADX)")
-adx_threshold = input.int(20, title="Nível Mínimo ADX", group="Filtro de Volatilidade (ADX)")
+adx_threshold = input.int(15, title="Nível Mínimo ADX", group="Filtro de Volatilidade (ADX)")
 
-rr_ratio = input.float(2.0, title="Relação Risco:Retorno", step=0.1, group="Gestão de Risco (ATR)")
+rr_ratio = input.float(3.0, title="Relação Risco:Retorno", step=0.1, group="Gestão de Risco (ATR)")
 atr_len = input.int(14, title="Período ATR", group="Gestão de Risco (ATR)")
-atr_mult = input.float(1.5, title="Multiplicador ATR para Stop", step=0.1, group="Gestão de Risco (ATR)")
+atr_mult = input.float(1.2, title="Multiplicador ATR para Stop", step=0.1, group="Gestão de Risco (ATR)")
 
 // =========================================================================
 // 2. CÁLCULOS
@@ -73,21 +73,13 @@ if short_cond and strategy.position_size == 0
     short_tp := close - ((short_sl - close) * rr_ratio)
 
 // =========================================================================
-// 7. LÓGICA DE SAÍDA (Trailing/Alvos)
+// 7. LÓGICA DE SAÍDA (Alvos Fixos)
 // =========================================================================
 
-// Saída Long: Preço fecha abaixo da EMA 20, ou atinge SL / TP
+// Saída Long: Atinge SL / TP (relação risco:retorno permite pagar a estatística perdedora)
 if strategy.position_size > 0
-    // trailing dinâmico pela ema20 se preço estiver a favor
-    // Saída estrutural se preço fechar abaixo da EMA 20
-    if close < ema20
-        strategy.close("Compra", comment="Fechou < EMA 20")
-    else
-        strategy.exit("Saída Compra", from_entry="Compra", stop=long_sl, limit=long_tp)
+    strategy.exit("Saída Compra", from_entry="Compra", stop=long_sl, limit=long_tp)
 
-// Saída Short: Preço fecha acima da EMA 20, ou atinge SL / TP
+// Saída Short: Atinge SL / TP
 if strategy.position_size < 0
-    if close > ema20
-        strategy.close("Venda", comment="Fechou > EMA 20")
-    else
-        strategy.exit("Saída Venda", from_entry="Venda", stop=short_sl, limit=short_tp)
+    strategy.exit("Saída Venda", from_entry="Venda", stop=short_sl, limit=short_tp)
