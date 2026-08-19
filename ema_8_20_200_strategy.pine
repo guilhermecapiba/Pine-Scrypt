@@ -1,19 +1,35 @@
 //@version=6
-strategy("Backtest EMAs 8/20/200", overlay=true, initial_capital=1000, default_qty_type=strategy.percent_of_equity, default_qty_value=100)
+strategy("Backtest EMAs 8/20/200 Refatorada", overlay=true, initial_capital=1000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.05, slippage=2)
 
 // =========================================================================
 // 1. INPUTS
 // =========================================================================
-len8   = input.int(8, title="EMA Curta")
-len20  = input.int(20, title="EMA Média")
-len200 = input.int(200, title="EMA Longa")
+len8   = input.int(8, title="EMA Curta", group="Médias Móveis")
+len20  = input.int(20, title="EMA Média", group="Médias Móveis")
+len200 = input.int(200, title="EMA Longa", group="Médias Móveis")
+
+enable_shorts = input.bool(true, title="Ativar Operações Short", group="Configurações de Estratégia")
+
+adxlen = input.int(14, title="Período ADX", group="Filtro de Volatilidade (ADX)")
+adx_threshold = input.int(20, title="Nível Mínimo ADX", group="Filtro de Volatilidade (ADX)")
+
+rr_ratio = input.float(2.0, title="Relação Risco:Retorno", step=0.1, group="Gestão de Risco (ATR)")
+atr_len = input.int(14, title="Período ATR", group="Gestão de Risco (ATR)")
+atr_mult = input.float(1.5, title="Multiplicador ATR para Stop", step=0.1, group="Gestão de Risco (ATR)")
 
 // =========================================================================
-// 2. CÁLCULOS DAS EMAS
+// 2. CÁLCULOS
 // =========================================================================
+// EMAs
 ema8   = ta.ema(close, len8)
 ema20  = ta.ema(close, len20)
 ema200 = ta.ema(close, len200)
+
+// ADX e DI
+[plusDI, minusDI, adx] = ta.dmi(adxlen, adxlen)
+
+// ATR para Stops
+atr = ta.atr(atr_len)
 
 // =========================================================================
 // 3. PLOTS NO GRÁFICO (Visualização)
@@ -23,30 +39,55 @@ plot(ema20, color=color.yellow, title="EMA 20", linewidth=2)
 plot(ema200, color=color.white, title="EMA 200", linewidth=3)
 
 // =========================================================================
-// 4. LÓGICA DE ALINHAMENTO
+// 4. LÓGICA DE ENTRADA
 // =========================================================================
-// Verifica se as EMAs estão alinhadas
-long_aligned  = (ema8 > ema20) and (ema20 > ema200)
-short_aligned = (ema8 < ema20) and (ema20 < ema200)
-
-// =========================================================================
-// 5. EXECUÇÃO DE ORDENS
-// =========================================================================
+// Condição de Volatilidade e Tendência
+adx_filter = adx > adx_threshold
 
 // ENTRADAS
-// Compra: EMA 8 cruza acima da 20 E a 20 já está acima da 200
-if ta.crossover(ema8, ema20) and (ema20 > ema200)
+// Compra: EMA 8 cruza acima da 20 E a 20 já está acima da 200 E ADX > limite
+long_cond = ta.crossover(ema8, ema20) and (ema20 > ema200) and adx_filter
+
+// Venda: EMA 8 cruza abaixo da 20 E a 20 já está abaixo da 200 E ADX > limite E Shorts ativados
+short_cond = ta.crossunder(ema8, ema20) and (ema20 < ema200) and adx_filter and enable_shorts
+
+// =========================================================================
+// 5. VARIÁVEIS DE GESTÃO DE TRADE (SL/TP)
+// =========================================================================
+var float long_sl = na
+var float long_tp = na
+var float short_sl = na
+var float short_tp = na
+
+// =========================================================================
+// 6. EXECUÇÃO DE ORDENS
+// =========================================================================
+if long_cond and strategy.position_size == 0
     strategy.entry("Compra", strategy.long)
+    long_sl := close - (atr * atr_mult)
+    long_tp := close + ((close - long_sl) * rr_ratio)
 
-// Venda: EMA 8 cruza abaixo da 20 E a 20 já está abaixo da 200
-if ta.crossunder(ema8, ema20) and (ema20 < ema200)
+if short_cond and strategy.position_size == 0
     strategy.entry("Venda", strategy.short)
+    short_sl := close + (atr * atr_mult)
+    short_tp := close - ((short_sl - close) * rr_ratio)
 
-// SAÍDAS
-// Fecha a posição comprada se o alinhamento de alta for quebrado
-if strategy.position_size > 0 and not long_aligned
-    strategy.close("Compra", comment="Fim Alinhamento Alta")
+// =========================================================================
+// 7. LÓGICA DE SAÍDA (Trailing/Alvos)
+// =========================================================================
 
-// Fecha a posição vendida se o alinhamento de baixa for quebrado
-if strategy.position_size < 0 and not short_aligned
-    strategy.close("Venda", comment="Fim Alinhamento Baixa")
+// Saída Long: Preço fecha abaixo da EMA 20, ou atinge SL / TP
+if strategy.position_size > 0
+    // trailing dinâmico pela ema20 se preço estiver a favor
+    // Saída estrutural se preço fechar abaixo da EMA 20
+    if close < ema20
+        strategy.close("Compra", comment="Fechou < EMA 20")
+    else
+        strategy.exit("Saída Compra", from_entry="Compra", stop=long_sl, limit=long_tp)
+
+// Saída Short: Preço fecha acima da EMA 20, ou atinge SL / TP
+if strategy.position_size < 0
+    if close > ema20
+        strategy.close("Venda", comment="Fechou > EMA 20")
+    else
+        strategy.exit("Saída Venda", from_entry="Venda", stop=short_sl, limit=short_tp)
