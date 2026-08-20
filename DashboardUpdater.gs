@@ -1,32 +1,28 @@
 /**
  * DashboardUpdater.gs
- * Atualiza o Dashboard Executivo da "BTC Backtest Machine" de forma assíncrona e em lote.
+ * Atualiza o Dashboard Executivo da "BTC Backtest Machine" nas coordenadas exatas solicitadas.
  */
 
-function atualizarDashboard() {
-  // Conectando via ID específico fornecido no contexto
+function refreshExecutiveDashboard() {
   const SPREADSHEET_ID = "13RyXbvMGYppWPmWAPpFxUJ1bz17_oz6G-dAUAWZxhzQ";
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-  // 1. Extração de Dados em Lote (Performance e Evitando Rate Limits)
   const tabs = {
     ranking: ss.getSheetByName('Ranking_Performance'),
     btc4h: ss.getSheetByName('BTC_4H'),
     btc1d: ss.getSheetByName('BTC_1D'),
     btc1w: ss.getSheetByName('BTC_1W'),
-    config: ss.getSheetByName('Config'),
     dashboard: ss.getSheetByName('Dashboard')
   };
 
-  if (!tabs.ranking || !tabs.btc4h || !tabs.btc1d || !tabs.btc1w || !tabs.config || !tabs.dashboard) {
-    throw new Error('Erro: Algumas abas necessárias não foram encontradas.');
+  if (!tabs.ranking || !tabs.btc4h || !tabs.btc1d || !tabs.btc1w || !tabs.dashboard) {
+    throw new Error('Erro: Abas base para o Dashboard não encontradas.');
   }
+
+  Logger.log("Iniciando atualização do Dashboard...");
 
   // Busca de dados em bulk
   const rankingData = tabs.ranking.getDataRange().getValues();
-  const configData = tabs.config.getDataRange().getValues();
-
-  // Pegando a última linha de dados (excluindo cabeçalhos presumidos na linha 1)
   const btc4hData = tabs.btc4h.getDataRange().getValues();
   const btc1dData = tabs.btc1d.getDataRange().getValues();
   const btc1wData = tabs.btc1w.getDataRange().getValues();
@@ -35,115 +31,95 @@ function atualizarDashboard() {
   const last1D = btc1dData[btc1dData.length - 1];
   const last1W = btc1wData[btc1wData.length - 1];
 
-  // 2. Eleição da Estratégia Campeã
-  // Assumindo que na aba Ranking_Performance:
-  // Coluna A (Index 0) = Nome da Estratégia
-  let liderName = "N/A";
+  // 1. HEADER (C3 e C4)
+  const now = new Date();
+  const timeStr = Utilities.formatDate(now, "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
+  const currentPrice = last1D[1] ? "$" + parseFloat(last1D[1]).toFixed(2) : "N/A"; // Assumindo coluna 1 (B) como Close
 
-  if (rankingData.length > 1) {
-    liderName = rankingData[1][0]; // Assumindo primeira coluna
-  }
+  tabs.dashboard.getRange("C3").setValue(timeStr);
+  tabs.dashboard.getRange("C4").setValue(currentPrice);
 
-  // Pesos da Config (1W: 50%, 1D: 30%, 4H: 20%)
-  // Extraindo pesos caso estejam na config, senão usamos hardcoded
-  let peso1W = 0.50;
-  let peso1D = 0.30;
-  let peso4H = 0.20;
+  // 2. ACTION CARD (Decisão Tática) — Linha 8
+  let liderName = rankingData.length > 1 ? rankingData[1][0] : "N/A";
 
-  // 3. Extração do Posicionamento Tático da Estratégia Líder
   let colIndex4H = btc4hData[0].indexOf(liderName);
   let colIndex1D = btc1dData[0].indexOf(liderName);
   let colIndex1W = btc1wData[0].indexOf(liderName);
 
-  // Valor de fallback para sinal
   let signal4H = (colIndex4H !== -1 && !isNaN(last4H[colIndex4H])) ? last4H[colIndex4H] : 0;
   let signal1D = (colIndex1D !== -1 && !isNaN(last1D[colIndex1D])) ? last1D[colIndex1D] : 0;
   let signal1W = (colIndex1W !== -1 && !isNaN(last1W[colIndex1W])) ? last1W[colIndex1W] : 0;
 
-  // Calculando Exposição Ponderada
-  let exposure = (signal1W * peso1W) + (signal1D * peso1D) + (signal4H * peso4H);
-  let exposurePercent = (exposure * 100).toFixed(0) + "%";
+  let exposure = (signal1W * 0.50) + (signal1D * 0.30) + (signal4H * 0.20);
+  let exposurePercent = (exposure * 100).toFixed(0);
 
-  // Determinar a Ação Final
   let recomendacao = "";
-  if (exposure >= 0.80) {
-    recomendacao = "LONG AGRESSIVO (Comprado 80%-100% / Caixa 0%-20%)";
-  } else if (exposure >= 0.30 && exposure < 0.80) {
-    recomendacao = "LONG MODERADO (Comprado parcial / Caixa defensivo)";
-  } else if (exposure === 0) {
-    recomendacao = "FLAT / DEFENSIVO (100% Caixa em Dólar)";
-  } else if (exposure < 0) {
-    recomendacao = "SHORT / PROTEÇÃO (Hedge ativo)";
-  } else {
-    // Entre 0 e 0.30
-    recomendacao = "FLAT / LEVEMENTE COMPRADO (Caixa majoritário)";
-  }
+  if (exposure >= 0.80) recomendacao = `LONG (${exposurePercent}% BTC / ${100 - exposurePercent}% Caixa)`;
+  else if (exposure >= 0.30) recomendacao = `LONG PARCIAL (${exposurePercent}% BTC / ${100 - exposurePercent}% Caixa)`;
+  else if (exposure > 0 && exposure < 0.30) recomendacao = `FLAT / LEVEMENTE COMPRADO (${exposurePercent}% BTC)`;
+  else if (exposure === 0) recomendacao = "FLAT (100% Caixa)";
+  else recomendacao = "SHORT (Proteção)";
 
-  // Extrair Regime de Mercado
   let regimeMercado = "TRANSIÇÃO/LATERAL";
   if(signal1W > 0 && signal1D > 0) regimeMercado = "TENDÊNCIA DE ALTA";
   if(signal1W <= 0 && signal1D <= 0) regimeMercado = "TENDÊNCIA DE BAIXA";
 
-  // 4. Atualização Visual dos Blocos do Dashboard
-  const now = new Date();
-  const timeStr = Utilities.formatDate(now, "America/Sao_Paulo", "dd/MM/yyyy HH:mm:ss") + " BRT";
-
-  // Pegar o último preço
-  const currentPrice = "$" + parseFloat(last1D[1] || 0).toFixed(2);
-
-  // Header
-  tabs.dashboard.getRange("B2").setValue(timeStr);
-  tabs.dashboard.getRange("D2").setValue(currentPrice);
-
-  // Action Card
-  tabs.dashboard.getRange("B4").setValue(liderName);
-  tabs.dashboard.getRange("B5").setValue(recomendacao + " - " + exposurePercent);
-  tabs.dashboard.getRange("B6").setValue(regimeMercado);
-  tabs.dashboard.getRange("B7").setValue("N/A (Extrair suporte da planilha)"); // Mock do stop
-
-  // Formatação Condicional básica para o Action Card
-  let recBgColor = "#333333";
-  let recFontColor = "#FFFFFF";
-  if (exposure >= 0.8) { recBgColor = "#1B5E20"; recFontColor = "#C8E6C9"; }
-  else if (exposure >= 0.3) { recBgColor = "#827717"; recFontColor = "#F0F4C3"; }
-  else if (exposure === 0) { recBgColor = "#424242"; recFontColor = "#E0E0E0"; }
-  else if (exposure < 0) { recBgColor = "#b71c1c"; recFontColor = "#ffcdd2"; }
-
-  tabs.dashboard.getRange("B5").setBackground(recBgColor).setFontColor(recFontColor);
-
-  // Resumo do Leaderboard (copiar primeiras N linhas)
-  let boardRows = 5;
-  let writeData = [];
-  let bgColors = [];
-  let fontColors = [];
-
-  for(let i = 0; i <= boardRows && i < rankingData.length; i++) {
-    // Selecionando 5 colunas baseadas no Ranking_Performance
-    writeData.push([rankingData[i][0], rankingData[i][1], rankingData[i][2], rankingData[i][3], rankingData[i][4]]);
-
-    // Preparando array de formatação (destaque na campeã se for a linha 1 após o header)
-    if (i === 1) { // Campeã
-       bgColors.push(["#FFD700", "#FFD700", "#FFD700", "#FFD700", "#FFD700"]); // Gold
-       fontColors.push(["#000000", "#000000", "#000000", "#000000", "#000000"]);
-    } else {
-       bgColors.push(["#1E1E1E", "#1E1E1E", "#1E1E1E", "#1E1E1E", "#1E1E1E"]); // Dark Mode default
-       fontColors.push(["#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF", "#FFFFFF"]);
-    }
+  // Extrair ponto de invalidação (buscando na coluna da MA200 ou EMA de referência, se existir)
+  let pontoInvalidacao = "N/A";
+  let emaColIndex = btc1dData[0].findIndex(h => h.toString().toUpperCase().includes('EMA 20'));
+  if(emaColIndex !== -1 && !isNaN(last1D[emaColIndex])) {
+     pontoInvalidacao = "$" + parseFloat(last1D[emaColIndex]).toFixed(2);
   }
 
-  if (writeData.length > 0) {
-      let rangeBoard = tabs.dashboard.getRange(10, 2, writeData.length, writeData[0].length);
-      rangeBoard.setValues(writeData);
-      // Aplicando formatação condicional de destaque em lote
-      rangeBoard.setBackgrounds(bgColors);
-      rangeBoard.setFontColors(fontColors);
+  tabs.dashboard.getRange("B8").setValue(liderName);
+  tabs.dashboard.getRange("C8").setValue(recomendacao);
+  tabs.dashboard.getRange("D8").setValue(regimeMercado);
+  tabs.dashboard.getRange("E8").setValue(pontoInvalidacao);
+
+  // 3. LEADERBOARD MULTITEMPORAL — Linhas 13 a 28 (Colunas D a G)
+  // Assumindo a estrutura baseada nas colunas requeridas (Retorno, DD, Sharpe, WR)
+  // Vamos buscar índices baseados em headers comuns caso existam. Se não, mapeamos de forma estruturada.
+  // Como as janelas temporais de um leaderboard de planilhas costumam ter as métricas em colunas fixas:
+  // Offset 12M = Col 1..4, 24M = Col 5..8, 36M = Col 9..12, AT = Col 13..16 (exemplo prático robusto)
+
+  function getLeaderBlock(rankingArray, startColIndex) {
+      let block = [];
+      for(let i = 1; i <= 4; i++) {
+          if(i < rankingArray.length) {
+              block.push([
+                rankingArray[i][startColIndex] || "",
+                rankingArray[i][startColIndex+1] || "",
+                rankingArray[i][startColIndex+2] || "",
+                rankingArray[i][startColIndex+3] || ""
+              ]);
+          } else {
+              block.push(["", "", "", ""]);
+          }
+      }
+      return block;
   }
 
-  // Status Timeframes (Fechamentos e sinais de cada TF)
-  let tfData = [
-      ["1W", "$" + parseFloat(last1W[1]||0).toFixed(2), (signal1W > 0 ? "BULL" : "BEAR")],
-      ["1D", currentPrice, (signal1D > 0 ? "BULL" : "BEAR")],
-      ["4H", "$" + parseFloat(last4H[1]||0).toFixed(2), (signal4H > 0 ? "BULL" : "BEAR")]
-  ];
-  tabs.dashboard.getRange(20, 2, 3, 3).setValues(tfData);
+  // Preenchendo com offsets baseados na estrutura padronizada (assumindo colunas contíguas no DB)
+  // Caso a estrutura da aba Ranking seja linha a linha para os períodos, esse mapeamento cobrirá colunas laterais
+  const leader12M = getLeaderBlock(rankingData, 1);  // Ex: B, C, D, E
+  const leader24M = getLeaderBlock(rankingData, 5);  // Ex: F, G, H, I
+  const leader36M = getLeaderBlock(rankingData, 9);  // Ex: J, K, L, M
+  const leaderAT = getLeaderBlock(rankingData, 13);  // Ex: N, O, P, Q
+
+  tabs.dashboard.getRange("D13:G16").setValues(leader12M);
+  tabs.dashboard.getRange("D17:G20").setValues(leader24M);
+  tabs.dashboard.getRange("D21:G24").setValues(leader36M);
+  tabs.dashboard.getRange("D25:G28").setValues(leaderAT);
+
+  // 4. STATUS ATUAL POR TIMEFRAME — Coluna D (Linhas 31 a 33)
+  // Lógica técnica básica baseada nos sinais (pode ser aprimorada lendo a EMA se necessário)
+  let status1W = signal1W > 0 ? "COMPRADO - " + liderName + " Alinhado" : "VENDIDO / CAIXA";
+  let status1D = signal1D > 0 ? "COMPRADO - " + liderName + " Alinhado" : "VENDIDO / CAIXA";
+  let status4H = signal4H > 0 ? "COMPRADO - " + liderName + " Alinhado" : "VENDIDO / CAIXA";
+
+  tabs.dashboard.getRange("D31").setValue(status1W);
+  tabs.dashboard.getRange("D32").setValue(status1D);
+  tabs.dashboard.getRange("D33").setValue(status4H);
+
+  Logger.log("Dashboard Executive atualizado com sucesso.");
 }
