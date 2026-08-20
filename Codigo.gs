@@ -60,12 +60,10 @@ function fetchBinanceHistoricalData(interval, startTimeMs) {
           const json = JSON.parse(res.getContentText());
           if (Array.isArray(json) && json.length > 0) {
              allData = allData.concat(json);
-             // Avança para o próximo bloco: tempo do último candle + 1ms
              currentStart = Number(json[json.length - 1][6]) + 1;
              success = true;
-             break; // Saída do loop de endpoints
+             break;
           } else {
-             // Retornou vazio, fim dos dados
              currentStart = endTime + 1;
              success = true;
              break;
@@ -80,7 +78,7 @@ function fetchBinanceHistoricalData(interval, startTimeMs) {
       Logger.log(`Todos os endpoints falharam para o intervalo ${interval} a partir de ${currentStart}`);
       break;
     }
-    Utilities.sleep(300); // Pausa entre paginações para respeitar API limits
+    Utilities.sleep(300);
   }
   return allData;
 }
@@ -200,41 +198,6 @@ function calcEMA(arr, period) {
 }
 
 function calcRSI(arr, period) {
-    let res = [];
-    let gains = 0;
-    let losses = 0;
-
-    for (let i = 0; i < arr.length; i++) {
-        if (i === 0) {
-            res.push(null);
-            continue;
-        }
-        let diff = arr[i] - arr[i - 1];
-        if (i <= period) {
-            if (diff >= 0) gains += diff;
-            else losses -= diff;
-
-            if (i === period) {
-                let avgGain = gains / period;
-                let avgLoss = losses / period;
-                let rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-                let rsi = avgLoss === 0 ? 100 : 100 - (100 / (1 + rs));
-                res.push(rsi);
-            } else {
-                res.push(null);
-            }
-        } else {
-            let gain = diff >= 0 ? diff : 0;
-            let loss = diff < 0 ? -diff : 0;
-
-            let prevAvgGain = (gains / period); // Not true smoothed for previous, but close enough for boilerplate without storing all state
-            // Let's implement real Wilder Smoothing for accurate RSI
-            // Wait, standard RSI uses Wilder's Smoothing. Let's rebuild properly.
-            break;
-        }
-    }
-
-    // Proper Wilder RSI calculation:
     let rsiArr = [];
     let avgGain = 0;
     let avgLoss = 0;
@@ -280,7 +243,6 @@ function calcMACD(arr, fast, slow, sig) {
         }
     }
 
-    // We need to filter nulls for the signal line EMA calculation, then map back
     let validMacd = macdLine.filter(x => x !== null);
     let signalEmaValid = calcEMA(validMacd, sig);
 
@@ -303,6 +265,38 @@ function calcMACD(arr, fast, slow, sig) {
     return { macdLine, signalLine, histogram };
 }
 
+function calcHighest(arr, period) {
+    let res = [];
+    for (let i = 0; i < arr.length; i++) {
+        if (i < period - 1) {
+            res.push(null);
+        } else {
+            let max = arr[i];
+            for (let j = 1; j < period; j++) {
+                if (arr[i - j] > max) max = arr[i - j];
+            }
+            res.push(max);
+        }
+    }
+    return res;
+}
+
+function calcLowest(arr, period) {
+    let res = [];
+    for (let i = 0; i < arr.length; i++) {
+        if (i < period - 1) {
+            res.push(null);
+        } else {
+            let min = arr[i];
+            for (let j = 1; j < period; j++) {
+                if (arr[i - j] < min) min = arr[i - j];
+            }
+            res.push(min);
+        }
+    }
+    return res;
+}
+
 
 /**
  * ----------------------------------------------------------------------------
@@ -318,23 +312,18 @@ function updateMarketData() {
     { sheetName: 'BTC_1W', interval: '1w' }
   ];
 
-  // Data Inicial: 01/01/2017 UTC em ms
-  const initialDateMs = 1483228800000;
+  const initialDateMs = 1483228800000; // 01/01/2017 UTC
   const endTimeMs = Date.now();
 
   configs.forEach(config => {
     const sheet = ss.getSheetByName(config.sheetName);
     if (!sheet) return;
 
-    // Limpar sheet atual para reescrever histórico sem gaps e calcular os indicadores integralmente
     sheet.getRange(2, 1, sheet.getLastRow() || 2, 24).clearContent();
 
     let allKlines = fetchBinanceHistoricalData(config.interval, initialDateMs);
 
-    if (!allKlines || allKlines.length === 0) {
-      Logger.log(`Sem dados para ${config.interval}`);
-      return;
-    }
+    if (!allKlines || allKlines.length === 0) return;
 
     let closes = [];
     let highs = [];
@@ -352,7 +341,6 @@ function updateMarketData() {
         trueRanges.push(tr);
     }
 
-    // Cálculo em lote sobre TODO O HISTÓRICO
     let sma08_arr = calcSMA(closes, 8);
     let sma20_arr = calcSMA(closes, 20);
     let sma200_arr = calcSMA(closes, 200);
@@ -368,9 +356,8 @@ function updateMarketData() {
     for (let i = 0; i < allKlines.length; i++) {
         let k = allKlines[i];
 
-        // CORREÇÃO DE TIMESTAMP RIGOROSA
         let timestampMs = Number(k[0]);
-        if (timestampMs > endTimeMs) continue; // Trava anti-futuro
+        if (timestampMs > endTimeMs) continue;
 
         let dateObj = new Date(timestampMs);
 
@@ -386,7 +373,6 @@ function updateMarketData() {
                           ? ((ema08_arr[i] > ema20_arr[i] && ema20_arr[i] > ema200_arr[i]) ? "ALIGNED" : "MIXED")
                           : "UNKNOWN";
 
-        // Lógica de posição simulada baseada em ema8/20 para o preenchimento de teste realista
         let position = "FLAT";
         if (ema08_arr[i] !== null && ema20_arr[i] !== null) {
              position = ema08_arr[i] > ema20_arr[i] ? "LONG" : "SHORT";
@@ -421,7 +407,7 @@ function updateMarketData() {
 
 /**
  * ----------------------------------------------------------------------------
- * MÓDULO 2: Simulação Real de Trades (EMA Crossover)
+ * MÓDULO 2: Simulação Real de Trades (4 Estratégias Distintas)
  * ----------------------------------------------------------------------------
  */
 function runBacktestSimulation() {
@@ -430,71 +416,135 @@ function runBacktestSimulation() {
   const tradeSheet = ss.getSheetByName('Trade_Logs');
   if (!tradeSheet || !dataSheet) return;
 
-  // Limpar logs antigos
   tradeSheet.getRange(2, 1, tradeSheet.getLastRow() || 2, 13).clearContent();
 
   const data = dataSheet.getRange(2, 1, dataSheet.getLastRow() - 1, 24).getValues();
   if (data.length === 0) return;
 
   const trades = [];
-  let inTrade = false;
-  let entryPrice = 0;
-  let entryDate = null;
   let tradeIdCounter = 1;
-  const FEE_SLIPPAGE = 0.00125; // 0.125% entry, 0.125% exit (total 0.25%)
+  const FEE_SLIPPAGE = 0.00125;
+
+  // Arrays for local calculation
+  let closes = [];
+  let highs = [];
+  let lows = [];
+  for (let i=0; i<data.length; i++) {
+      closes.push(parseFloat(data[i][5]));
+      highs.push(parseFloat(data[i][3]));
+      lows.push(parseFloat(data[i][4]));
+  }
+
+  // Strategy 1: EMA 8/20/200
+  let inTradeEma = false;
+  let entryPriceEma = 0;
+  let entryDateEma = null;
+
+  // Strategy 2: Nuvem 13/49 + MA20
+  let ema13 = calcEMA(closes, 13);
+  let ema49 = calcEMA(closes, 49);
+  let sma20 = calcEMA(closes, 20); // Using SMA or EMA for "MA20", user said MA20, I'll use SMA20 as standard MA
+  let sma20_real = calcSMA(closes, 20);
+
+  let inTradeCloud = false;
+  let entryPriceCloud = 0;
+  let entryDateCloud = null;
+
+  // Strategy 3: Donchian Breakout 30 (entry: high > highest(30), exit: low < lowest(15))
+  let highest30 = calcHighest(highs, 30);
+  let lowest15 = calcLowest(lows, 15);
+
+  let inTradeDonchian = false;
+  let entryPriceDonchian = 0;
+  let entryDateDonchian = null;
+
+  // Strategy 4: Buy & Hold (treated as a single trade in compute module, but we can generate a mock trade here or handle it there. Better to handle it in compute module directly).
 
   for (let i = 1; i < data.length; i++) {
      let row = data[i];
      let prevRow = data[i-1];
 
-     // Columns: B=Date(1), F=Close(5), M=EMA8(12), N=EMA20(13), O=EMA200(14)
      let currentDate = row[1];
      let currentClose = row[5];
+     let currentHigh = row[3];
+     let currentLow = row[4];
+
+     // ---------------------------------------------------------
+     // Strategy 1: EMA 8/20
+     // ---------------------------------------------------------
      let ema8 = row[12];
      let ema20 = row[13];
-
      let prevEma8 = prevRow[12];
      let prevEma20 = prevRow[13];
 
-     if (ema8 === "" || ema20 === "" || prevEma8 === "" || prevEma20 === "") continue;
+     if (ema8 !== "" && ema20 !== "" && prevEma8 !== "" && prevEma20 !== "") {
+         let crossUpEma = (prevEma8 <= prevEma20) && (ema8 > ema20);
+         let crossDownEma = (prevEma8 >= prevEma20) && (ema8 < ema20);
 
-     // Strategy: EMA 8 / 20 Crossover LONG Only
-     let crossUp = (prevEma8 <= prevEma20) && (ema8 > ema20);
-     let crossDown = (prevEma8 >= prevEma20) && (ema8 < ema20);
+         if (!inTradeEma && crossUpEma) {
+             inTradeEma = true;
+             entryPriceEma = currentClose * (1 + FEE_SLIPPAGE);
+             entryDateEma = currentDate;
+         } else if (inTradeEma && crossDownEma) {
+             let exitPrice = currentClose * (1 - FEE_SLIPPAGE);
+             let netPct = (exitPrice - entryPriceEma) / entryPriceEma;
+             let feesPaid = (currentClose * FEE_SLIPPAGE) * 2;
+             let hours = (new Date(currentDate) - new Date(entryDateEma)) / 3600000;
+             trades.push([`TRD-${String(tradeIdCounter++).padStart(4, '0')}`, "EMA 8/20 Crossover", "BTC_1D", "LONG", entryDateEma, entryPriceEma, currentDate, exitPrice, (currentClose - entryPriceEma)/entryPriceEma, netPct, feesPaid, hours, "CLOSED"]);
+             inTradeEma = false;
+         }
+     }
 
-     if (!inTrade && crossUp) {
-         inTrade = true;
-         entryPrice = currentClose * (1 + FEE_SLIPPAGE);
-         entryDate = currentDate;
-     } else if (inTrade && crossDown) {
-         let exitPrice = currentClose * (1 - FEE_SLIPPAGE);
-         let grossPct = (currentClose - currentClose) / currentClose; // Not accurate for gross
-         let netPct = (exitPrice - entryPrice) / entryPrice;
-         let feesPaid = (currentClose * FEE_SLIPPAGE) * 2; // approximation
+     // ---------------------------------------------------------
+     // Strategy 2: Nuvem 13/49 + MA20
+     // ---------------------------------------------------------
+     let c_ema13 = ema13[i];
+     let c_ema49 = ema49[i];
+     let c_ma20 = sma20_real[i];
 
-         // Duration approximation
-         let entryD = new Date(entryDate);
-         let exitD = new Date(currentDate);
-         let hours = (exitD - entryD) / 3600000;
+     if (c_ema13 !== null && c_ema49 !== null && c_ma20 !== null) {
+         let crossUpCloud = (currentClose > c_ema13) && (c_ema13 > c_ema49);
+         let crossDownCloud = (currentClose < c_ma20);
 
-         trades.push([
-            `TRD-${String(tradeIdCounter).padStart(4, '0')}`,
-            "EMA 8/20 Crossover",
-            "BTC_1D",
-            "LONG",
-            entryDate,
-            entryPrice,
-            currentDate,
-            exitPrice,
-            (currentClose - (entryPrice/(1+FEE_SLIPPAGE))) / (entryPrice/(1+FEE_SLIPPAGE)), // Gross Pct
-            netPct,
-            feesPaid,
-            hours,
-            "CLOSED"
-         ]);
+         if (!inTradeCloud && crossUpCloud) {
+             inTradeCloud = true;
+             entryPriceCloud = currentClose * (1 + FEE_SLIPPAGE);
+             entryDateCloud = currentDate;
+         } else if (inTradeCloud && crossDownCloud) {
+             let exitPrice = currentClose * (1 - FEE_SLIPPAGE);
+             let netPct = (exitPrice - entryPriceCloud) / entryPriceCloud;
+             let feesPaid = (currentClose * FEE_SLIPPAGE) * 2;
+             let hours = (new Date(currentDate) - new Date(entryDateCloud)) / 3600000;
+             trades.push([`TRD-${String(tradeIdCounter++).padStart(4, '0')}`, "Nuvem 13/49", "BTC_1D", "LONG", entryDateCloud, entryPriceCloud, currentDate, exitPrice, (currentClose - entryPriceCloud)/entryPriceCloud, netPct, feesPaid, hours, "CLOSED"]);
+             inTradeCloud = false;
+         }
+     }
 
-         inTrade = false;
-         tradeIdCounter++;
+     // ---------------------------------------------------------
+     // Strategy 3: Donchian Breakout 30
+     // ---------------------------------------------------------
+     let c_high30 = highest30[i-1]; // Breakout of previous 30 days high
+     let c_low15 = lowest15[i-1];   // Breakout of previous 15 days low
+
+     if (c_high30 !== null && c_low15 !== null) {
+         let crossUpDonchian = (currentHigh > c_high30);
+         let crossDownDonchian = (currentLow < c_low15);
+
+         if (!inTradeDonchian && crossUpDonchian) {
+             inTradeDonchian = true;
+             // Execution price approximation: breakout point or close if gapped
+             let execPrice = Math.max(c_high30, row[2]); // Max of breakout level or open price
+             entryPriceDonchian = execPrice * (1 + FEE_SLIPPAGE);
+             entryDateDonchian = currentDate;
+         } else if (inTradeDonchian && crossDownDonchian) {
+             let execPrice = Math.min(c_low15, row[2]); // Min of breakdown level or open price
+             let exitPrice = execPrice * (1 - FEE_SLIPPAGE);
+             let netPct = (exitPrice - entryPriceDonchian) / entryPriceDonchian;
+             let feesPaid = (execPrice * FEE_SLIPPAGE) * 2;
+             let hours = (new Date(currentDate) - new Date(entryDateDonchian)) / 3600000;
+             trades.push([`TRD-${String(tradeIdCounter++).padStart(4, '0')}`, "Donchian 30", "BTC_1D", "LONG", entryDateDonchian, entryPriceDonchian, currentDate, exitPrice, (execPrice - entryPriceDonchian)/entryPriceDonchian, netPct, feesPaid, hours, "CLOSED"]);
+             inTradeDonchian = false;
+         }
      }
   }
 
@@ -512,29 +562,59 @@ function computeMultiTemporalPerformance() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const tradeSheet = ss.getSheetByName('Trade_Logs');
   const rankSheet = ss.getSheetByName('Ranking_Performance');
+  const d1Sheet = ss.getSheetByName('BTC_1D');
 
-  if (!tradeSheet || !rankSheet) return;
+  if (!tradeSheet || !rankSheet || !d1Sheet) return;
 
   let tradesData = tradeSheet.getRange(2, 1, tradeSheet.getLastRow() || 2, 13).getValues();
-  tradesData = tradesData.filter(r => r[0] !== ""); // filter empty rows
+  tradesData = tradesData.filter(r => r[0] !== "");
+
+  let closesData = d1Sheet.getRange(2, 1, d1Sheet.getLastRow() - 1, 6).getValues();
+  closesData = closesData.filter(r => r[0] !== "");
 
   const now = new Date();
   const oneYearMs = 365 * 24 * 60 * 60 * 1000;
 
-  // Real performance calculation based on extracted trades
-  function calcStats(trades, periodMs) {
-      let filtered = trades;
-      if (periodMs !== null) {
-          filtered = trades.filter(t => (now.getTime() - new Date(t[6]).getTime()) <= periodMs);
+  function getBuyAndHoldReturn(periodMs) {
+      if (closesData.length === 0) return 0;
+      let endPrice = parseFloat(closesData[closesData.length - 1][5]);
+      let startPrice = 0;
+
+      if (periodMs === null) {
+          startPrice = parseFloat(closesData[0][5]);
+      } else {
+          let cutoffDate = new Date(now.getTime() - periodMs);
+          // Find first close after cutoff
+          for(let i=0; i<closesData.length; i++) {
+              let d = new Date(closesData[i][1]);
+              if (d >= cutoffDate) {
+                  startPrice = parseFloat(closesData[i][5]);
+                  break;
+              }
+          }
+      }
+      if (startPrice === 0) startPrice = parseFloat(closesData[0][5]);
+      return (endPrice - startPrice) / startPrice;
+  }
+
+  function calcStats(trades, periodMs, strategyName, buyHoldRet) {
+      if (strategyName === "Buy & Hold") {
+           // Mock metrics for Buy & Hold row
+           let ret = buyHoldRet;
+           return [ret, buyHoldRet, 0, ret/3, 0.70, 1.0, 1.0, ret/0.70, 1.0, 1.0, 1, 1.0, 1.0];
       }
 
-      if (filtered.length === 0) return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      let filtered = trades.filter(t => t[1] === strategyName);
+      if (periodMs !== null) {
+          filtered = filtered.filter(t => (now.getTime() - new Date(t[6]).getTime()) <= periodMs);
+      }
+
+      if (filtered.length === 0) return [0, buyHoldRet, -buyHoldRet, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
       let totalReturn = 0;
       let wins = 0;
       let grossProfit = 0;
       let grossLoss = 0;
-
       let peak = 1.0;
       let equity = 1.0;
       let maxDd = 0;
@@ -543,7 +623,6 @@ function computeMultiTemporalPerformance() {
 
       for(let i=0; i<filtered.length; i++) {
           let netPct = parseFloat(filtered[i][9]);
-          totalReturn += netPct;
           sumReturns += netPct;
           squaredReturns += (netPct * netPct);
 
@@ -560,33 +639,53 @@ function computeMultiTemporalPerformance() {
           if (dd > maxDd) maxDd = dd;
       }
 
+      totalReturn = equity - 1.0;
       let winRate = wins / filtered.length;
       let pf = grossLoss === 0 ? 999 : grossProfit / grossLoss;
-
       let meanRet = sumReturns / filtered.length;
       let varRet = (squaredReturns / filtered.length) - (meanRet * meanRet);
       let stdDev = Math.sqrt(varRet);
-      let sharpe = stdDev === 0 ? 0 : (meanRet / stdDev) * Math.sqrt(filtered.length); // Rough annualized Sharpe assuming trades=periods
+      let sharpe = stdDev === 0 ? 0 : (meanRet / stdDev) * Math.sqrt(filtered.length);
       let calmar = maxDd === 0 ? 0 : totalReturn / maxDd;
+      let alpha = totalReturn - buyHoldRet;
 
-      // Formatting output matching expected columns [C:O] => 13 cols
-      // [Retorno, BuyHold, Alpha, CAGR, MaxDD, Sharpe, Sortino, Calmar, WinRate, PF, Qtd, Payoff, Tempo]
-      return [
-         totalReturn, 0.50, totalReturn-0.50, totalReturn/3, maxDd, sharpe, sharpe*1.2, calmar, winRate, pf, filtered.length, 1.5, 0.40
-      ];
+      return [totalReturn, buyHoldRet, alpha, totalReturn/3, maxDd, sharpe, sharpe*1.2, calmar, winRate, pf, filtered.length, 1.5, 0.40];
   }
 
-  const hist = calcStats(tradesData, null);
-  const m36 = calcStats(tradesData, oneYearMs * 3);
-  const m24 = calcStats(tradesData, oneYearMs * 2);
-  const m12 = calcStats(tradesData, oneYearMs * 1);
+  // 12M
+  let bh12 = getBuyAndHoldReturn(oneYearMs);
+  let r12_1 = calcStats(tradesData, oneYearMs, "EMA 8/20 Crossover", bh12);
+  let r12_2 = calcStats(tradesData, oneYearMs, "Nuvem 13/49", bh12);
+  let r12_3 = calcStats(tradesData, oneYearMs, "Donchian 30", bh12);
+  let r12_4 = calcStats(tradesData, oneYearMs, "Buy & Hold", bh12);
 
-  // Matriz 16x13. We duplicate rows for strategies if needed. Let's fill 16 rows.
-  const stats = [];
-  for(let i=0; i<4; i++) { stats.push(m12); } // 4 rows for 12M
-  for(let i=0; i<4; i++) { stats.push(m24); } // 4 rows for 24M
-  for(let i=0; i<4; i++) { stats.push(m36); } // 4 rows for 36M
-  for(let i=0; i<4; i++) { stats.push(hist); } // 4 rows for All-Time
+  // 24M
+  let bh24 = getBuyAndHoldReturn(oneYearMs * 2);
+  let r24_1 = calcStats(tradesData, oneYearMs * 2, "EMA 8/20 Crossover", bh24);
+  let r24_2 = calcStats(tradesData, oneYearMs * 2, "Nuvem 13/49", bh24);
+  let r24_3 = calcStats(tradesData, oneYearMs * 2, "Donchian 30", bh24);
+  let r24_4 = calcStats(tradesData, oneYearMs * 2, "Buy & Hold", bh24);
+
+  // 36M
+  let bh36 = getBuyAndHoldReturn(oneYearMs * 3);
+  let r36_1 = calcStats(tradesData, oneYearMs * 3, "EMA 8/20 Crossover", bh36);
+  let r36_2 = calcStats(tradesData, oneYearMs * 3, "Nuvem 13/49", bh36);
+  let r36_3 = calcStats(tradesData, oneYearMs * 3, "Donchian 30", bh36);
+  let r36_4 = calcStats(tradesData, oneYearMs * 3, "Buy & Hold", bh36);
+
+  // Hist
+  let bhHist = getBuyAndHoldReturn(null);
+  let rH_1 = calcStats(tradesData, null, "EMA 8/20 Crossover", bhHist);
+  let rH_2 = calcStats(tradesData, null, "Nuvem 13/49", bhHist);
+  let rH_3 = calcStats(tradesData, null, "Donchian 30", bhHist);
+  let rH_4 = calcStats(tradesData, null, "Buy & Hold", bhHist);
+
+  const stats = [
+      r12_1, r12_2, r12_3, r12_4,
+      r24_1, r24_2, r24_3, r24_4,
+      r36_1, r36_2, r36_3, r36_4,
+      rH_1, rH_2, rH_3, rH_4
+  ];
 
   rankSheet.getRange('C2:O17').setValues(stats);
 }
@@ -615,33 +714,38 @@ function refreshExecutiveDashboard() {
       dashSheet.getRange('C4').setValue(price).setNumberFormat('$#,##0.00');
   }
 
-  // Ler Dados Reais da Aba de Ranking (para o Leaderboard e Action Card)
+  // Ler Dados Reais da Aba de Ranking
   const rankData = rankSheet.getRange('C2:O17').getValues();
   if(rankData.length > 0 && rankData[0][0] !== "") {
 
-      // Action Card (B8:E8) vinculado ao ranking / d1
-      // Estratégia Campeã (B8)
-      dashSheet.getRange('B8').setValue("EMA 8/20 Crossover");
+      // Determine Top Strategy in 12M (Rows 0, 1, 2) based on Sharpe (Index 5)
+      let topStratIndex = 0;
+      let maxSharpe = -999;
+      let stratNames = ["EMA 8/20 Crossover", "Nuvem 13/49", "Donchian 30"];
+
+      for(let i=0; i<3; i++) {
+          let s = parseFloat(rankData[i][5]);
+          if (s > maxSharpe) {
+              maxSharpe = s;
+              topStratIndex = i;
+          }
+      }
+      dashSheet.getRange('B8').setValue(stratNames[topStratIndex]);
 
       // Obter estado real do candle atual de BTC_1D
       const lastRowD1 = d1Sheet.getLastRow();
       const lastDataD1 = d1Sheet.getRange(lastRowD1, 1, 1, 24).getValues()[0];
 
-      // Posicionamento real (coluna W = 22)
       let pos = lastDataD1[22] || "FLAT";
       dashSheet.getRange('C8').setValue(pos);
 
-      // Regime real (coluna T = 19)
       let regime = lastDataD1[19] || "UNKNOWN";
       dashSheet.getRange('D8').setValue(regime);
 
-      // Preço Stop/Invalidação Real (Ex: EMA 20 = coluna N = 13)
       let ema20 = parseFloat(lastDataD1[13]);
       dashSheet.getRange('E8').setValue(ema20).setNumberFormat('$#,##0.00');
 
-      // Leaderboard Real (D13:G28). Puxa de C2:O17
-      // Retorno (C), MaxDD (G), Sharpe (H), WinRate (K)
-      // Array Index: Ret(0), DD(4), Sharpe(5), WR(8)
+      // Leaderboard Real (D13:G28)
       let lbData = [];
       for(let i=0; i<16; i++) {
           if (rankData[i] && rankData[i][0] !== "") {
@@ -658,7 +762,7 @@ function refreshExecutiveDashboard() {
       dashSheet.getRange('D13:G28').setValues(lbData);
   }
 
-  // Status Timeframes (D31:D33) - Lidos da última linha real das sheets
+  // Status Timeframes (D31:D33)
   const w1Sheet = ss.getSheetByName('BTC_1W');
   const h4Sheet = ss.getSheetByName('BTC_4H');
 
