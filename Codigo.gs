@@ -114,7 +114,6 @@ function ingerirMercado() {
   const eth4HKey = Object.keys(JSON.parse(resps[3].getContentText()).result)[0];
   const eth4H = JSON.parse(resps[3].getContentText()).result[eth4HKey] || [];
 
-  // Aumentado o slice para 250 para garantir cálculo correto do SMA200
   const procBtc1D = processarOHLC(btc1D.slice(-250));
   const procBtc1W = processarOHLC(btc1W.slice(-250));
   const procEth1D = processarOHLC(eth1D.slice(-250));
@@ -273,42 +272,60 @@ function motorMatriz(mkt, aave) {
   };
 }
 
-/* ========================= ATUALIZADOR DE PAINEL ========================= */
+/* ========================= ATUALIZADOR DE PAINEL (ALINHADO) ========================= */
 
 function atualizarPainel(mkt, aave, dec) {
   let aba = SpreadsheetApp.getActive().getSheetByName(CONFIG.ABA_PAINEL);
-  if (!aba) {
-    aba = SpreadsheetApp.getActive().insertSheet(CONFIG.ABA_PAINEL);
-  }
+  if (!aba) return;
 
-  const p = aave['Polygon'];
-  const b = aave['Base'];
+  const p = aave['Polygon'] || { colateral:0, divida:0, disponivel:0, ltvAtual:0, hf:0, quedaTolerada:0, precoLiq:0, status:'DESCONHECIDO' };
+  const b = aave['Base'] || { colateral:0, divida:0, disponivel:0, ltvAtual:0, hf:0, quedaTolerada:0, precoLiq:0, status:'DESCONHECIDO' };
 
-  // Template preenchido
-  const layout = [
-    ['DASHBOARD DECISÃO', 'Data/Hora (BRT):', agoraLocal(), '', '', '', '', ''],
-    ['Preço BTC/USD:', mkt.btcSpot, 'Preço ETH/BTC:', mkt.ethSpot, '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
-    ['==== 1. MATRIZ DE DECISÃO ====', '', '', '', '', '', '', ''],
-    ['Macro (Cripto vs Caixa):', `${dec.macro.cripto}% / ${dec.macro.caixa}%`, dec.macro.status, '', '', '', '', ''],
-    ['Relativo (BTC vs ETH):', `${dec.relativo.wbtc}% / ${dec.relativo.eth}%`, dec.relativo.status, '', '', '', '', ''],
-    ['Alocação Patrimonial Final:', `WBTC: ${dec.final.wbtc}%`, `ETH: ${dec.final.eth}%`, `CAIXA: ${dec.final.caixa}%`, '', '', '', ''],
-    ['Ação Recomendada:', dec.aporte.acao, `Aporte WBTC: R$ ${dec.aporte.wbtc}`, `Amortização: R$ ${dec.aporte.usdc}`, '', '', '', ''],
-    ['', '', '', '', '', '', '', ''],
-    ['==== 2. RADAR DE RISCO AAVE ====', '', '', '', '', '', '', ''],
-    ['Rede', 'Colateral (USD)', 'Dívida (USD)', 'Poder Disponível', 'LTV Atual (%)', 'Health Factor', 'Margem (Queda %)', 'Preço Liq BTC', 'Status'],
-    ['Polygon', p.colateral.toFixed(2), p.divida.toFixed(2), p.disponivel.toFixed(2), p.ltvAtual.toFixed(2), p.hf.toFixed(3), p.quedaTolerada.toFixed(2), p.precoLiq.toFixed(2), p.status],
-    ['Base', b.colateral.toFixed(2), b.divida.toFixed(2), b.disponivel.toFixed(2), b.ltvAtual.toFixed(2), b.hf.toFixed(3), b.quedaTolerada.toFixed(2), b.precoLiq.toFixed(2), b.status],
-    ['', '', '', '', '', '', '', ''],
-    ['==== 3. SINAIS TÉCNICOS ====', '', '', '', '', '', '', ''],
-    ['Ativo / TF', 'RSI', 'EMA Rápida', 'EMA Lenta', 'Status Cruzamento', '', '', ''],
-    ['BTC 1D', mkt.btc.rsi_1D.toFixed(1), mkt.btc.ema10_1D.toFixed(0), mkt.btc.ema30_1D.toFixed(0), mkt.btc.ema10_1D > mkt.btc.ema30_1D ? 'BULL' : 'BEAR', '', '', ''],
-    ['BTC 1W', 'N/A', mkt.btc.ema10_1W.toFixed(0), mkt.btc.ema30_1W.toFixed(0), mkt.btc.ema10_1W > mkt.btc.ema30_1W ? 'BULL' : 'BEAR', '', '', ''],
-    ['ETH 1D', 'N/A', mkt.eth.ema21_1D.toFixed(4), mkt.eth.ema55_1D.toFixed(4), mkt.eth.ema21_1D > mkt.eth.ema55_1D ? 'BULL' : 'BEAR', '', '', ''],
-    ['ETH 4H', mkt.eth.rsi_4H.toFixed(1), 'N/A', 'N/A', 'N/A', '', '', '']
+  // 1. Header (Linha 2)
+  aba.getRange('B2').setValue(mkt.btcSpot).setNumberFormat('$#,##0.00');
+  aba.getRange('D2').setValue(mkt.ethSpot).setNumberFormat('0.000000');
+  aba.getRange('F2').setValue(agoraLocal());
+
+  // 2. Bloco 1: Matriz de Decisão (Linhas 5 a 8)
+  aba.getRange('B5').setValue(`${dec.macro.cripto}% / ${dec.macro.caixa}%`);
+  aba.getRange('C5').setValue(dec.macro.status);
+
+  aba.getRange('B6').setValue(`${dec.relativo.wbtc}% / ${dec.relativo.eth}%`);
+  aba.getRange('C6').setValue(dec.relativo.status);
+
+  aba.getRange('B7').setValue(`WBTC: ${dec.final.wbtc}%`);
+  aba.getRange('C7').setValue(`ETH: ${dec.final.eth}%`);
+  aba.getRange('D7').setValue(`CAIXA: ${dec.final.caixa}%`);
+
+  aba.getRange('B8').setValue(dec.aporte.acao);
+  aba.getRange('C8').setValue(`R$ ${dec.aporte.wbtc} WBTC + R$ ${dec.aporte.usdc} USDC`);
+
+  // 3. Bloco 2: Radar Aave V3 (Linhas 12 e 13)
+  const aaveRows = [
+    ['Polygon', p.colateral, p.divida, p.disponivel, p.ltvAtual / 100, p.hf, p.quedaTolerada / 100, p.precoLiq, p.status],
+    ['Base', b.colateral, b.divida, b.disponivel, b.ltvAtual / 100, b.hf, b.quedaTolerada / 100, b.precoLiq, b.status]
   ];
+  aba.getRange(12, 1, 2, 9).setValues(aaveRows);
+  aba.getRange('B12:D13').setNumberFormat('$#,##0.00');
+  aba.getRange('E12:E13').setNumberFormat('0.00%');
+  aba.getRange('F12:F13').setNumberFormat('0.000');
+  aba.getRange('G12:G13').setNumberFormat('0.00%');
+  aba.getRange('H12:H13').setNumberFormat('$#,##0.00');
 
-  aba.getRange(1, 1, layout.length, layout[0].length).setValues(layout);
+  // 4. Bloco 3: Sinais Técnicos (Linhas 17 a 20)
+  const sinaisRows = [
+    ['BTC/USD 1W', mkt.btcSpot, 'N/A', mkt.btc.ema10_1W, mkt.btc.ema30_1W, mkt.btc.ema10_1W > mkt.btc.ema30_1W ? 'ALTA (10>30)' : 'BAIXA (10<30)', mkt.btc.ema10_1W > mkt.btc.ema30_1W ? 'BULLISH' : 'BEARISH'],
+    ['BTC/USD 1D', mkt.btcSpot, mkt.btc.rsi_1D, mkt.btc.ema10_1D, mkt.btc.ema30_1D, mkt.btc.ema10_1D > mkt.btc.ema30_1D ? 'ALTA (10>30)' : 'BAIXA (10<30)', mkt.btc.ema10_1D > mkt.btc.ema30_1D ? 'BULLISH' : 'BEARISH'],
+    ['ETH/BTC 1D', mkt.ethSpot, 'N/A', mkt.eth.ema21_1D, mkt.eth.ema55_1D, mkt.eth.ema21_1D > mkt.eth.ema55_1D ? 'ALTA (21>55)' : 'BAIXA (21<55)', mkt.eth.ema21_1D > mkt.eth.ema55_1D ? 'BULLISH' : 'BEARISH'],
+    ['ETH/BTC 4H', mkt.ethSpot, mkt.eth.rsi_4H, 'N/A', 'N/A', mkt.eth.rsi_4H > 70 ? 'SOBRECOMPRA' : mkt.eth.rsi_4H < 30 ? 'SOBREVENDA' : 'NEUTRO', mkt.eth.rsi_4H > 45 && mkt.eth.rsi_4H < 70 ? 'SAUDÁVEL' : 'CAUTELA']
+  ];
+  aba.getRange(17, 1, 4, 7).setValues(sinaisRows);
+  aba.getRange('B17:B18').setNumberFormat('$#,##0.00');
+  aba.getRange('D17:E18').setNumberFormat('$#,##0.00');
+  aba.getRange('B19:B20').setNumberFormat('0.000000');
+  aba.getRange('D19:E19').setNumberFormat('0.000000');
+  aba.getRange('C18').setNumberFormat('0.0');
+  aba.getRange('C20').setNumberFormat('0.0');
 }
 
 /* ========================= UTILITÁRIOS E MATEMÁTICA ========================= */
