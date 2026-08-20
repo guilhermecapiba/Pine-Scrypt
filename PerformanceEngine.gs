@@ -5,7 +5,7 @@
 
 const SPREADSHEET_ID = '13RyXbvMGYppWPmWAPpFxUJ1bz17_oz6G-dAUAWZxhzQ';
 
-function runPerformanceEngine() {
+function computeMultiTemporalPerformance() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
   // 1. Bulk read data from input sheets
@@ -77,14 +77,13 @@ function runPerformanceEngine() {
     const row = tradesData[i];
     if (row[colStrategy] && row[colExitDate]) {
       const rawPct = parseFloat(row[colReturnPct]);
-      // Attempt to normalize % if it's entered as e.g. 5 instead of 0.05
       // Use the raw percent. Google Sheets naturally handles formatted percentages
-      // as decimals (e.g., 5% -> 0.05). Remove flawed heuristic.
+      // as decimals (e.g., 5% -> 0.05).
       const returnPct = isNaN(rawPct) ? 0 : rawPct;
       const returnAbs = parseFloat(row[colReturnAbs]) || 0;
 
       trades.push({
-        strategy: row[colStrategy].toString(),
+        strategy: row[colStrategy].toString().trim(),
         entryDate: row[colEntryDate] ? new Date(row[colEntryDate]) : new Date(row[colExitDate]),
         exitDate: new Date(row[colExitDate]),
         returnPct: returnPct,
@@ -104,280 +103,264 @@ function runPerformanceEngine() {
   const allTimeDays = Math.max(1, Math.floor((now.getTime() - dateAllTime.getTime()) / (1000 * 60 * 60 * 24)));
 
   const windows = [
-    { name: '1Y', startDate: date1Y, days: 365 },
-    { name: '2Y', startDate: date2Y, days: 730 },
-    { name: '3Y', startDate: date3Y, days: 1095 },
-    { name: 'All-Time', startDate: dateAllTime, days: allTimeDays }
+    { name: '12 Meses', startDate: date1Y, days: 365 },
+    { name: '24 Meses', startDate: date2Y, days: 730 },
+    { name: '36 Meses', startDate: date3Y, days: 1095 },
+    { name: 'Histórico Completo', startDate: dateAllTime, days: allTimeDays }
   ];
 
-  // Calculate metrics
-  const resultsByWindow = {};
+  const strategyNames = ['EMA 8/20/200', 'Nuvem 13/49 + MA20', 'Donchian Breakout', 'Buy & Hold'];
+
+  // Result matrix: 16 rows x 13 columns (C:O)
+  const resultsMatrix = [];
+
   for (const win of windows) {
-    resultsByWindow[win.name] = calculateMetricsForWindow(trades, btcHistory, win, now);
-  }
+    const winTrades = trades.filter(t => t.exitDate >= win.startDate && t.exitDate <= now);
+    const winBtc = btcHistory.filter(b => b.date >= win.startDate && b.date <= now);
 
-  // Output to Ranking_Performance
-  writeResultsToRankingSheet(rankingSheet, resultsByWindow, windows);
-}
+    let btcStartClose = 1;
+    let btcEndClose = 1;
+    let btcReturn = 0;
+    let btcCagr = 0;
+    let btcMaxDrawdown = 0;
+    let btcSharpe = 0;
+    let btcSortino = 0;
+    let btcCalmar = 0;
 
-function calculateMetricsForWindow(trades, btcHistory, win, now) {
-  // Filter for the specific time window
-  const winTrades = trades.filter(t => t.exitDate >= win.startDate && t.exitDate <= now);
-  const winBtc = btcHistory.filter(b => b.date >= win.startDate && b.date <= now);
+    if (winBtc.length > 1) {
+      btcStartClose = winBtc[0].close;
+      btcEndClose = winBtc[winBtc.length - 1].close;
+      btcReturn = (btcEndClose - btcStartClose) / btcStartClose;
+      btcCagr = Math.pow(1 + btcReturn, 365 / Math.max(1, win.days)) - 1;
 
-  if (winBtc.length < 2) return [];
+      // Calculate B&H metrics
+      let btcPeak = btcStartClose;
+      const btcDailyReturns = [];
+      let sumSqNegBtcRet = 0;
 
-  const btcStartClose = winBtc[0].close;
-  const btcEndClose = winBtc[winBtc.length - 1].close;
-  const btcReturn = (btcEndClose - btcStartClose) / btcStartClose;
+      for (let i = 1; i < winBtc.length; i++) {
+        const pClose = winBtc[i-1].close;
+        const cClose = winBtc[i].close;
+        const ret = (cClose - pClose) / pClose;
+        btcDailyReturns.push(ret);
 
-  // Group trades by strategy
-  const strategyMap = {};
-  for (const t of winTrades) {
-    if (!strategyMap[t.strategy]) {
-      strategyMap[t.strategy] = [];
-    }
-    strategyMap[t.strategy].push(t);
-  }
+        if (ret < 0) {
+            sumSqNegBtcRet += ret * ret;
+        }
 
-  const results = [];
-
-  for (const strat in strategyMap) {
-    const sTrades = strategyMap[strat];
-
-    let totalReturnCompound = 1;
-    let grossProfit = 0;
-    let grossLoss = 0;
-    let wins = 0;
-    let losses = 0;
-    let sumWinPct = 0;
-    let sumLossPct = 0;
-
-    const dailyReturnsMap = new Map();
-    const intervals = [];
-
-    for (const t of sTrades) {
-      totalReturnCompound *= (1 + t.returnPct);
-
-      if (t.returnPct > 0 || (t.returnPct === 0 && t.returnAbs >= 0)) {
-        grossProfit += Math.abs(t.returnAbs !== 0 ? t.returnAbs : t.returnPct);
-        wins++;
-        sumWinPct += t.returnPct;
-      } else {
-        grossLoss += Math.abs(t.returnAbs !== 0 ? t.returnAbs : t.returnPct);
-        losses++;
-        sumLossPct += t.returnPct;
-      }
-
-      const dTime = new Date(t.exitDate.getFullYear(), t.exitDate.getMonth(), t.exitDate.getDate()).getTime();
-      dailyReturnsMap.set(dTime, (dailyReturnsMap.get(dTime) || 0) + t.returnPct);
-
-      intervals.push({ start: t.entryDate.getTime(), end: t.exitDate.getTime() });
-    }
-
-    const totalReturn = totalReturnCompound - 1;
-    const alpha = totalReturn - btcReturn;
-
-    // CAGR: ((1 + TotalReturn) ^ (365 / Days)) - 1
-    const cagr = Math.pow(1 + totalReturn, 365 / Math.max(1, win.days)) - 1;
-
-    const winRate = wins / sTrades.length;
-    const profitFactor = grossLoss === 0 ? (grossProfit > 0 ? 99.99 : 0) : grossProfit / grossLoss;
-
-    const avgWin = wins > 0 ? sumWinPct / wins : 0;
-    const avgLoss = losses > 0 ? Math.abs(sumLossPct / losses) : 0;
-    const payoff = avgLoss === 0 ? (avgWin > 0 ? 99.99 : 0) : avgWin / avgLoss;
-
-    // Calculate Time in Market
-    intervals.sort((a, b) => a.start - b.start);
-    const merged = [];
-    if (intervals.length > 0) {
-      let current = intervals[0];
-      for (let i = 1; i < intervals.length; i++) {
-        if (intervals[i].start <= current.end) {
-          current.end = Math.max(current.end, intervals[i].end);
-        } else {
-          merged.push(current);
-          current = intervals[i];
+        if (cClose > btcPeak) {
+          btcPeak = cClose;
+        }
+        const dd = (btcPeak - cClose) / btcPeak;
+        if (dd > btcMaxDrawdown) {
+          btcMaxDrawdown = dd;
         }
       }
-      merged.push(current);
-    }
-    const timeInMarketMs = merged.reduce((acc, val) => acc + (val.end - val.start), 0);
-    const pctTimeInMarket = (timeInMarketMs / (1000 * 60 * 60 * 24)) / Math.max(1, win.days);
 
-    // Daily Equity Curve to calculate Max Drawdown and Volatilities
-    let equity = 1;
-    let peak = 1;
-    let maxDrawdown = 0;
-    const dailyReturnsArr = [];
-    const currentDay = new Date(win.startDate.getFullYear(), win.startDate.getMonth(), win.startDate.getDate());
-    const endDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const btcN = btcDailyReturns.length;
+      const btcMeanRet = btcDailyReturns.reduce((a, b) => a + b, 0) / Math.max(1, btcN);
+      const btcVar = btcDailyReturns.reduce((a, b) => a + Math.pow(b - btcMeanRet, 2), 0) / Math.max(1, btcN);
+      const btcStd = Math.sqrt(btcVar);
+      const btcAnnVol = btcStd * Math.sqrt(365);
 
-    while (currentDay <= endDay) {
-      const currentDayTime = currentDay.getTime();
-      const dayRet = dailyReturnsMap.get(currentDayTime) || 0;
-      dailyReturnsArr.push(dayRet);
+      const btcDownsideVar = btcN > 0 ? sumSqNegBtcRet / btcN : 0;
+      const btcDownsideStd = Math.sqrt(btcDownsideVar);
+      const btcAnnDownVol = btcDownsideStd * Math.sqrt(365);
 
-
-      equity *= (1 + dayRet);
-      if (equity > peak) {
-        peak = equity;
-      }
-      const dd = (peak - equity) / peak;
-      if (dd > maxDrawdown) {
-        maxDrawdown = dd;
-      }
-
-      currentDay.setDate(currentDay.getDate() + 1);
+      btcSharpe = btcAnnVol === 0 ? 0 : btcCagr / btcAnnVol;
+      btcSortino = btcAnnDownVol === 0 ? 0 : btcCagr / btcAnnDownVol;
+      btcCalmar = btcMaxDrawdown === 0 ? (btcCagr > 0 ? 99.99 : 0) : btcCagr / btcMaxDrawdown;
     }
 
-    // Volatility Calculations
-    const n = dailyReturnsArr.length;
-    const meanDailyReturn = dailyReturnsArr.reduce((a, b) => a + b, 0) / Math.max(1, n);
-    const varianceDaily = dailyReturnsArr.reduce((a, b) => a + Math.pow(b - meanDailyReturn, 2), 0) / Math.max(1, n);
-    const stdDaily = Math.sqrt(varianceDaily);
-    const annualizedVol = stdDaily * Math.sqrt(365); // Annualized Volatility
+    // Group trades by strategy, map to predefined names as best effort
+    const strategyMap = {
+        'EMA 8/20/200': [],
+        'Nuvem 13/49 + MA20': [],
+        'Donchian Breakout': []
+    };
 
-    // Downside Deviation for Sortino Ratio
-    // Target return = 0%. Standard deviation of negative returns relative to 0
-    let sumSquaredNegativeReturns = 0;
-    for (const r of dailyReturnsArr) {
-      if (r < 0) {
-        sumSquaredNegativeReturns += r * r;
+    for (const t of winTrades) {
+      const lowerName = t.strategy.toLowerCase();
+      if (lowerName.includes('ema')) {
+          strategyMap['EMA 8/20/200'].push(t);
+      } else if (lowerName.includes('nuvem') || lowerName.includes('cloud')) {
+          strategyMap['Nuvem 13/49 + MA20'].push(t);
+      } else if (lowerName.includes('donchian') || lowerName.includes('breakout')) {
+          strategyMap['Donchian Breakout'].push(t);
+      } else {
+          // Attempt fuzzy match or fallback
+          if (t.strategy.includes('8') || t.strategy.includes('200')) strategyMap['EMA 8/20/200'].push(t);
+          else if (t.strategy.includes('13') || t.strategy.includes('49')) strategyMap['Nuvem 13/49 + MA20'].push(t);
+          else if (t.strategy.includes('30')) strategyMap['Donchian Breakout'].push(t);
       }
     }
-    const downsideVariance = n > 0 ? sumSquaredNegativeReturns / n : 0;
-    const stdNeg = Math.sqrt(downsideVariance);
-    const annualizedDownsideVol = stdNeg * Math.sqrt(365);
 
-    // Sharpe Ratio: Annualized Return / Annualized Volatility (Risk-Free = 0%)
-    const sharpe = annualizedVol === 0 ? 0 : cagr / annualizedVol;
+    for (const stratName of strategyNames) {
+      if (stratName === 'Buy & Hold') {
+        resultsMatrix.push([
+          btcReturn,        // C: Total Return
+          btcReturn,        // D: B&H Return
+          0,                // E: Alpha
+          btcCagr,          // F: CAGR
+          btcMaxDrawdown,   // G: Max Drawdown
+          btcSharpe,        // H: Sharpe
+          btcSortino,       // I: Sortino
+          btcCalmar,        // J: Calmar
+          1.00,             // K: Win Rate (100% for B&H)
+          99.99,            // L: Profit Factor
+          1,                // M: Qtd Trades
+          0,                // N: Payoff
+          1.00              // O: Time in Market
+        ]);
+        continue;
+      }
 
-    // Sortino Ratio: Annualized Return / Downside Deviation
-    const sortino = annualizedDownsideVol === 0 ? 0 : cagr / annualizedDownsideVol;
+      const sTrades = strategyMap[stratName];
 
-    // Calmar Ratio: CAGR / Max Drawdown
-    const calmar = maxDrawdown === 0 ? (cagr > 0 ? 99.99 : 0) : cagr / maxDrawdown;
+      if (!sTrades || sTrades.length === 0) {
+        resultsMatrix.push([0, btcReturn, 0 - btcReturn, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+        continue;
+      }
 
-    results.push({
-      strategy: strat,
-      totalReturn,
-      btcReturn,
-      alpha,
-      cagr,
-      maxDrawdown,
-      sharpe,
-      sortino,
-      calmar,
-      winRate,
-      profitFactor,
-      qtdTrades: sTrades.length,
-      payoff,
-      pctTimeInMarket
-    });
-  }
+      let totalReturnCompound = 1;
+      let grossProfit = 0;
+      let grossLoss = 0;
+      let wins = 0;
+      let losses = 0;
+      let sumWinPct = 0;
+      let sumLossPct = 0;
 
-  // Sort descending by Calmar Ratio (or Sharpe if Calmar is tied)
-  results.sort((a, b) => {
-    if (b.calmar !== a.calmar) return b.calmar - a.calmar;
-    return b.sharpe - a.sharpe;
-  });
+      const dailyReturnsMap = new Map();
+      const intervals = [];
 
-  return results;
-}
+      for (const t of sTrades) {
+        totalReturnCompound *= (1 + t.returnPct);
 
-function writeResultsToRankingSheet(sheet, resultsByWindow, windows) {
-  // Clear the entire sheet to rewrite the 4 blocks cleanly
-  sheet.clear();
+        if (t.returnPct > 0 || (t.returnPct === 0 && t.returnAbs >= 0)) {
+          grossProfit += Math.abs(t.returnAbs !== 0 ? t.returnAbs : t.returnPct);
+          wins++;
+          sumWinPct += t.returnPct;
+        } else {
+          grossLoss += Math.abs(t.returnAbs !== 0 ? t.returnAbs : t.returnPct);
+          losses++;
+          sumLossPct += t.returnPct;
+        }
 
-  const headers = [
-    'Estratégia', 'Retorno Total (%)', 'B&H BTC (%)', 'Alpha (%)', 'CAGR (%)',
-    'Max Drawdown (%)', 'Sharpe Ratio', 'Sortino Ratio', 'Calmar Ratio',
-    'Win Rate (%)', 'Profit Factor', 'Qtd Trades', 'Payoff', '% Tempo Posicionado'
-  ];
+        const dTime = new Date(t.exitDate.getFullYear(), t.exitDate.getMonth(), t.exitDate.getDate()).getTime();
+        dailyReturnsMap.set(dTime, (dailyReturnsMap.get(dTime) || 0) + t.returnPct);
 
-  const windowTitles = {
-    '1Y': 'Performance - Últimos 12 Meses (1Y)',
-    '2Y': 'Performance - Últimos 24 Meses (2Y)',
-    '3Y': 'Performance - Últimos 36 Meses (3Y)',
-    'All-Time': 'Performance - Histórico Completo (All-Time)'
-  };
+        intervals.push({ start: t.entryDate.getTime(), end: t.exitDate.getTime() });
+      }
 
-  let currentRow = 2; // Start a bit below top
+      const totalReturn = totalReturnCompound - 1;
+      const alpha = totalReturn - btcReturn;
 
-  for (const win of windows) {
-    const winName = win.name;
-    const results = resultsByWindow[winName];
+      const cagr = Math.pow(1 + totalReturn, 365 / Math.max(1, win.days)) - 1;
 
-    // Title
-    sheet.getRange(currentRow, 2).setValue(windowTitles[winName])
-         .setFontWeight('bold')
-         .setFontSize(14)
-         .setBackground('#1E293B')
-         .setFontColor('#FFFFFF');
-    // Merge title cells
-    sheet.getRange(currentRow, 2, 1, headers.length).merge();
-    currentRow += 2;
+      const winRate = wins / sTrades.length;
+      const profitFactor = grossLoss === 0 ? (grossProfit > 0 ? 99.99 : 0) : grossProfit / grossLoss;
 
-    // Headers
-    const headerRange = sheet.getRange(currentRow, 2, 1, headers.length);
-    headerRange.setValues([headers])
-               .setFontWeight('bold')
-               .setBackground('#f3f3f3')
-               .setBorder(true, true, true, true, null, null);
-    currentRow++;
+      const avgWin = wins > 0 ? sumWinPct / wins : 0;
+      const avgLoss = losses > 0 ? Math.abs(sumLossPct / losses) : 0;
+      const payoff = avgLoss === 0 ? (avgWin > 0 ? 99.99 : 0) : avgWin / avgLoss;
 
-    if (results && results.length > 0) {
-      const outData = results.map(r => [
-        r.strategy,
-        r.totalReturn,
-        r.btcReturn,
-        r.alpha,
-        r.cagr,
-        r.maxDrawdown,
-        r.sharpe,
-        r.sortino,
-        r.calmar,
-        r.winRate,
-        r.profitFactor,
-        r.qtdTrades,
-        r.payoff,
-        r.pctTimeInMarket
+      // Calculate Time in Market
+      intervals.sort((a, b) => a.start - b.start);
+      const merged = [];
+      if (intervals.length > 0) {
+        let current = intervals[0];
+        for (let i = 1; i < intervals.length; i++) {
+          if (intervals[i].start <= current.end) {
+            current.end = Math.max(current.end, intervals[i].end);
+          } else {
+            merged.push(current);
+            current = intervals[i];
+          }
+        }
+        merged.push(current);
+      }
+      const timeInMarketMs = merged.reduce((acc, val) => acc + (val.end - val.start), 0);
+      const pctTimeInMarket = (timeInMarketMs / (1000 * 60 * 60 * 24)) / Math.max(1, win.days);
+
+      let equity = 1;
+      let peak = 1;
+      let maxDrawdown = 0;
+      const dailyReturnsArr = [];
+
+      const currentDay = new Date(win.startDate.getFullYear(), win.startDate.getMonth(), win.startDate.getDate());
+      const endDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      while (currentDay <= endDay) {
+        const currentDayTime = currentDay.getTime();
+        const dayRet = dailyReturnsMap.get(currentDayTime) || 0;
+        dailyReturnsArr.push(dayRet);
+
+        equity *= (1 + dayRet);
+        if (equity > peak) {
+          peak = equity;
+        }
+        const dd = (peak - equity) / peak;
+        if (dd > maxDrawdown) {
+          maxDrawdown = dd;
+        }
+
+        currentDay.setDate(currentDay.getDate() + 1);
+      }
+
+      const n = dailyReturnsArr.length;
+      const meanDailyReturn = dailyReturnsArr.reduce((a, b) => a + b, 0) / Math.max(1, n);
+      const varianceDaily = dailyReturnsArr.reduce((a, b) => a + Math.pow(b - meanDailyReturn, 2), 0) / Math.max(1, n);
+      const stdDaily = Math.sqrt(varianceDaily);
+      const annualizedVol = stdDaily * Math.sqrt(365);
+
+      let sumSquaredNegativeReturns = 0;
+      for (const r of dailyReturnsArr) {
+        if (r < 0) {
+          sumSquaredNegativeReturns += r * r;
+        }
+      }
+      const downsideVariance = n > 0 ? sumSquaredNegativeReturns / n : 0;
+      const stdNeg = Math.sqrt(downsideVariance);
+      const annualizedDownsideVol = stdNeg * Math.sqrt(365);
+
+      const sharpe = annualizedVol === 0 ? 0 : cagr / annualizedVol;
+      const sortino = annualizedDownsideVol === 0 ? 0 : cagr / annualizedDownsideVol;
+      const calmar = maxDrawdown === 0 ? (cagr > 0 ? 99.99 : 0) : cagr / maxDrawdown;
+
+      resultsMatrix.push([
+        totalReturn,
+        btcReturn,
+        alpha,
+        cagr,
+        maxDrawdown,
+        sharpe,
+        sortino,
+        calmar,
+        winRate,
+        profitFactor,
+        sTrades.length,
+        payoff,
+        pctTimeInMarket
       ]);
-
-      const dataRange = sheet.getRange(currentRow, 2, outData.length, headers.length);
-      dataRange.setValues(outData);
-
-      // Formatting
-      // Percentages: Retorno Total, B&H, Alpha, CAGR, Max Drawdown, Win Rate, % Tempo Posicionado
-      // Indices relative to outData array (0-based): 1, 2, 3, 4, 5, 9, 13
-      // Spreadsheet ranges are 1-based and we start at column 2.
-      // So columns to format as %: 3, 4, 5, 6, 7, 11, 15
-
-      // Batch set formats where possible
-      sheet.getRange(currentRow, 3, outData.length, 5).setNumberFormat('0.00%'); // Ret Total to Max DD
-      sheet.getRange(currentRow, 11, outData.length, 1).setNumberFormat('0.00%'); // Win Rate
-      sheet.getRange(currentRow, 15, outData.length, 1).setNumberFormat('0.00%'); // % Tempo
-
-      // Ratios & Decimals: Sharpe, Sortino, Calmar, Profit Factor, Payoff
-      // Spreadsheet columns: 8, 9, 10, 12, 14
-      sheet.getRange(currentRow, 8, outData.length, 3).setNumberFormat('0.00');
-      sheet.getRange(currentRow, 12, outData.length, 1).setNumberFormat('0.00');
-      sheet.getRange(currentRow, 14, outData.length, 1).setNumberFormat('0.00');
-
-      // Add borders
-      dataRange.setBorder(true, true, true, true, true, true);
-
-      currentRow += outData.length;
-    } else {
-      sheet.getRange(currentRow, 2).setValue('Sem dados para esta janela.');
-      currentRow++;
     }
-
-    currentRow += 4; // Space before next block
   }
 
-  // Auto resize columns for better visibility
-  sheet.autoResizeColumns(2, headers.length);
+  // Write output
+  if (resultsMatrix.length === 16) {
+    const dataRange = rankingSheet.getRange(2, 3, 16, 13); // C2:O17
+    dataRange.setValues(resultsMatrix);
+
+    // Formatting C, D, E, F, G (Cols 3, 4, 5, 6, 7) - indices 0, 1, 2, 3, 4 -> 0.00%
+    rankingSheet.getRange(2, 3, 16, 5).setNumberFormat('0.00%');
+    // Formatting K, O (Cols 11, 15) - indices 8, 12 -> 0.00%
+    rankingSheet.getRange(2, 11, 16, 1).setNumberFormat('0.00%');
+    rankingSheet.getRange(2, 15, 16, 1).setNumberFormat('0.00%');
+
+    // Formatting H, I, J (Cols 8, 9, 10) - indices 5, 6, 7 -> 0.00
+    rankingSheet.getRange(2, 8, 16, 3).setNumberFormat('0.00');
+    // Formatting L, M, N (Cols 12, 13, 14) - indices 9, 10, 11 -> 0.00
+    rankingSheet.getRange(2, 12, 16, 3).setNumberFormat('0.00');
+  } else {
+      throw new Error(`Expected 16 rows of results, got ${resultsMatrix.length}.`);
+  }
 }
