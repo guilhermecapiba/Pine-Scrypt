@@ -1,6 +1,6 @@
 /**
  * DashboardUpdater.gs
- * Atualiza o Dashboard Executivo da "BTC Backtest Machine" nas coordenadas exatas solicitadas.
+ * Atualiza o Dashboard Executivo da "BTC Backtest Machine" nas coordenadas exatas solicitadas e corrige a formatação visual.
  */
 
 function refreshExecutiveDashboard() {
@@ -34,14 +34,31 @@ function refreshExecutiveDashboard() {
   // 1. HEADER (C3 e C4)
   const now = new Date();
   const timeStr = Utilities.formatDate(now, "America/Sao_Paulo", "dd/MM/yyyy HH:mm");
-  const currentPrice = last1D[1] ? "$" + parseFloat(last1D[1]).toFixed(2) : "N/A"; // Assumindo coluna 1 (B) como Close
+
+  // Pegar Preço Spot BTC numérico (Coluna F da aba BTC_1D, índice 5)
+  // Certificando de que F existe e é numérico
+  let currentPrice = last1D[5] !== undefined && !isNaN(parseFloat(last1D[5])) ? parseFloat(last1D[5]) : 0;
 
   tabs.dashboard.getRange("C3").setValue(timeStr);
-  tabs.dashboard.getRange("C4").setValue(currentPrice);
+  let priceRange = tabs.dashboard.getRange("C4");
+  priceRange.setValue(currentPrice);
+  priceRange.setNumberFormat("$#,##0.00");
+
+  Logger.log("Header atualizado: " + timeStr + " / " + currentPrice);
 
   // 2. ACTION CARD (Decisão Tática) — Linha 8
-  let liderName = rankingData.length > 1 ? rankingData[1][0] : "N/A";
+  // O usuário relatou que antes escreveu "Últimos 12 Meses". Isso ocorre porque a linha 1 do bloco 12M na coluna 0 ou 1 era um separador.
+  // Vamos buscar ativamente pela primeira estratégia da aba Ranking na janela de 12M (linhas 2 a 5).
+  // A estratégia normalmente está na coluna B (Index 1) da Ranking_Performance.
+  let liderName = "N/A";
+  if (rankingData.length > 2) {
+      // Assumindo que a linha 0 é cabeçalho global, linha 1 é cabeçalho de bloco ou a própria 1ª strat.
+      // O usuário pede para ler da linha 2 (index 1 se array base 0 ou linha 2 na UI é index 1 do array).
+      // Array base 0: Linha 1 UI = Index 0. Linha 2 UI = Index 1.
+      liderName = rankingData[1][1]; // Coluna B = index 1
+  }
 
+  // Encontrar o posicionamento atual baseado nos pesos (1W: 50%, 1D: 30%, 4H: 20%)
   let colIndex4H = btc4hData[0].indexOf(liderName);
   let colIndex1D = btc1dData[0].indexOf(liderName);
   let colIndex1W = btc1wData[0].indexOf(liderName);
@@ -64,7 +81,6 @@ function refreshExecutiveDashboard() {
   if(signal1W > 0 && signal1D > 0) regimeMercado = "TENDÊNCIA DE ALTA";
   if(signal1W <= 0 && signal1D <= 0) regimeMercado = "TENDÊNCIA DE BAIXA";
 
-  // Extrair ponto de invalidação (buscando na coluna da MA200 ou EMA de referência, se existir)
   let pontoInvalidacao = "N/A";
   let emaColIndex = btc1dData[0].findIndex(h => h.toString().toUpperCase().includes('EMA 20'));
   if(emaColIndex !== -1 && !isNaN(last1D[emaColIndex])) {
@@ -77,21 +93,21 @@ function refreshExecutiveDashboard() {
   tabs.dashboard.getRange("E8").setValue(pontoInvalidacao);
 
   // 3. LEADERBOARD MULTITEMPORAL — Linhas 13 a 28 (Colunas D a G)
-  // Assumindo a estrutura baseada nas colunas requeridas (Retorno, DD, Sharpe, WR)
-  // Vamos buscar índices baseados em headers comuns caso existam. Se não, mapeamos de forma estruturada.
-  // Como as janelas temporais de um leaderboard de planilhas costumam ter as métricas em colunas fixas:
-  // Offset 12M = Col 1..4, 24M = Col 5..8, 36M = Col 9..12, AT = Col 13..16 (exemplo prático robusto)
+  // Coluna C = index 2 (Retorno)
+  // Coluna G = index 6 (Max DD)
+  // Coluna H = index 7 (Sharpe)
+  // Coluna K = index 10 (Win Rate)
 
-  function getLeaderBlock(rankingArray, startColIndex) {
+  function getLeaderBlock(rankingArray, startRowIndex, endRowIndex) {
       let block = [];
-      for(let i = 1; i <= 4; i++) {
+      for(let i = startRowIndex; i <= endRowIndex; i++) {
           if(i < rankingArray.length) {
-              block.push([
-                rankingArray[i][startColIndex] || "",
-                rankingArray[i][startColIndex+1] || "",
-                rankingArray[i][startColIndex+2] || "",
-                rankingArray[i][startColIndex+3] || ""
-              ]);
+              // Valores puros
+              let ret = parseFloat(rankingArray[i][2]) || 0;
+              let dd = parseFloat(rankingArray[i][6]) || 0;
+              let sharpe = parseFloat(rankingArray[i][7]) || 0;
+              let wr = parseFloat(rankingArray[i][10]) || 0;
+              block.push([ret, dd, sharpe, wr]);
           } else {
               block.push(["", "", "", ""]);
           }
@@ -99,20 +115,48 @@ function refreshExecutiveDashboard() {
       return block;
   }
 
-  // Preenchendo com offsets baseados na estrutura padronizada (assumindo colunas contíguas no DB)
-  // Caso a estrutura da aba Ranking seja linha a linha para os períodos, esse mapeamento cobrirá colunas laterais
-  const leader12M = getLeaderBlock(rankingData, 1);  // Ex: B, C, D, E
-  const leader24M = getLeaderBlock(rankingData, 5);  // Ex: F, G, H, I
-  const leader36M = getLeaderBlock(rankingData, 9);  // Ex: J, K, L, M
-  const leaderAT = getLeaderBlock(rankingData, 13);  // Ex: N, O, P, Q
+  // Linhas da UI: 2 a 5 -> Array indices 1 a 4
+  const leader12M = getLeaderBlock(rankingData, 1, 4);
+  // Linhas da UI: 6 a 9 -> Array indices 5 a 8
+  const leader24M = getLeaderBlock(rankingData, 5, 8);
+  // Linhas da UI: 10 a 13 -> Array indices 9 a 12
+  const leader36M = getLeaderBlock(rankingData, 9, 12);
+  // Linhas da UI: 14 a 17 -> Array indices 13 a 16
+  const leaderAT = getLeaderBlock(rankingData, 13, 16);
 
-  tabs.dashboard.getRange("D13:G16").setValues(leader12M);
-  tabs.dashboard.getRange("D17:G20").setValues(leader24M);
-  tabs.dashboard.getRange("D21:G24").setValues(leader36M);
-  tabs.dashboard.getRange("D25:G28").setValues(leaderAT);
+  // 12 Meses (D13:G16)
+  let range12M = tabs.dashboard.getRange("D13:G16");
+  range12M.setValues(leader12M);
+  tabs.dashboard.getRange("D13:D16").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("E13:E16").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("F13:F16").setNumberFormat("0.00");
+  tabs.dashboard.getRange("G13:G16").setNumberFormat("0.00%");
+
+  // 24 Meses (D17:G20)
+  let range24M = tabs.dashboard.getRange("D17:G20");
+  range24M.setValues(leader24M);
+  tabs.dashboard.getRange("D17:D20").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("E17:E20").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("F17:F20").setNumberFormat("0.00");
+  tabs.dashboard.getRange("G17:G20").setNumberFormat("0.00%");
+
+  // 36 Meses (D21:G24)
+  let range36M = tabs.dashboard.getRange("D21:G24");
+  range36M.setValues(leader36M);
+  tabs.dashboard.getRange("D21:D24").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("E21:E24").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("F21:F24").setNumberFormat("0.00");
+  tabs.dashboard.getRange("G21:G24").setNumberFormat("0.00%");
+
+  // Histórico Completo (D25:G28)
+  let rangeAT = tabs.dashboard.getRange("D25:G28");
+  rangeAT.setValues(leaderAT);
+  tabs.dashboard.getRange("D25:D28").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("E25:E28").setNumberFormat("0.00%");
+  tabs.dashboard.getRange("F25:F28").setNumberFormat("0.00");
+  tabs.dashboard.getRange("G25:G28").setNumberFormat("0.00%");
 
   // 4. STATUS ATUAL POR TIMEFRAME — Coluna D (Linhas 31 a 33)
-  // Lógica técnica básica baseada nos sinais (pode ser aprimorada lendo a EMA se necessário)
   let status1W = signal1W > 0 ? "COMPRADO - " + liderName + " Alinhado" : "VENDIDO / CAIXA";
   let status1D = signal1D > 0 ? "COMPRADO - " + liderName + " Alinhado" : "VENDIDO / CAIXA";
   let status4H = signal4H > 0 ? "COMPRADO - " + liderName + " Alinhado" : "VENDIDO / CAIXA";
@@ -121,5 +165,5 @@ function refreshExecutiveDashboard() {
   tabs.dashboard.getRange("D32").setValue(status1D);
   tabs.dashboard.getRange("D33").setValue(status4H);
 
-  Logger.log("Dashboard Executive atualizado com sucesso.");
+  Logger.log("Dashboard Executive (Coord Mapping e Formatação) finalizado com sucesso.");
 }
