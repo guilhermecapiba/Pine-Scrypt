@@ -6,6 +6,40 @@
 
 /**
  * ----------------------------------------------------------------------------
+ * UTILS: Binance API Fallback
+ * ----------------------------------------------------------------------------
+ */
+function fetchBinanceAPI(endpoint) {
+  const baseUrls = [
+    'https://api.binance.com',
+    'https://api1.binance.com',
+    'https://api2.binance.com',
+    'https://api3.binance.com',
+    'https://api4.binance.com',
+    'https://data-api.binance.vision'
+  ];
+
+  for (let i = 0; i < baseUrls.length; i++) {
+    const url = baseUrls[i] + endpoint;
+    try {
+      const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+      const code = response.getResponseCode();
+
+      if (code === 200) {
+        return response.getContentText();
+      } else {
+        Logger.log(`Aviso Binance (${baseUrls[i]}): HTTP ${code} - ${response.getContentText()}`);
+      }
+    } catch (e) {
+      Logger.log(`Falha na requisição para ${url}: ${e}`);
+    }
+  }
+
+  throw new Error("Todos os endpoints da Binance falharam (possível restrição geográfica).");
+}
+
+/**
+ * ----------------------------------------------------------------------------
  * MÓDULO 5: Orquestrador e Menu (Main.gs integrado)
  * ----------------------------------------------------------------------------
  */
@@ -101,15 +135,11 @@ function updateMarketData() {
 
     while (currentStart < endTime) {
       let limit = 1000;
-      let url = `https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${config.interval}&startTime=${currentStart}&endTime=${endTime}&limit=${limit}`;
+      let endpoint = `/api/v3/klines?symbol=BTCUSDT&interval=${config.interval}&startTime=${currentStart}&endTime=${endTime}&limit=${limit}`;
 
       try {
-        let response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-        if (response.getResponseCode() !== 200) {
-            Logger.log(`Erro Binance: ${response.getContentText()}`);
-            break;
-        }
-        let data = JSON.parse(response.getContentText());
+        let responseText = fetchBinanceAPI(endpoint);
+        let data = JSON.parse(responseText);
         if (data.length === 0) break;
 
         allKlines = allKlines.concat(data);
@@ -117,7 +147,7 @@ function updateMarketData() {
         // Pega o close time do último candle recebido + 1ms para a próxima busca
         currentStart = data[data.length - 1][6] + 1;
       } catch (e) {
-        Logger.log(`Falha fetch: ${e}`);
+        Logger.log(`Falha fetch klines ${config.interval}: ${e}`);
         break;
       }
       Utilities.sleep(100); // rate limit
@@ -171,8 +201,8 @@ function updateMarketData() {
         // Nuvem fake boilerplate
         let baseLine = 0, conversionLine = 0, lead1 = 0, lead2 = 0;
 
-        let trend = ema8 > ema20 ? "Bullish" : "Bearish";
-        let alignment = (ema8 > ema20 && ema20 > ema200) ? "Aligned" : "Mixed";
+        let trend = ema08 > ema20 ? "Bullish" : "Bearish";
+        let alignment = (ema08 > ema20 && ema20 > ema200) ? "Aligned" : "Mixed";
         let signal = "Hold";
         let position = "None";
 
@@ -279,8 +309,8 @@ function refreshExecutiveDashboard() {
 
   // C4: Preço Spot
   try {
-      let resp = UrlFetchApp.fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-      let data = JSON.parse(resp.getContentText());
+      let responseText = fetchBinanceAPI('/api/v3/ticker/price?symbol=BTCUSDT');
+      let data = JSON.parse(responseText);
       let price = parseFloat(data.price);
       dashSheet.getRange('C4').setValue(price).setNumberFormat('$#,##0.00');
   } catch(e) {
