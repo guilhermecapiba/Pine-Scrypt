@@ -51,7 +51,7 @@ function computeMultiTemporalPerformance() {
 
   // Identify columns in BTC_1D
   const btcHeaders = btcData[0].map(h => h.toString().toLowerCase().trim());
-  const colBtcDate = btcHeaders.findIndex(h => h.includes('date') || h.includes('data'));
+  const colBtcDate = btcHeaders.findIndex(h => h.includes('timestamp_utc') || h.includes('timestamp_brt') || h.includes('date') || h.includes('data'));
   const colBtcClose = btcHeaders.findIndex(h => h.includes('close') || h.includes('fechamento'));
 
   if (colBtcDate === -1 || colBtcClose === -1) {
