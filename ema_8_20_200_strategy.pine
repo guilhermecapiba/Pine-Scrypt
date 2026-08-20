@@ -1,0 +1,117 @@
+//@version=6
+strategy("Backtest EMAs 8/20/200 Refatorada (Breakeven Corrigido)", overlay=true, initial_capital=1000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.05, slippage=2)
+
+// =========================================================================
+// 1. INPUTS
+// =========================================================================
+len8   = input.int(8, title="EMA Curta", group="Médias Móveis")
+len20  = input.int(20, title="EMA Média", group="Médias Móveis")
+len200 = input.int(200, title="EMA Longa", group="Médias Móveis")
+
+enable_shorts = input.bool(false, title="Ativar Operações Short", group="Configurações de Estratégia")
+
+adxlen = input.int(14, title="Período ADX", group="Filtro de Volatilidade (ADX)")
+adx_threshold = input.int(20, title="Nível Mínimo ADX", group="Filtro de Volatilidade (ADX)")
+
+rr_ratio = input.float(2.5, title="Relação Risco:Retorno", step=0.1, group="Gestão de Risco (ATR)")
+atr_len = input.int(14, title="Período ATR", group="Gestão de Risco (ATR)")
+atr_mult = input.float(1.0, title="Multiplicador ATR para Stop", step=0.1, group="Gestão de Risco (ATR)")
+
+// =========================================================================
+// 2. CÁLCULOS
+// =========================================================================
+// EMAs
+ema8   = ta.ema(close, len8)
+ema20  = ta.ema(close, len20)
+ema200 = ta.ema(close, len200)
+
+// ADX e DI
+[plusDI, minusDI, adx] = ta.dmi(adxlen, adxlen)
+
+// ATR para Stops
+atr = ta.atr(atr_len)
+
+// =========================================================================
+// 3. PLOTS NO GRÁFICO (Visualização)
+// =========================================================================
+plot(ema8, color=color.green, title="EMA 8", linewidth=2)
+plot(ema20, color=color.yellow, title="EMA 20", linewidth=2)
+plot(ema200, color=color.white, title="EMA 200", linewidth=3)
+
+// =========================================================================
+// 4. LÓGICA DE ENTRADA
+// =========================================================================
+// Condição de Volatilidade e Tendência
+adx_filter = adx > adx_threshold
+
+// ENTRADAS
+// Compra: EMA 8 cruza acima da 20 E a 20 já está acima da 200 E ADX > limite
+long_cond = ta.crossover(ema8, ema20) and (ema20 > ema200) and adx_filter
+
+// Venda: EMA 8 cruza abaixo da 20 E a 20 já está abaixo da 200 E ADX > limite E Shorts ativados
+short_cond = ta.crossunder(ema8, ema20) and (ema20 < ema200) and adx_filter and enable_shorts
+
+// =========================================================================
+// 5. VARIÁVEIS DE GESTÃO DE TRADE (SL/TP e Breakeven)
+// =========================================================================
+var float long_sl = na
+var float long_tp = na
+var float long_entry_price = na
+var float long_risk = na
+var bool long_breakeven_triggered = false
+
+var float short_sl = na
+var float short_tp = na
+var float short_entry_price = na
+var float short_risk = na
+var bool short_breakeven_triggered = false
+
+// Resetar flags se não estiver em posição
+if strategy.position_size == 0
+    long_breakeven_triggered := false
+    short_breakeven_triggered := false
+    long_risk := na
+    short_risk := na
+
+// =========================================================================
+// 6. EXECUÇÃO DE ORDENS
+// =========================================================================
+if long_cond and strategy.position_size == 0
+    strategy.entry("Compra", strategy.long)
+    long_entry_price := close
+    long_risk := atr * atr_mult
+    long_sl := close - long_risk
+    long_tp := close + (long_risk * rr_ratio)
+    long_breakeven_triggered := false
+
+if short_cond and strategy.position_size == 0
+    strategy.entry("Venda", strategy.short)
+    short_entry_price := close
+    short_risk := atr * atr_mult
+    short_sl := close + short_risk
+    short_tp := close - (short_risk * rr_ratio)
+    short_breakeven_triggered := false
+
+// =========================================================================
+// 7. LÓGICA DE SAÍDA E BREAKEVEN
+// =========================================================================
+
+if strategy.position_size > 0
+    // Lógica de Breakeven em 1.0R usando a distância de risco estática
+    long_1_0r_target = long_entry_price + (long_risk * 1.0)
+
+    if high >= long_1_0r_target and not long_breakeven_triggered
+        long_sl := long_entry_price
+        long_breakeven_triggered := true
+
+    strategy.exit("Saída Compra", from_entry="Compra", stop=long_sl, limit=long_tp)
+
+if strategy.position_size < 0
+    // Lógica de Breakeven em 1.0R usando a distância de risco estática
+    short_1_0r_target = short_entry_price - (short_risk * 1.0)
+
+    if low <= short_1_0r_target and not short_breakeven_triggered
+        short_sl := short_entry_price
+        short_breakeven_triggered := true
+
+    strategy.exit("Saída Venda", from_entry="Venda", stop=short_sl, limit=short_tp)
