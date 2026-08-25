@@ -1,0 +1,40 @@
+//@version=5
+indicator("MACD(20,50,12) Coloração de Velas (Fixo 1D)", overlay=true)
+
+// =========================================================================
+// PARÂMETROS
+// =========================================================================
+fastLength = input.int(20, title="MACD Fast Length (EMA)", group="Parâmetros MACD")
+slowLength = input.int(50, title="MACD Slow Length (EMA)", group="Parâmetros MACD")
+signalLength = input.int(12, title="MACD Signal Length (EMA)", group="Parâmetros MACD")
+
+opMode = input.string("Long / Flat (Verde/Neutro)", title="Modo da Estratégia", options=["Long / Flat (Verde/Neutro)", "Long / Short (Verde/Vermelho)"], group="Estilo de Coloração")
+
+// =========================================================================
+// CÁLCULOS MACD (Base no tempo gráfico atual, necessário para o request.security)
+// =========================================================================
+// Para evitar problemas de repintura e de escopo com o request.security no Pine Script,
+// calculamos as EMAs base e depois passamos a expressão limpa para a requisição de timeframe.
+
+// Expressões base que serão processadas em 1 Dia
+macdCalc = ta.ema(close, fastLength) - ta.ema(close, slowLength)
+signalCalc = ta.ema(macdCalc, signalLength)
+
+// =========================================================================
+// FIXANDO EM 1 DIA (Multi-Timeframe / MTF)
+// =========================================================================
+// request.security busca os dados de "1D" (1 Dia) independentemente do gráfico atual.
+// Usamos lookahead = barmerge.lookahead_off por segurança.
+[macdLine1D, signalLine1D] = request.security(syminfo.tickerid, "1D", [macdCalc, signalCalc], lookahead=barmerge.lookahead_off)
+
+// =========================================================================
+// DEFINIÇÃO DE ESTADO E LÓGICA DE COLORAÇÃO
+// =========================================================================
+// Avalia o MACD do diário (1D)
+candleColor = macdLine1D > signalLine1D ? color.new(color.green, 0) : (opMode == "Long / Short (Verde/Vermelho)" ? color.new(color.red, 0) : na)
+
+// =========================================================================
+// PLOTAGENS
+// =========================================================================
+// Pinta as velas sobre o gráfico nativo de acordo com a regra estipulada
+barcolor(candleColor, title="Coloração de Velas MACD (1D)")
