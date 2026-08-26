@@ -723,6 +723,14 @@ function computeMultiTemporalPerformance() {
       rH_1, rH_2, rH_3, rH_4, rH_5
   ];
 
+  const labels = [
+      ["12M", "EMA 8/20 Crossover"], ["12M", "Nuvem 13/49"], ["12M", "Donchian 30"], ["12M", "MACD 20/50/12"], ["12M", "Buy & Hold"],
+      ["24M", "EMA 8/20 Crossover"], ["24M", "Nuvem 13/49"], ["24M", "Donchian 30"], ["24M", "MACD 20/50/12"], ["24M", "Buy & Hold"],
+      ["36M", "EMA 8/20 Crossover"], ["36M", "Nuvem 13/49"], ["36M", "Donchian 30"], ["36M", "MACD 20/50/12"], ["36M", "Buy & Hold"],
+      ["Histórico Completo", "EMA 8/20 Crossover"], ["Histórico Completo", "Nuvem 13/49"], ["Histórico Completo", "Donchian 30"], ["Histórico Completo", "MACD 20/50/12"], ["Histórico Completo", "Buy & Hold"]
+  ];
+
+  rankSheet.getRange('A2:B21').setValues(labels);
   rankSheet.getRange('C2:O21').setValues(stats);
 }
 
