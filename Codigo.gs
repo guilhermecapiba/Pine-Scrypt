@@ -759,6 +759,7 @@ function refreshExecutiveDashboard() {
   }
 
   // Ler Dados Reais da Aba de Ranking (Expandido para O21)
+  const rankLabels = rankSheet.getRange('A2:B21').getValues();
   const rankData = rankSheet.getRange('C2:O21').getValues();
   if(rankData.length > 0 && rankData[0][0] !== "") {
 
@@ -789,10 +790,14 @@ function refreshExecutiveDashboard() {
       let ema20 = parseFloat(lastDataD1[13]);
       dashSheet.getRange('E8').setValue(ema20).setNumberFormat('$#,##0.00');
 
-      // Leaderboard Real Expandido (D13:G32)
+      // Leaderboard Real Expandido (D13:G32) e Labels (A13:B32)
+      let lbLabels = [];
       let lbData = [];
       for(let i=0; i<20; i++) {
           if (rankData[i] && rankData[i][0] !== "") {
+              // rankLabels tem [Timeframe, Strategy]
+              // Dashboard espera Strategy em A e Timeframe em B
+              lbLabels.push([rankLabels[i][1], rankLabels[i][0]]);
               lbData.push([
                   rankData[i][0], // Retorno %
                   rankData[i][4], // Max DD %
@@ -800,10 +805,18 @@ function refreshExecutiveDashboard() {
                   rankData[i][8]  // Win Rate %
               ]);
           } else {
+              lbLabels.push(["", ""]);
               lbData.push(["", "", "", ""]);
           }
       }
-      dashSheet.getRange('D13:G32').setValues(lbData);
+      dashSheet.getRange('A13:B32').setValues(lbLabels);
+      const dataRange = dashSheet.getRange('D13:G32');
+      dataRange.setValues(lbData);
+      // Formatação programática para corrigir números crus
+      dashSheet.getRange('D13:D32').setNumberFormat('0.00%');
+      dashSheet.getRange('E13:E32').setNumberFormat('0.00%');
+      dashSheet.getRange('F13:F32').setNumberFormat('0.00');
+      dashSheet.getRange('G13:G32').setNumberFormat('0.00%');
   }
 
   // Status Timeframes (D35:D37)
