@@ -1,0 +1,31 @@
+//@version=5
+indicator("MACD(20,50,12) Coloração de Velas (Fixo 1D)", overlay=true)
+
+// =========================================================================
+// PARÂMETROS
+// =========================================================================
+fastLength = input.int(20, title="MACD Fast Length (EMA)", group="Parâmetros MACD")
+slowLength = input.int(50, title="MACD Slow Length (EMA)", group="Parâmetros MACD")
+signalLength = input.int(12, title="MACD Signal Length (EMA)", group="Parâmetros MACD")
+
+// =========================================================================
+// CÁLCULOS MACD (Base)
+// =========================================================================
+macdCalc = ta.ema(close, fastLength) - ta.ema(close, slowLength)
+signalCalc = ta.ema(macdCalc, signalLength)
+
+// =========================================================================
+// FIXANDO EM 1 DIA (Multi-Timeframe / MTF)
+// =========================================================================
+[macdLine1D, signalLine1D] = request.security(syminfo.tickerid, "1D", [macdCalc, signalCalc], lookahead=barmerge.lookahead_off)
+
+// =========================================================================
+// DEFINIÇÃO DE ESTADO E LÓGICA DE COLORAÇÃO
+// =========================================================================
+// Avalia o MACD do diário (1D): Verde se Comprado (MACD > Signal), Vermelho se Vendido (MACD <= Signal)
+candleColor = macdLine1D > signalLine1D ? color.new(color.green, 0) : color.new(color.red, 0)
+
+// =========================================================================
+// PLOTAGENS
+// =========================================================================
+barcolor(candleColor, title="Coloração de Velas MACD (1D)")

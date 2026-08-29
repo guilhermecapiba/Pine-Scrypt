@@ -1,0 +1,55 @@
+//@version=5
+strategy("MACD(20,50,12) Crossover", overlay=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=100,
+     commission_type=strategy.commission.percent,
+     commission_value=0.125, // 0.075% de corretagem + 0.050% de slippage aproximado
+     calc_on_every_tick=false,
+     use_bar_magnifier=false)
+
+// =========================================================================
+// PARÂMETROS
+// =========================================================================
+
+// Filtro de Data
+startDate = input.time(timestamp("2019-09-23T00:00:00+00:00"), title="Data de Início")
+
+inDateRange = time >= startDate
+
+// Parâmetros MACD
+fastLength = input.int(20, title="MACD Fast Length (EMA)")
+slowLength = input.int(50, title="MACD Slow Length (EMA)")
+signalLength = input.int(12, title="MACD Signal Length (EMA)")
+
+// =========================================================================
+// CÁLCULOS MACD
+// =========================================================================
+// Linha MACD = EMA Rápida - EMA Lenta
+macdLine = ta.ema(close, fastLength) - ta.ema(close, slowLength)
+
+// Linha de Sinal = EMA da Linha MACD
+signalLine = ta.ema(macdLine, signalLength)
+
+// =========================================================================
+// CONDIÇÕES DE ENTRADA E SAÍDA
+// =========================================================================
+// Cruza para Cima = Compra
+longCond = ta.crossover(macdLine, signalLine)
+// Cruza para Baixo = Fecha a Posição (Fica Flat)
+closeCond = ta.crossunder(macdLine, signalLine)
+
+// =========================================================================
+// EXECUÇÃO DA ESTRATÉGIA
+// =========================================================================
+// barstate.isconfirmed garante que o cruzamento só é validado quando a barra atual
+// já fechou, prevenindo lookahead e repintura.
+// Como calc_on_every_tick=false (padrão), o script avalia as condições
+// no fechamento e executa no 'open' do próximo candle.
+
+if (inDateRange and barstate.isconfirmed)
+    if (longCond)
+        strategy.entry("Long", strategy.long)
+
+    if (closeCond)
+        strategy.close("Long")
