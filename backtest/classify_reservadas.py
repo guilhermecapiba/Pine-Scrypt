@@ -55,7 +55,7 @@ for i, x in r.iterrows():
             elif not motivos(m): status = 'PROMISSORA_PINE_GERADO' if key in ('DONCHIAN_20_10', 'BOLLINGER_SQUEEZE_20_2 (sem SMA200)', 'TPL(10.0, 90.0, 3.0, 2.5)') else (
                 'PROMISSORA_VARIANTE_COBERTA_PELO_PINE_EMA10_SMA90' if key.startswith('TPL') else 'REFINADA_PROMISSORA_PINE_GERADO')
             else: status, obs = 'REPROVADA_REGUA_PADRONIZADA', motivos(m)
-    row = dict(Strategy_ID=sid, Nome_Setup=nome, Status_Atual=st0[:60], Status_Proposto=status, Chave_Canonica=key or '', Observacao=obs)
+    row = dict(Linha_Planilha=i + 2, Strategy_ID=sid, Nome_Setup=nome, Status_Atual=st0[:60], Status_Proposto=status, Chave_Canonica=key or '', Observacao=obs)
     if m is not None: row.update(Trades=m.trades, PF=m.pf, Sharpe=m.sharpe, MaxDD=m.maxdd, CAGR=m.cagr, Calmar=m.calmar, PF_OOS=m.pf_oos,
                                   **{'CAGR_BuyHold_BTC_%': round(BH, 2), 'Alfa_vs_BTC_%': round(m.cagr - BH, 2)})
     out.append(row)
