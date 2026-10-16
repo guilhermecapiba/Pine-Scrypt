@@ -51,12 +51,7 @@ Diluem. Painel em peso igual (Calmar / Sharpe / MaxDD %):
 
 As 10 sozinhas têm Calmar melhor que as 19 em todas as janelas. Acrescentar o M3-01 às 10 não muda nada de relevante.
 
-**O que fiz no código:** removi G-04 e G-08, como você pediu, e **não** inseri nada. Deixei um interruptor no topo da biblioteca, `GATILHOS_NO_CONSENSO`:
-
-- `true` (entregue assim): os 9 gatilhos restantes seguem votando, como na v2.4. Painel com 19 componentes. Índice hoje: **65,7% Moderadamente Favorável**, voto simples 11/19.
-- `false`: os gatilhos continuam listados na `ESTRATEGIAS_1D` (acompanhamento), mas não votam. O consenso passa a ser apurado só pelas 10 estratégias. Índice hoje: **51,3% Neutro**, voto simples 5/10.
-
-Atenção antes de virar para `false`: a leitura que chega aos clientes muda de "Moderadamente Favorável" para "Neutro" no dia da troca, porque 5 das 10 estratégias estão em caixa hoje (M1-02, M1-04, M2-02, M2-03, M2-05) e os gatilhos, que são seguidores de tendência parecidos entre si, estão quase todos comprados. Pelo backtest, o painel de 10 é melhor; a decisão de quando trocar é sua. Minha sugestão é trocar para `false`, já que o objetivo declarado é padronizar nas 10 melhores.
+**O que está no código entregue (versão final):** a lista `ESTRATEGIAS` tem só as 10 estratégias das Machines. Os gatilhos G-01 a G-11 saíram da lista e ficam comentados dentro dela, para reativar por copiar e colar. Os alertas de cruzamento de médias, BMSB, inflexão de MACD, Bollinger e Z-score continuam, porque `detectarEventos_` lê a aba `INDICADORES_TECNICOS` e não a lista de estratégias. Hoje o Índice de Exposição Tática fica em **51,3% (Neutro)**, voto simples 5/10, contra 65,7% (Moderadamente Favorável) com os gatilhos. A mudança vem da composição: 5 das 10 estão em caixa (M1-02, M1-04, M2-02, M2-03, M2-05) e os gatilhos, parecidos entre si, estavam quase todos comprados.
 
 ## 4. Passo a passo na planilha MVP
 
@@ -64,8 +59,8 @@ Atenção antes de virar para `false`: a leitura que chega aos clientes muda de 
 2. Extensões > Apps Script. `Ctrl+A` no editor, apague, cole o conteúdo de `MVP_Projeto02_v2.5.gs`, salve.
 3. Recarregue a planilha (F5).
 4. Menu `1) Ciclo completo`. Não envia e-mail.
-5. Confira a `ESTRATEGIAS_1D`: 19 linhas de dados, sem G-04 e G-08. Os valores das outras linhas não mudam (por exemplo M1-02 com 68.202,45 e M2-02 com 22.223,07). No `DASHBOARD`, `Leitura do Consenso` deve mostrar `voto simples x/19` e o índice próximo de 65,7% (série até 15/10/2026).
-6. Para padronizar nas 10: troque `const GATILHOS_NO_CONSENSO = true;` por `false;`, salve, rode `1) Ciclo completo` de novo e confira `voto simples x/10` (índice próximo de 51,3%).
+5. Confira a `ESTRATEGIAS_1D`: 10 linhas de dados (M1-01, M1-02, M1-04, M1-05, M1-06, M1-11, M2-02, M2-03, M2-04, M2-05), todas com `Ativa_Consenso = SIM`. Os valores não mudam (por exemplo M1-02 com 68.202,45 e M2-02 com 22.223,07). A coluna `Peso_Consenso_pct` passa a somar 100 entre as 10, com pesos entre 8% e 11%.
+6. No `DASHBOARD`, `Leitura do Consenso` deve mostrar `voto simples x/10` e o índice próximo de 51,3% (série até 15/10/2026; muda com a vela do dia).
 7. Menu `C) Conferir gatilhos`: os gatilhos de 1h, semanal e backup continuam. Nada a reinstalar.
 
 Reverter: cole o código da v2.4 e rode `1) Ciclo completo`.

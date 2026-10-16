@@ -2,17 +2,15 @@
  * =============================================================================
  * MVP PROJETO CRIPTO (PROJETO 02) — MOTOR QUANTITATIVO UNIFICADO v2.5
  *
- * v2.5 (16/10/2026): padronização do painel nas 10 melhores estratégias para BTC/USD:
- *       - SAEM da biblioteca G-08 (Inflexão MACD 12/26/9) e G-04 (Cruzamento SMA140 x EMA147). Ambos eram
- *                 backtestados e votavam no consenso, mas sem retorno (CAGR de 17% e 6% contra 54% do painel;
- *                 Sharpe 3 anos de -0,64 e 0,30). Os ALERTAS de inflexão de MACD e de reconfiguração da BMSB
- *                 continuam ativos em detectarEventos_ (não dependem da biblioteca). O G-03 (preço x BMSB),
- *                 que é o uso de mercado da faixa, permanece.
- *       - NÃO ENTRA nenhuma estratégia nova: a melhor candidata da pesquisa de vídeos (EMA10 + SMA90 com stop
- *                 3 ATR) não supera nenhuma das 10 estratégias das Machines nas janelas recentes.
- *       - NOVO interruptor GATILHOS_NO_CONSENSO (padrão true = comportamento da v2.4). Com false, os gatilhos G-xx
- *                 continuam listados e acompanhados na ESTRATEGIAS_1D, mas deixam de votar no consenso, que passa
- *                 a ser apurado só pelas 10 estratégias das Machines.
+ * v2.5 (16/10/2026): painel padronizado nas 10 melhores estratégias para BTC/USD (Machines #1 e #2).
+ *       - SAEM da lista ESTRATEGIAS todos os gatilhos G-01 a G-11. Pelo backtest, as 10 sozinhas têm Calmar de 1,80
+ *                 (2015+), 1,42 (2018+) e 2,09 (3 anos) contra 1,31, 1,21 e 1,87 do painel com os gatilhos. G-04
+ *                 (cruzamento SMA140 x EMA147) e G-08 (inflexão MACD) eram os piores (CAGR de 6% e 17%).
+ *       - Os ALERTAS de cruzamento de médias, BMSB, inflexão de MACD, Bollinger e Z-score continuam ativos em
+ *                 detectarEventos_ (leem INDICADORES_TECNICOS, não a lista de estratégias). Só deixam de existir
+ *                 os votos dos gatilhos no consenso e as linhas G-xx na ESTRATEGIAS_1D.
+ *       - Nenhuma estratégia nova entra: a melhor candidata da pesquisa de vídeos não supera nenhuma das 10.
+ *       - As linhas dos gatilhos ficam comentadas dentro de ESTRATEGIAS, para reativação por copiar e colar.
  *       Nada mais foi alterado: motor, CONFIG, zonas, termômetro, alertas, e-mails e dashboard idênticos à v2.4.
  *
  * v2.4 (06/10/2026): ajustes de painel e de linguagem, sem alterar nenhum cálculo:
@@ -192,21 +190,19 @@ const ESTRATEGIAS = [
   { id: 'M2-03', grupo: 'Machine #2', key: 'bollingerSqueeze', nome: 'Bollinger Squeeze (20, 2.25) + SMA200', fn: sinalBollingerSqueeze, ativa: true },
   { id: 'M2-04', grupo: 'Machine #2', key: 'nuvemEma655Sma100', nome: 'Nuvem EMA 6/55 + SMA100', fn: sinalNuvemEma655, ativa: true },
   { id: 'M2-05', grupo: 'Machine #2', key: 'larryWilliams9394', nome: 'Larry Williams 9.3/9.4 (EMA12 + SMA50)', fn: sinalLarryWilliams9394, ativa: true },
-  // ---- Gatilhos do prompt convertidos em estratégias backtestadas ----
-  { id: 'G-01', grupo: 'Gatilho', key: 'gSma90', nome: 'Preço x SMA90', fn: function (o) { return gatilhoPrecoMedia_(o, sma(o.closes, 90)); }, ativa: true },
-  { id: 'G-02', grupo: 'Gatilho', key: 'gSma155', nome: 'Preço x SMA155 (STH-RP)', fn: function (o) { return gatilhoPrecoMedia_(o, sma(o.closes, 155)); }, ativa: true },
-  { id: 'G-03', grupo: 'Gatilho', key: 'gBmsb', nome: 'Preço x Bull Market Support Band (SMA140/EMA147)', fn: gatilhoBmsb_, ativa: true },
-  { id: 'G-05', grupo: 'Gatilho', key: 'gEma655', nome: 'Cruzamento EMA6 x EMA55 (puro)', fn: gatilhoEma655_, ativa: true },
-  { id: 'G-06', grupo: 'Gatilho', key: 'gEma200', nome: 'Preço x EMA200', fn: function (o) { return gatilhoPrecoMedia_(o, ema(o.closes, 200)); }, ativa: true },
-  { id: 'G-07', grupo: 'Gatilho', key: 'gEma365', nome: 'Preço x EMA365', fn: function (o) { return gatilhoPrecoMedia_(o, ema(o.closes, 365)); }, ativa: true },
-  { id: 'G-09', grupo: 'Gatilho', key: 'gBb25', nome: 'Reversão Bollinger 2,5σ (compra abaixo, sai na média)', fn: gatilhoBb25_, ativa: true },
-  { id: 'G-10', grupo: 'Gatilho', key: 'gZscore', nome: 'Capitulação Z-score ≤ -2σ (30d)', fn: gatilhoZscore_, ativa: true },
-  { id: 'G-11', grupo: 'Gatilho', key: 'gFearGreed', nome: 'Fear & Greed contrário (≤20 compra / ≥80 sai)', fn: gatilhoFearGreed_, ativa: true },
+  // ---- Gatilhos G-xx: FORA da lista desde a v2.5 (painel padronizado nas 10 estratégias). ----
+  // Para reativar algum, copie a linha correspondente de volta para dentro do array ESTRATEGIAS:
+  // { id: 'G-01', grupo: 'Gatilho', key: 'gSma90', nome: 'Preço x SMA90', fn: function (o) { return gatilhoPrecoMedia_(o, sma(o.closes, 90)); }, ativa: true },
+  // { id: 'G-02', grupo: 'Gatilho', key: 'gSma155', nome: 'Preço x SMA155 (STH-RP)', fn: function (o) { return gatilhoPrecoMedia_(o, sma(o.closes, 155)); }, ativa: true },
+  // { id: 'G-03', grupo: 'Gatilho', key: 'gBmsb', nome: 'Preço x Bull Market Support Band (SMA140/EMA147)', fn: gatilhoBmsb_, ativa: true },
+  // { id: 'G-05', grupo: 'Gatilho', key: 'gEma655', nome: 'Cruzamento EMA6 x EMA55 (puro)', fn: gatilhoEma655_, ativa: true },
+  // { id: 'G-06', grupo: 'Gatilho', key: 'gEma200', nome: 'Preço x EMA200', fn: function (o) { return gatilhoPrecoMedia_(o, ema(o.closes, 200)); }, ativa: true },
+  // { id: 'G-07', grupo: 'Gatilho', key: 'gEma365', nome: 'Preço x EMA365', fn: function (o) { return gatilhoPrecoMedia_(o, ema(o.closes, 365)); }, ativa: true },
+  // { id: 'G-09', grupo: 'Gatilho', key: 'gBb25', nome: 'Reversão Bollinger 2,5σ (compra abaixo, sai na média)', fn: gatilhoBb25_, ativa: true },
+  // { id: 'G-10', grupo: 'Gatilho', key: 'gZscore', nome: 'Capitulação Z-score ≤ -2σ (30d)', fn: gatilhoZscore_, ativa: true },
+  // { id: 'G-11', grupo: 'Gatilho', key: 'gFearGreed', nome: 'Fear & Greed contrário (≤20 compra / ≥80 sai)', fn: gatilhoFearGreed_, ativa: true },
   // Funding Rate e Open Interest: sem histórico público longo suficiente p/ backtest -> só monitoramento (aba 5 + alertas).
 ];
-
-/** true = os gatilhos G-xx votam no consenso (como na v2.4); false = ficam listados e acompanhados, mas sem voto. */
-const GATILHOS_NO_CONSENSO = true;
 
 /* ---- Machine #1: Confluência SMC/ICT/Trendline (cópia fiel) ---- */
 function sinalConfluencia(o) {
@@ -929,7 +925,7 @@ function rodarEstrategias_(o) {
   return ESTRATEGIAS.map(function (e) {
     let r;
     try { r = runBacktest_(o, e.fn(o)); } catch (err) { r = { erro: err.message, posAtual: 0 }; }
-    r.id = e.id; r.key = e.key; r.nome = e.nome; r.ativa = e.ativa && (e.grupo !== 'Gatilho' || GATILHOS_NO_CONSENSO); r.grupo = e.grupo;
+    r.id = e.id; r.key = e.key; r.nome = e.nome; r.ativa = e.ativa; r.grupo = e.grupo;
     return r;
   });
 }
