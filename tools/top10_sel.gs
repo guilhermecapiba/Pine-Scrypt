@@ -5,7 +5,7 @@
  * bonito, parte dele sorte). Por isso:
  *  1. A nota de cada candidato usa SOMENTE o período de seleção (IS = primeiros 70% do histórico, após o aquecimento
  *     das médias). O restante (OOS = últimos 30%) NUNCA entra na nota; ele serve para medir a decaída real.
- *  2. Elegível: Sharpe IS >= SELECAO_SHARPE_MIN (1,00) E Sharpe de permanência (últimos 24 meses) >= 1,00, drawdown IS <=
+ *  2. Elegível: Sharpe IS >= SELECAO_SHARPE_MIN (1,00) E Sharpe de 24 meses >= SELECAO_SHARPE_MIN_24M (0,90) E Sharpe de 12 meses >= SELECAO_SHARPE_MIN_12M (0,40), drawdown IS <=
  *     SELECAO_DD_MAX e trades mínimos no IS. Nenhuma vaga é preenchida com candidato abaixo disso (vaga fica ABERTA).
  *     Se faltarem estratégias, entra a BUSCA AMPLIADA (grade de ~300 parâmetros) e a escolha é refeita.
  *  3. Nota = média dos percentis de Sharpe IS e Calmar IS entre os elegíveis.
@@ -27,12 +27,18 @@ function metricasFaixa_(eq, a, b) {
   }
   return metricasRet_(r, dd, eq[b - 1] / e0);
 }
-/** Sharpe anualizado (raiz 365) dos últimos `dias` retornos da curva de equity. */
+/** Sharpe anualizado (raiz 365) dos últimos `dias` retornos da curva de equity, sem contar o aquecimento (barra 210). Sem arredondar. */
 function sharpeUlt_(eq, n, dias) {
-  const ini = Math.max(1, n - dias), r = []; for (let i = ini; i < n; i++) r.push(eq[i] / eq[i - 1] - 1);
+  const ini = Math.max(211, n - dias), r = []; for (let i = ini; i < n; i++) r.push(eq[i] / eq[i - 1] - 1);
   if (r.length < 60) return null;
   const mu = r.reduce(function (a, b) { return a + b; }, 0) / r.length, sd = Math.sqrt(r.reduce(function (a, b) { return a + (b - mu) * (b - mu); }, 0) / r.length);
-  return sd > 0 ? r_(mu / sd * Math.sqrt(365), 2) : 0;
+  return sd > 0 ? mu / sd * Math.sqrt(365) : 0;
+}
+/** Verdadeiro se a curva cumpre os mínimos de 24 e 12 meses. margem > 0 = histerese: quem já está na tabela só sai abaixo de (mínimo - margem). */
+function cumprePermanencia_(eq, n, margem) {
+  margem = margem || 0;
+  const a = sharpeUlt_(eq, n, cfgNum_('SELECAO_JANELA_PERM_DIAS')), b = sharpeUlt_(eq, n, 365);
+  return { ok: a !== null && b !== null && a >= cfgNum_('SELECAO_SHARPE_MIN_24M') - margem && b >= cfgNum_('SELECAO_SHARPE_MIN_12M') - margem, s24: a, s12: b };
 }
 function contarTrades_(r, a, b) { let k = 0; (r.tradeIdx || []).forEach(function (t) { if (t[0] >= a && t[0] < b) k++; }); return k; }
 function retornos_(eq, a, b) { const x = []; for (let i = a + 1; i < b; i++) x.push(eq[i] / eq[i - 1] - 1); return x; }
@@ -54,10 +60,10 @@ function avaliarCandidatos_(resLista, w0, cut, n, minTr, ddMax, shMin, idsBase) 
     const d = { id: r.id, fam: r.fam, nome: r.nome, r: r, situacao: '', slot: 0, base: !!idsBase[r.id] };
     if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return d; }
     d.isM = metricasFaixa_(r.eqCurve, w0, cut); d.oosM = metricasFaixa_(r.eqCurve, cut, n);
-    d.nTrIS = contarTrades_(r, w0, cut); d.shP = sharpeUlt_(r.eqCurve, n, cfgNum_('SELECAO_JANELA_PERM_DIAS'));
+    d.nTrIS = contarTrades_(r, w0, cut); d.perm = cumprePermanencia_(r.eqCurve, n);
     if (!d.isM) d.situacao = 'sem dados no IS';
     else if (d.isM.sharpe < shMin) d.situacao = 'Sharpe IS ' + d.isM.sharpe + ' < ' + shMin;
-    else if (d.shP === null || d.shP < shMin) d.situacao = 'Sharpe ' + Math.round(cfgNum_('SELECAO_JANELA_PERM_DIAS') / 30.4) + ' meses ' + (d.shP === null ? 'indisponível' : d.shP) + ' < ' + shMin;
+    else if (!d.perm.ok) d.situacao = d.perm.s24 === null || d.perm.s12 === null ? 'histórico recente curto demais' : d.perm.s24 < cfgNum_('SELECAO_SHARPE_MIN_24M') ? 'Sharpe 24 meses ' + r_(d.perm.s24, 2) + ' < ' + cfgNum_('SELECAO_SHARPE_MIN_24M') : 'Sharpe 12 meses ' + r_(d.perm.s12, 2) + ' < ' + cfgNum_('SELECAO_SHARPE_MIN_12M');
     else if (d.isM.dd > ddMax) d.situacao = 'drawdown IS acima de ' + ddMax + '%';
     else if (d.nTrIS < minTr) d.situacao = 'poucos trades no IS (' + d.nTrIS + ' < ' + minTr + ')';
     else d.elegivel = true;
@@ -132,7 +138,7 @@ function gravarSelecaoCandidatos_(sym, sel, dataHoje) {
     return [sym, d.slot || '', d.id, d.fam, d.nome, d.nTrIS === undefined ? '' : d.nTrIS, a.sharpe === undefined ? '' : a.sharpe, a.calmar === undefined ? '' : a.calmar, a.cagr === undefined ? '' : a.cagr, a.dd === undefined ? '' : a.dd,
       b.sharpe === undefined ? '' : b.sharpe, b.calmar === undefined ? '' : b.calmar, b.cagr === undefined ? '' : b.cagr, b.dd === undefined ? '' : b.dd, d.situacao, sel.w0Data + ' a ' + sel.corteData, dataHoje];
   });
-  novas.push([sym, '', '(resumo)', '', 'Fase ' + sel.fase + ': ' + sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' passaram nos filtros (Sharpe IS e 24 meses >= ' + sel.shMin + ', drawdown, trades); ' + ocultos + ' da busca ampliada reprovados não listados. Vagas abertas: ' + sel.vagas, '', '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
+  novas.push([sym, '', '(resumo)', '', 'Fase ' + sel.fase + ': ' + sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' passaram nos filtros (Sharpe IS >= ' + sel.shMin + ', 24 meses >= ' + cfgNum_('SELECAO_SHARPE_MIN_24M') + ', 12 meses >= ' + cfgNum_('SELECAO_SHARPE_MIN_12M') + ', drawdown, trades); ' + ocultos + ' da busca ampliada reprovados não listados. Vagas abertas: ' + sel.vagas, '', '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
   const todas = antigas.concat(novas);
   sh.clear();
   sh.getRange(1, 1, 1, COLS_SELECAO.length).setValues([COLS_SELECAO]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);

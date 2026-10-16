@@ -46,17 +46,17 @@ function gravarPainel_() {
 function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
-    'Sharpe_Janela (3a, peso do consenso)', 'Peso_Consenso_pct', 'Sharpe_24m (permanência)', 'Sharpe_12m (informativo)', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
+    'Sharpe_Janela (3a, peso do consenso)', 'Peso_Consenso_pct', 'Sharpe_24m (mín. 0,90)', 'Sharpe_12m (mín. 0,40)', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; };
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') return;
     x.r.estr.forEach(function (e) {
-      rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.pos === 1 ? 'COMPRADO' : 'CAIXA', e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
+      rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
         e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.sh24), v(e.sh12), v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ' nos filtros', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
+      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato passa nos mínimos de Sharpe (IS ' + cfgNum_('SELECAO_SHARPE_MIN') + ', 24m ' + cfgNum_('SELECAO_SHARPE_MIN_24M') + ', 12m ' + cfgNum_('SELECAO_SHARPE_MIN_12M') + ')', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
     }
   });
   sh.clear();
@@ -67,8 +67,9 @@ function gravarEstrategiasTop10_() {
     rows.forEach(function (r, i) {
       if (r[6] === 'VAGA') { sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee'); return; }
       sh.getRange(i + 2, 6, 1, 2).setBackground(r[5] === 1 ? '#d9ead3' : '#f4cccc');
-      if (r[16] !== '' && r[16] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 17).setBackground('#f4cccc').setFontWeight('bold');
-      if (r[17] !== '' && r[17] < cfgNum_('SELECAO_ALERTA_SHARPE_12M')) sh.getRange(i + 2, 18).setBackground('#fce5cd').setFontWeight('bold');
+      if (r[16] !== '' && r[16] < cfgNum_('SELECAO_SHARPE_MIN_24M')) sh.getRange(i + 2, 17).setBackground('#f4cccc').setFontWeight('bold');
+      if (r[17] !== '' && r[17] < cfgNum_('SELECAO_SHARPE_MIN_12M')) sh.getRange(i + 2, 18).setBackground('#f4cccc').setFontWeight('bold');
+      if (r[6] === 'FORA DA REGRA (Sharpe)') sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee');
       if (r[21] !== '' && r[21] < 0) sh.getRange(i + 2, 22, 1, 4).setBackground('#fce5cd');
     });
   }

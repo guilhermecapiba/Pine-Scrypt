@@ -60,7 +60,7 @@ function metricasRet_(r, dd, final) {
 }
 /** Painel das 10 em peso igual no intervalo [a, b): média dos retornos diários das curvas de equity das estratégias. */
 function metricasPainel_(res, a, b) {
-  const curvas = res.filter(function (x) { return x.eqCurve && !x.erro; }).map(function (x) { return x.eqCurve; });
+  const curvas = res.filter(function (x) { return x.eqCurve && !x.erro && x.ativa !== false; }).map(function (x) { return x.eqCurve; });
   if (!curvas.length) return null;
   b = b || curvas[0].length; if (b - a < 90) return null;
   const r = []; let v = 1, peak = 1, dd = 0;
@@ -117,7 +117,7 @@ function processarAtivo_(u, forcar) {
       const lista = sel.ids.map(function (id) { return POOL.concat(gerarPoolAmpliadoSeNecessario_(sel)).filter(function (e) { return e.id === id; })[0]; }).filter(Boolean);
       res = rodarLista_(o, lista);
       // permanência: estratégia cujo Sharpe de 24 meses cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
-      const permD = cfgNum_('SELECAO_JANELA_PERM_DIAS'), caiu = res.filter(function (r) { if (r.erro) return false; const v = sharpeUlt_(r.eqCurve, n, permD); return v === null || v < shMin; }).length;
+      const caiu = res.filter(function (r) { return !r.erro && !cumprePermanencia_(r.eqCurve, n, cfgNum_('SELECAO_HISTERESE')).ok; }).length;
       if ((caiu || sel.vagas > 0) && idadeDias_(sel.data) >= cfgNum_('SELECAO_REVISAO_DIAS')) fazer();
     }
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
@@ -126,6 +126,11 @@ function processarAtivo_(u, forcar) {
     const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, fase: sel ? sel.fase : '', ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
     guardarRes_(u.sym, res1); return { resumo: res1, eventos: [] };
   }
+  res.forEach(function (r) {
+    if (r.erro || !r.eqCurve) return;
+    r.perm = cumprePermanencia_(r.eqCurve, n);
+    if (fixas && !cumprePermanencia_(r.eqCurve, n, cfgNum_('SELECAO_HISTERESE')).ok) r.ativa = false;   // BTC: estratégia fora do mínimo sai do consenso (continua visível na tabela como FORA DA REGRA)
+  });
   const I = calcularIndicadores_(o), cons = consenso_(res), termo = termometro_(o, I, null);
   const w0 = idxData_(o, w0Str), cut = idxData_(o, cutStr), ini = Math.min(n - 91, cfgNum_('JANELA_INICIO_BARRAS')), C = o.closes, L = n - 1;
   const iSel = sel ? idxData_(o, sel.data) : -1;
@@ -136,7 +141,7 @@ function processarAtivo_(u, forcar) {
     return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
-      sh12: r.eqCurve ? sharpeUlt_(r.eqCurve, n, 365) : null, sh24: r.eqCurve ? sharpeUlt_(r.eqCurve, n, cfgNum_('SELECAO_JANELA_PERM_DIAS')) : null, isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
+      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, fora: r.ativa === false, isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
   const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
