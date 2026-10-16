@@ -4,8 +4,8 @@
  * Planilha: https://docs.google.com/spreadsheets/d/1WubiUb2K9s8J_a9AGfqphKYFFYi6ezAWCVBqn21A0jk
  *
  * Paradigma: MVP Projeto Cripto (PROJETO 02) v2.5. Motor de backtest, indicadores, Consenso Algorítmico, Esticamento do Mercado
- * e detecção de alertas são CÓPIAS FIÉIS do código do BTC. A diferença desta planilha: CADA MOEDA TEM AS PRÓPRIAS 10 MELHORES
- * ESTRATÉGIAS (até 100 estratégias distintas no total), escolhidas de um conjunto candidato de 51 (mais uma busca ampliada de ~300 quando faltam) por critério de
+ * e detecção de alertas são CÓPIAS FIÉIS do código do BTC. A diferença desta planilha: CADA MOEDA TEM AS PRÓPRIAS 5 MELHORES
+ * ESTRATÉGIAS (até 50 distintas no total; SELECAO_N_ESTRATEGIAS é editável), escolhidas de um conjunto candidato de 51 (mais uma busca ampliada de ~300 quando faltam) por critério de
  * desempenho (Sharpe mínimo de 1,00 por estratégia) e diversificação medidos só no período de seleção (IS 70%), com os 30% finais (OOS) reservados para medir a decaída
  * real. O BTC é a referência e roda as 10 fixas do Projeto 02. Ver seção 2B (SELEÇÃO).
  *
@@ -73,13 +73,15 @@ const CFG_PADRAO = [
   ['UNIVERSO_N_ATIVOS', 8, 'Quantidade de moedas do ranking CoinGecko (além do BTC e das escolhas manuais)'],
   ['UNIVERSO_MANUAIS', 'chainlink,aave', 'IDs CoinGecko escolhidos manualmente: ficam no universo mesmo fora da janela do ranking'],
   ['SELECAO_ATIVA', 'SIM', 'SIM = cada moeda usa as próprias 10 melhores; NAO = todas usam as 10 fixas do Projeto 02'],
-  ['SELECAO_N_ESTRATEGIAS', 10, 'Quantidade de estratégias escolhidas por moeda'],
+  ['SELECAO_N_ESTRATEGIAS', 5, 'Quantidade de estratégias escolhidas por moeda'],
   ['SELECAO_CORTE_IS', 0.70, 'Fração do histórico usada para NOTA (in-sample). O restante (out-of-sample) nunca entra na escolha'],
   ['SELECAO_MIN_TRADES_IS', 12, 'Trades mínimos no IS (reduz automaticamente para moedas de histórico curto, piso 5)'],
   ['SELECAO_SHARPE_MIN', 1.0, 'Sharpe mínimo (IS e 3 anos) para uma estratégia entrar e permanecer na tabela da moeda. Vaga sem candidato fica ABERTA'],
+  ['SELECAO_JANELA_PERM_DIAS', 730, 'Janela (dias) do Sharpe de permanência: estratégia da moeda com Sharpe nessa janela abaixo do mínimo sai da tabela (24 meses)'],
+  ['SELECAO_ALERTA_SHARPE_12M', 0.5, 'Sharpe de 12 meses abaixo disso acende alerta na coluna informativa (não remove a estratégia)'],
   ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que trocam estratégias que caíram abaixo do Sharpe mínimo ou preenchem vagas abertas'],
   ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) no IS para um candidato ser elegível'],
-  ['SELECAO_MAX_POR_FAMILIA', 3, 'Máximo de estratégias da mesma família entre as 10'],
+  ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as 10'],
   ['SELECAO_CORR_MAX', 0.92, 'Correlação máxima dos retornos diários (IS) entre duas escolhidas'],
   ['SELECAO_REFRESH_DIAS', 90, 'Dias até refazer a seleção sozinha (ou use o menu S). Entre reseleções, a escolha fica congelada'],
   ['UNIVERSO_EXCLUIR_IDS', 'tether,usd-coin,usds,dai,ethena-usde,usd1-world-liberty-financial,paypal-usd,first-digital-usd,true-usd,usdd,figure-heloc,tether-gold,pax-gold,wrapped-bitcoin,staked-ether,wrapped-steth,weth,coinbase-wrapped-btc,wrapped-eeth,usdt0,blackrock-usd-institutional-digital-liquidity-fund',

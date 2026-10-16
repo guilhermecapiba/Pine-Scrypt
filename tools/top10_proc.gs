@@ -116,8 +116,8 @@ function processarAtivo_(u, forcar) {
     else {
       const lista = sel.ids.map(function (id) { return POOL.concat(gerarPoolAmpliadoSeNecessario_(sel)).filter(function (e) { return e.id === id; })[0]; }).filter(Boolean);
       res = rodarLista_(o, lista);
-      // permanência: estratégia cujo Sharpe de 3 anos cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
-      const caiu = res.filter(function (r) { return !r.erro && r.sharpe < shMin; }).length;
+      // permanência: estratégia cujo Sharpe de 24 meses cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
+      const permD = cfgNum_('SELECAO_JANELA_PERM_DIAS'), caiu = res.filter(function (r) { if (r.erro) return false; const v = sharpeUlt_(r.eqCurve, n, permD); return v === null || v < shMin; }).length;
       if ((caiu || sel.vagas > 0) && idadeDias_(sel.data) >= cfgNum_('SELECAO_REVISAO_DIAS')) fazer();
     }
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
@@ -136,7 +136,7 @@ function processarAtivo_(u, forcar) {
     return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
-      isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
+      sh12: r.eqCurve ? sharpeUlt_(r.eqCurve, n, 365) : null, sh24: r.eqCurve ? sharpeUlt_(r.eqCurve, n, cfgNum_('SELECAO_JANELA_PERM_DIAS')) : null, isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
   const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });

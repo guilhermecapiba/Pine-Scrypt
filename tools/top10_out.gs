@@ -25,7 +25,7 @@ function gravarPainel_() {
   sh.clear();
   sh.getRange(1, 1).setValue('CRYPTO BACKTEST MACHINE — TOP 10 · TERMINAL QUANTITATIVO').setFontWeight('bold').setFontSize(14).setFontColor('#f5c542');
   sh.getRange(1, 1, 1, cab.length).setBackground('#081428');
-  sh.getRange(2, 1).setValue('Última leitura (BRT): ' + Utilities.formatDate(new Date(), P2.TZ_BRT, 'dd/MM/yyyy HH:mm:ss') + '  ·  10 estratégias próprias de cada moeda (BTC: as 10 fixas do Projeto 02)  ·  execução: sinal no fechamento, entrada na abertura do dia seguinte');
+  sh.getRange(2, 1).setValue('Última leitura (BRT): ' + Utilities.formatDate(new Date(), P2.TZ_BRT, 'dd/MM/yyyy HH:mm:ss') + '  ·  estratégias próprias de cada moeda (BTC: as 10 fixas do Projeto 02)  ·  execução: sinal no fechamento, entrada na abertura do dia seguinte');
   sh.getRange(4, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   if (rows.length) {
     sh.getRange(5, 1, rows.length, cab.length).setNumberFormat('@').setValues(rows).setVerticalAlignment('top');
@@ -46,29 +46,30 @@ function gravarPainel_() {
 function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
-    'Sharpe_Janela', 'Peso_Consenso_pct', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
+    'Sharpe_Janela (3a, peso do consenso)', 'Peso_Consenso_pct', 'Sharpe_24m (permanência)', 'Sharpe_12m (informativo)', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; };
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') return;
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.pos === 1 ? 'COMPRADO' : 'CAIXA', e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.sh24), v(e.sh12), v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
     });
-    // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra 10 posições
+    // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ' nos filtros', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
+      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ' nos filtros', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
     }
   });
   sh.clear();
   sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   if (rows.length) {
-    sh.getRange(2, 25, rows.length, 2).setNumberFormat('@');
+    sh.getRange(2, 27, rows.length, 2).setNumberFormat('@');
     sh.getRange(2, 1, rows.length, cab.length).setValues(rows);
     rows.forEach(function (r, i) {
       if (r[6] === 'VAGA') { sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee'); return; }
       sh.getRange(i + 2, 6, 1, 2).setBackground(r[5] === 1 ? '#d9ead3' : '#f4cccc');
-      if (r[14] !== '' && r[14] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 15).setBackground('#f4cccc').setFontWeight('bold');
-      if (r[19] !== '' && r[19] < 0) sh.getRange(i + 2, 20, 1, 4).setBackground('#fce5cd');
+      if (r[16] !== '' && r[16] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 17).setBackground('#f4cccc').setFontWeight('bold');
+      if (r[17] !== '' && r[17] < cfgNum_('SELECAO_ALERTA_SHARPE_12M')) sh.getRange(i + 2, 18).setBackground('#fce5cd').setFontWeight('bold');
+      if (r[21] !== '' && r[21] < 0) sh.getRange(i + 2, 22, 1, 4).setBackground('#fce5cd');
     });
   }
   sh.setFrozenRows(1); sh.setFrozenColumns(3); sh.setColumnWidth(5, 330);
@@ -78,7 +79,7 @@ function gravarDesempenho_() {
   const sh = ss_().getSheetByName(P2.ABAS.desemp), lista = resultadosOrdenados_().filter(function (x) { return x.r && x.r.estado === 'OK'; });
   sh.clear();
   if (!lista.length) { sh.getRange(1, 1).setValue('Sem ativos carregados ainda. Rode o menu 2) Carga inicial.'); return; }
-  sh.getRange(1, 1).setValue('DESEMPENHO DAS 10 ESTRATÉGIAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
+  sh.getRange(1, 1).setValue('DESEMPENHO DAS ESTRATÉGIAS ESCOLHIDAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
   sh.getRange(1, 1, 1, 22).setBackground('#081428');
   sh.getRange(2, 1).setValue('IS = período usado para ESCOLHER as estratégias. OOS = período que não participou da escolha: é o número que deve ser levado a sério. Para o BTC (referência) as 10 são fixas e o corte é 02/06/2023. Verde = painel supera o buy and hold do mesmo período em Calmar.');
   const cab = ['Ativo', 'Anos de histórico', 'Selecionada em', 'Período IS', 'Corte OOS',
@@ -92,7 +93,7 @@ function gravarDesempenho_() {
     const r = x.r, bhO = r.bhOOS ? r.bhOOS.calmar : null;
     const sup = r.bhOOS ? r.estr.filter(function (e) { return e.oosCa !== null && e.oosCa > bhO; }).length : '';
     const neg = r.estr.filter(function (e) { return e.oosSh !== null && e.oosSh < 0; }).length;
-    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas + ' (só ' + r.estr.length + ' de 10 com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ')' : '') + (r.fase === 'ampliada' ? ' · busca ampliada usada (' + r.nTest + ' candidatos testados)' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
+    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas + ' (só ' + r.estr.length + ' de ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ')' : '') + (r.fase === 'ampliada' ? ' · busca ampliada usada (' + r.nTest + ' candidatos testados)' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
     return [x.u.sym + (x.u.status === 'REFERENCIA' ? ' (ref.)' : ''), r_(r.n / 365.25, 1), r.selData, r.w0 + ' a ' + r.corte, r.corte,
       g(r.painelIS, 'calmar'), g(r.painelIS, 'sharpe'), g(r.painelIS, 'cagr'), g(r.painelIS, 'dd'),
       g(r.painelOOS, 'calmar'), g(r.painelOOS, 'sharpe'), g(r.painelOOS, 'cagr'), g(r.painelOOS, 'dd'),

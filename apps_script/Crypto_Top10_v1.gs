@@ -4,8 +4,8 @@
  * Planilha: https://docs.google.com/spreadsheets/d/1WubiUb2K9s8J_a9AGfqphKYFFYi6ezAWCVBqn21A0jk
  *
  * Paradigma: MVP Projeto Cripto (PROJETO 02) v2.5. Motor de backtest, indicadores, Consenso Algorítmico, Esticamento do Mercado
- * e detecção de alertas são CÓPIAS FIÉIS do código do BTC. A diferença desta planilha: CADA MOEDA TEM AS PRÓPRIAS 10 MELHORES
- * ESTRATÉGIAS (até 100 estratégias distintas no total), escolhidas de um conjunto candidato de 51 (mais uma busca ampliada de ~300 quando faltam) por critério de
+ * e detecção de alertas são CÓPIAS FIÉIS do código do BTC. A diferença desta planilha: CADA MOEDA TEM AS PRÓPRIAS 5 MELHORES
+ * ESTRATÉGIAS (até 50 distintas no total; SELECAO_N_ESTRATEGIAS é editável), escolhidas de um conjunto candidato de 51 (mais uma busca ampliada de ~300 quando faltam) por critério de
  * desempenho (Sharpe mínimo de 1,00 por estratégia) e diversificação medidos só no período de seleção (IS 70%), com os 30% finais (OOS) reservados para medir a decaída
  * real. O BTC é a referência e roda as 10 fixas do Projeto 02. Ver seção 2B (SELEÇÃO).
  *
@@ -73,13 +73,15 @@ const CFG_PADRAO = [
   ['UNIVERSO_N_ATIVOS', 8, 'Quantidade de moedas do ranking CoinGecko (além do BTC e das escolhas manuais)'],
   ['UNIVERSO_MANUAIS', 'chainlink,aave', 'IDs CoinGecko escolhidos manualmente: ficam no universo mesmo fora da janela do ranking'],
   ['SELECAO_ATIVA', 'SIM', 'SIM = cada moeda usa as próprias 10 melhores; NAO = todas usam as 10 fixas do Projeto 02'],
-  ['SELECAO_N_ESTRATEGIAS', 10, 'Quantidade de estratégias escolhidas por moeda'],
+  ['SELECAO_N_ESTRATEGIAS', 5, 'Quantidade de estratégias escolhidas por moeda'],
   ['SELECAO_CORTE_IS', 0.70, 'Fração do histórico usada para NOTA (in-sample). O restante (out-of-sample) nunca entra na escolha'],
   ['SELECAO_MIN_TRADES_IS', 12, 'Trades mínimos no IS (reduz automaticamente para moedas de histórico curto, piso 5)'],
   ['SELECAO_SHARPE_MIN', 1.0, 'Sharpe mínimo (IS e 3 anos) para uma estratégia entrar e permanecer na tabela da moeda. Vaga sem candidato fica ABERTA'],
+  ['SELECAO_JANELA_PERM_DIAS', 730, 'Janela (dias) do Sharpe de permanência: estratégia da moeda com Sharpe nessa janela abaixo do mínimo sai da tabela (24 meses)'],
+  ['SELECAO_ALERTA_SHARPE_12M', 0.5, 'Sharpe de 12 meses abaixo disso acende alerta na coluna informativa (não remove a estratégia)'],
   ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que trocam estratégias que caíram abaixo do Sharpe mínimo ou preenchem vagas abertas'],
   ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) no IS para um candidato ser elegível'],
-  ['SELECAO_MAX_POR_FAMILIA', 3, 'Máximo de estratégias da mesma família entre as 10'],
+  ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as 10'],
   ['SELECAO_CORR_MAX', 0.92, 'Correlação máxima dos retornos diários (IS) entre duas escolhidas'],
   ['SELECAO_REFRESH_DIAS', 90, 'Dias até refazer a seleção sozinha (ou use o menu S). Entre reseleções, a escolha fica congelada'],
   ['UNIVERSO_EXCLUIR_IDS', 'tether,usd-coin,usds,dai,ethena-usde,usd1-world-liberty-financial,paypal-usd,first-digital-usd,true-usd,usdd,figure-heloc,tether-gold,pax-gold,wrapped-bitcoin,staked-ether,wrapped-steth,weth,coinbase-wrapped-btc,wrapped-eeth,usdt0,blackrock-usd-institutional-digital-liquidity-fund',
@@ -315,7 +317,7 @@ function gerarPoolAmpliado_() {
  * bonito, parte dele sorte). Por isso:
  *  1. A nota de cada candidato usa SOMENTE o período de seleção (IS = primeiros 70% do histórico, após o aquecimento
  *     das médias). O restante (OOS = últimos 30%) NUNCA entra na nota; ele serve para medir a decaída real.
- *  2. Elegível: Sharpe IS >= SELECAO_SHARPE_MIN (1,00) E Sharpe de 3 anos (o mostrado na tabela) >= 1,00, drawdown IS <=
+ *  2. Elegível: Sharpe IS >= SELECAO_SHARPE_MIN (1,00) E Sharpe de permanência (últimos 24 meses) >= 1,00, drawdown IS <=
  *     SELECAO_DD_MAX e trades mínimos no IS. Nenhuma vaga é preenchida com candidato abaixo disso (vaga fica ABERTA).
  *     Se faltarem estratégias, entra a BUSCA AMPLIADA (grade de ~300 parâmetros) e a escolha é refeita.
  *  3. Nota = média dos percentis de Sharpe IS e Calmar IS entre os elegíveis.
@@ -337,6 +339,13 @@ function metricasFaixa_(eq, a, b) {
   }
   return metricasRet_(r, dd, eq[b - 1] / e0);
 }
+/** Sharpe anualizado (raiz 365) dos últimos `dias` retornos da curva de equity. */
+function sharpeUlt_(eq, n, dias) {
+  const ini = Math.max(1, n - dias), r = []; for (let i = ini; i < n; i++) r.push(eq[i] / eq[i - 1] - 1);
+  if (r.length < 60) return null;
+  const mu = r.reduce(function (a, b) { return a + b; }, 0) / r.length, sd = Math.sqrt(r.reduce(function (a, b) { return a + (b - mu) * (b - mu); }, 0) / r.length);
+  return sd > 0 ? r_(mu / sd * Math.sqrt(365), 2) : 0;
+}
 function contarTrades_(r, a, b) { let k = 0; (r.tradeIdx || []).forEach(function (t) { if (t[0] >= a && t[0] < b) k++; }); return k; }
 function retornos_(eq, a, b) { const x = []; for (let i = a + 1; i < b; i++) x.push(eq[i] / eq[i - 1] - 1); return x; }
 function correl_(x, y) {
@@ -357,10 +366,10 @@ function avaliarCandidatos_(resLista, w0, cut, n, minTr, ddMax, shMin, idsBase) 
     const d = { id: r.id, fam: r.fam, nome: r.nome, r: r, situacao: '', slot: 0, base: !!idsBase[r.id] };
     if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return d; }
     d.isM = metricasFaixa_(r.eqCurve, w0, cut); d.oosM = metricasFaixa_(r.eqCurve, cut, n);
-    d.nTrIS = contarTrades_(r, w0, cut); d.sh3 = r.sharpe;
+    d.nTrIS = contarTrades_(r, w0, cut); d.shP = sharpeUlt_(r.eqCurve, n, cfgNum_('SELECAO_JANELA_PERM_DIAS'));
     if (!d.isM) d.situacao = 'sem dados no IS';
     else if (d.isM.sharpe < shMin) d.situacao = 'Sharpe IS ' + d.isM.sharpe + ' < ' + shMin;
-    else if (d.sh3 < shMin) d.situacao = 'Sharpe 3 anos ' + r_(d.sh3, 2) + ' < ' + shMin;
+    else if (d.shP === null || d.shP < shMin) d.situacao = 'Sharpe ' + Math.round(cfgNum_('SELECAO_JANELA_PERM_DIAS') / 30.4) + ' meses ' + (d.shP === null ? 'indisponível' : d.shP) + ' < ' + shMin;
     else if (d.isM.dd > ddMax) d.situacao = 'drawdown IS acima de ' + ddMax + '%';
     else if (d.nTrIS < minTr) d.situacao = 'poucos trades no IS (' + d.nTrIS + ' < ' + minTr + ')';
     else d.elegivel = true;
@@ -435,7 +444,7 @@ function gravarSelecaoCandidatos_(sym, sel, dataHoje) {
     return [sym, d.slot || '', d.id, d.fam, d.nome, d.nTrIS === undefined ? '' : d.nTrIS, a.sharpe === undefined ? '' : a.sharpe, a.calmar === undefined ? '' : a.calmar, a.cagr === undefined ? '' : a.cagr, a.dd === undefined ? '' : a.dd,
       b.sharpe === undefined ? '' : b.sharpe, b.calmar === undefined ? '' : b.calmar, b.cagr === undefined ? '' : b.cagr, b.dd === undefined ? '' : b.dd, d.situacao, sel.w0Data + ' a ' + sel.corteData, dataHoje];
   });
-  novas.push([sym, '', '(resumo)', '', 'Fase ' + sel.fase + ': ' + sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' passaram nos filtros (Sharpe IS e 3 anos >= ' + sel.shMin + ', drawdown, trades); ' + ocultos + ' da busca ampliada reprovados não listados. Vagas abertas: ' + sel.vagas, '', '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
+  novas.push([sym, '', '(resumo)', '', 'Fase ' + sel.fase + ': ' + sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' passaram nos filtros (Sharpe IS e 24 meses >= ' + sel.shMin + ', drawdown, trades); ' + ocultos + ' da busca ampliada reprovados não listados. Vagas abertas: ' + sel.vagas, '', '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
   const todas = antigas.concat(novas);
   sh.clear();
   sh.getRange(1, 1, 1, COLS_SELECAO.length).setValues([COLS_SELECAO]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
@@ -1295,8 +1304,8 @@ function processarAtivo_(u, forcar) {
     else {
       const lista = sel.ids.map(function (id) { return POOL.concat(gerarPoolAmpliadoSeNecessario_(sel)).filter(function (e) { return e.id === id; })[0]; }).filter(Boolean);
       res = rodarLista_(o, lista);
-      // permanência: estratégia cujo Sharpe de 3 anos cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
-      const caiu = res.filter(function (r) { return !r.erro && r.sharpe < shMin; }).length;
+      // permanência: estratégia cujo Sharpe de 24 meses cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
+      const permD = cfgNum_('SELECAO_JANELA_PERM_DIAS'), caiu = res.filter(function (r) { if (r.erro) return false; const v = sharpeUlt_(r.eqCurve, n, permD); return v === null || v < shMin; }).length;
       if ((caiu || sel.vagas > 0) && idadeDias_(sel.data) >= cfgNum_('SELECAO_REVISAO_DIAS')) fazer();
     }
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
@@ -1315,7 +1324,7 @@ function processarAtivo_(u, forcar) {
     return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
-      isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
+      sh12: r.eqCurve ? sharpeUlt_(r.eqCurve, n, 365) : null, sh24: r.eqCurve ? sharpeUlt_(r.eqCurve, n, cfgNum_('SELECAO_JANELA_PERM_DIAS')) : null, isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
   const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
@@ -1575,7 +1584,7 @@ function gravarPainel_() {
   sh.clear();
   sh.getRange(1, 1).setValue('CRYPTO BACKTEST MACHINE — TOP 10 · TERMINAL QUANTITATIVO').setFontWeight('bold').setFontSize(14).setFontColor('#f5c542');
   sh.getRange(1, 1, 1, cab.length).setBackground('#081428');
-  sh.getRange(2, 1).setValue('Última leitura (BRT): ' + Utilities.formatDate(new Date(), P2.TZ_BRT, 'dd/MM/yyyy HH:mm:ss') + '  ·  10 estratégias próprias de cada moeda (BTC: as 10 fixas do Projeto 02)  ·  execução: sinal no fechamento, entrada na abertura do dia seguinte');
+  sh.getRange(2, 1).setValue('Última leitura (BRT): ' + Utilities.formatDate(new Date(), P2.TZ_BRT, 'dd/MM/yyyy HH:mm:ss') + '  ·  estratégias próprias de cada moeda (BTC: as 10 fixas do Projeto 02)  ·  execução: sinal no fechamento, entrada na abertura do dia seguinte');
   sh.getRange(4, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   if (rows.length) {
     sh.getRange(5, 1, rows.length, cab.length).setNumberFormat('@').setValues(rows).setVerticalAlignment('top');
@@ -1596,29 +1605,30 @@ function gravarPainel_() {
 function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
-    'Sharpe_Janela', 'Peso_Consenso_pct', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
+    'Sharpe_Janela (3a, peso do consenso)', 'Peso_Consenso_pct', 'Sharpe_24m (permanência)', 'Sharpe_12m (informativo)', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; };
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') return;
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.pos === 1 ? 'COMPRADO' : 'CAIXA', e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.sh24), v(e.sh12), v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
     });
-    // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra 10 posições
+    // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ' nos filtros', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
+      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ' nos filtros', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
     }
   });
   sh.clear();
   sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   if (rows.length) {
-    sh.getRange(2, 25, rows.length, 2).setNumberFormat('@');
+    sh.getRange(2, 27, rows.length, 2).setNumberFormat('@');
     sh.getRange(2, 1, rows.length, cab.length).setValues(rows);
     rows.forEach(function (r, i) {
       if (r[6] === 'VAGA') { sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee'); return; }
       sh.getRange(i + 2, 6, 1, 2).setBackground(r[5] === 1 ? '#d9ead3' : '#f4cccc');
-      if (r[14] !== '' && r[14] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 15).setBackground('#f4cccc').setFontWeight('bold');
-      if (r[19] !== '' && r[19] < 0) sh.getRange(i + 2, 20, 1, 4).setBackground('#fce5cd');
+      if (r[16] !== '' && r[16] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 17).setBackground('#f4cccc').setFontWeight('bold');
+      if (r[17] !== '' && r[17] < cfgNum_('SELECAO_ALERTA_SHARPE_12M')) sh.getRange(i + 2, 18).setBackground('#fce5cd').setFontWeight('bold');
+      if (r[21] !== '' && r[21] < 0) sh.getRange(i + 2, 22, 1, 4).setBackground('#fce5cd');
     });
   }
   sh.setFrozenRows(1); sh.setFrozenColumns(3); sh.setColumnWidth(5, 330);
@@ -1628,7 +1638,7 @@ function gravarDesempenho_() {
   const sh = ss_().getSheetByName(P2.ABAS.desemp), lista = resultadosOrdenados_().filter(function (x) { return x.r && x.r.estado === 'OK'; });
   sh.clear();
   if (!lista.length) { sh.getRange(1, 1).setValue('Sem ativos carregados ainda. Rode o menu 2) Carga inicial.'); return; }
-  sh.getRange(1, 1).setValue('DESEMPENHO DAS 10 ESTRATÉGIAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
+  sh.getRange(1, 1).setValue('DESEMPENHO DAS ESTRATÉGIAS ESCOLHIDAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
   sh.getRange(1, 1, 1, 22).setBackground('#081428');
   sh.getRange(2, 1).setValue('IS = período usado para ESCOLHER as estratégias. OOS = período que não participou da escolha: é o número que deve ser levado a sério. Para o BTC (referência) as 10 são fixas e o corte é 02/06/2023. Verde = painel supera o buy and hold do mesmo período em Calmar.');
   const cab = ['Ativo', 'Anos de histórico', 'Selecionada em', 'Período IS', 'Corte OOS',
@@ -1642,7 +1652,7 @@ function gravarDesempenho_() {
     const r = x.r, bhO = r.bhOOS ? r.bhOOS.calmar : null;
     const sup = r.bhOOS ? r.estr.filter(function (e) { return e.oosCa !== null && e.oosCa > bhO; }).length : '';
     const neg = r.estr.filter(function (e) { return e.oosSh !== null && e.oosSh < 0; }).length;
-    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas + ' (só ' + r.estr.length + ' de 10 com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ')' : '') + (r.fase === 'ampliada' ? ' · busca ampliada usada (' + r.nTest + ' candidatos testados)' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
+    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas + ' (só ' + r.estr.length + ' de ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ')' : '') + (r.fase === 'ampliada' ? ' · busca ampliada usada (' + r.nTest + ' candidatos testados)' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
     return [x.u.sym + (x.u.status === 'REFERENCIA' ? ' (ref.)' : ''), r_(r.n / 365.25, 1), r.selData, r.w0 + ' a ' + r.corte, r.corte,
       g(r.painelIS, 'calmar'), g(r.painelIS, 'sharpe'), g(r.painelIS, 'cagr'), g(r.painelIS, 'dd'),
       g(r.painelOOS, 'calmar'), g(r.painelOOS, 'sharpe'), g(r.painelOOS, 'cagr'), g(r.painelOOS, 'dd'),
