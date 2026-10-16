@@ -7,19 +7,19 @@
 const COLS_UNIVERSO = ['Ordem', 'Simbolo', 'CoinGecko_ID', 'Nome', 'Rank_MC', 'Tipo', 'Status', 'Fontes', 'Fonte_OK', 'Inicio_Historico', 'N_Velas', 'Ultima_Vela', 'Ultima_Atualizacao', 'Observacao'];
 const SEED_UNIVERSO = [
   [1, 'BTC', 'bitcoin', 'Bitcoin', 'CRIPTO', 'REFERENCIA', 'coinbase:BTC-USD,binance:BTCUSDT,okx:BTC-USDT,kraken:XBTUSD', 'Referência: o mesmo motor roda no BTC para comparação com o Projeto 02'],
-  [2, 'ETH', 'ethereum', 'Ethereum', 'CRIPTO', 'ATIVO', 'binance:ETHUSDT,coinbase:ETH-USD,okx:ETH-USDT,kucoin:ETH-USDT,kraken:ETHUSD', ''],
+  [2, 'ETH', 'ethereum', 'Ethereum', 'CRIPTO', 'ATIVO', 'binance:ETHUSDT,kucoin:ETH-USDT,bitfinex:ETHUSD,okx:ETH-USDT,bybit:ETHUSDT,mexc:ETHUSDT,gate:ETH_USDT,coinbase:ETH-USD,kraken:ETHUSD', ''],
   [3, 'USDT', 'tether', 'Tether', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin: não há tendência para testar'],
-  [4, 'BNB', 'binancecoin', 'BNB', 'CRIPTO', 'ATIVO', 'binance:BNBUSDT,okx:BNB-USDT,kucoin:BNB-USDT,bybit:BNBUSDT', 'Não está na Coinbase nem na Kraken'],
-  [5, 'XRP', 'ripple', 'XRP', 'CRIPTO', 'ATIVO', 'binance:XRPUSDT,coinbase:XRP-USD,okx:XRP-USDT,kucoin:XRP-USDT,kraken:XRPUSD', ''],
+  [4, 'BNB', 'binancecoin', 'BNB', 'CRIPTO', 'ATIVO', 'binance:BNBUSDT,kucoin:BNB-USDT,okx:BNB-USDT,bybit:BNBUSDT,mexc:BNBUSDT,gate:BNB_USDT', 'Não está na Coinbase nem na Kraken'],
+  [5, 'XRP', 'ripple', 'XRP', 'CRIPTO', 'ATIVO', 'binance:XRPUSDT,kucoin:XRP-USDT,bitfinex:XRPUSD,okx:XRP-USDT,bybit:XRPUSDT,mexc:XRPUSDT,gate:XRP_USDT,coinbase:XRP-USD,kraken:XRPUSD', ''],
   [6, 'USDC', 'usd-coin', 'USDC', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin: não há tendência para testar'],
-  [7, 'SOL', 'solana', 'Solana', 'CRIPTO', 'ATIVO', 'binance:SOLUSDT,coinbase:SOL-USD,okx:SOL-USDT,kucoin:SOL-USDT,kraken:SOLUSD', 'Histórico desde 2020'],
-  [8, 'TRX', 'tron', 'TRON', 'CRIPTO', 'ATIVO', 'binance:TRXUSDT,okx:TRX-USDT,kucoin:TRX-USDT,kraken:TRXUSD', ''],
+  [7, 'SOL', 'solana', 'Solana', 'CRIPTO', 'ATIVO', 'binance:SOLUSDT,kucoin:SOL-USDT,bitfinex:SOLUSD,okx:SOL-USDT,bybit:SOLUSDT,mexc:SOLUSDT,gate:SOL_USDT,coinbase:SOL-USD,kraken:SOLUSD', 'Histórico desde 2020'],
+  [8, 'TRX', 'tron', 'TRON', 'CRIPTO', 'ATIVO', 'binance:TRXUSDT,kucoin:TRX-USDT,bitfinex:TRXUSD,okx:TRX-USDT,bybit:TRXUSDT,mexc:TRXUSDT,gate:TRX_USDT,kraken:TRXUSD', ''],
   [9, 'FIGR_HELOC', 'figure-heloc', 'Figure Heloc', 'RWA', 'EXCLUIDO', '', 'Empréstimo tokenizado cotado perto de US$ 1: não é um ativo de tendência'],
-  [10, 'ZEC', 'zcash', 'Zcash', 'CRIPTO', 'ATIVO', 'binance:ZECUSDT,coinbase:ZEC-USD,okx:ZEC-USDT,kucoin:ZEC-USDT,kraken:ZECUSD,bitfinex:ZECUSD', ''],
-  [11, 'HYPE', 'hyperliquid', 'Hyperliquid', 'CRIPTO', 'ATIVO', 'okx:HYPE-USDT,bybit:HYPEUSDT,kucoin:HYPE-USDT,binance:HYPEUSDT', 'Histórico curto (desde o fim de 2024): consenso só com 450+ velas'],
-  [12, 'DOGE', 'dogecoin', 'Dogecoin', 'CRIPTO', 'ATIVO', 'binance:DOGEUSDT,coinbase:DOGE-USD,okx:DOGE-USDT,kucoin:DOGE-USDT,kraken:XDGUSD', ''],
-  [13, 'LINK', 'chainlink', 'Chainlink', 'CRIPTO', 'ATIVO', 'binance:LINKUSDT,coinbase:LINK-USD,okx:LINK-USDT,kucoin:LINK-USDT,kraken:LINKUSD,bitfinex:LINK:USD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking)'],
-  [14, 'AAVE', 'aave', 'Aave', 'CRIPTO', 'ATIVO', 'binance:AAVEUSDT,coinbase:AAVE-USD,okx:AAVE-USDT,kucoin:AAVE-USDT,kraken:AAVEUSD,bitfinex:AAVE:USD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking). Histórico desde out/2020'],
+  [10, 'ZEC', 'zcash', 'Zcash', 'CRIPTO', 'ATIVO', 'binance:ZECUSDT,kucoin:ZEC-USDT,bitfinex:ZECUSD,okx:ZEC-USDT,bybit:ZECUSDT,mexc:ZECUSDT,gate:ZEC_USDT,coinbase:ZEC-USD,kraken:ZECUSD', ''],
+  [11, 'HYPE', 'hyperliquid', 'Hyperliquid', 'CRIPTO', 'ATIVO', 'kucoin:HYPE-USDT,bybit:HYPEUSDT,gate:HYPE_USDT,mexc:HYPEUSDT,bitfinex:HYPE:USD,okx:HYPE-USDT,binance:HYPEUSDT', 'Histórico curto: consenso só com 500+ velas; a carga completa escolhe a fonte com mais histórico'],
+  [12, 'DOGE', 'dogecoin', 'Dogecoin', 'CRIPTO', 'ATIVO', 'binance:DOGEUSDT,kucoin:DOGE-USDT,bitfinex:DOGE:USD,okx:DOGE-USDT,bybit:DOGEUSDT,mexc:DOGEUSDT,gate:DOGE_USDT,coinbase:DOGE-USD,kraken:XDGUSD', ''],
+  [13, 'LINK', 'chainlink', 'Chainlink', 'CRIPTO', 'ATIVO', 'binance:LINKUSDT,kucoin:LINK-USDT,bitfinex:LINK:USD,okx:LINK-USDT,bybit:LINKUSDT,mexc:LINKUSDT,gate:LINK_USDT,coinbase:LINK-USD,kraken:LINKUSD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking)'],
+  [14, 'AAVE', 'aave', 'Aave', 'CRIPTO', 'ATIVO', 'binance:AAVEUSDT,kucoin:AAVE-USDT,bitfinex:AAVE:USD,okx:AAVE-USDT,bybit:AAVEUSDT,mexc:AAVEUSDT,gate:AAVE_USDT,coinbase:AAVE-USD,kraken:AAVEUSD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking). Histórico desde out/2020'],
   [15, 'XMR', 'monero', 'Monero', 'CRIPTO', 'EXCLUIDO', 'bitfinex:XMRUSD,kucoin:XMR-USDT,kraken:XMRUSD', 'Retirada por decisão do usuário (substituída por LINK e AAVE)'],
   [16, 'USDS', 'usds', 'USDS', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin'],
 ];
@@ -81,14 +81,17 @@ function rodarLista_(o, lista) {
   });
 }
 
-/** Recompõe, só se a seleção usou a fase ampliada, os candidatos da grade (IDs começam com X-). */
-function gerarPoolAmpliadoSeNecessario_(sel) {
-  return sel.ids.some(function (id) { return id.indexOf('X-') === 0; }) ? gerarPoolAmpliado_() : [];
+/** Recompõe as definições dos candidatos escolhidos (só gera as grades se algum ID delas foi escolhido). */
+function defsPorId_(ids) {
+  const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
 }
 
 function processarAtivo_(u, forcar) {
   const prev = lerRes_(u.sym), ontemStr = Utilities.formatDate(new Date(ontemUtcMs_()), 'UTC', 'yyyy-MM-dd');
-  const pend = pendentesSel_(), pendente = pend.indexOf(u.sym) >= 0;
+  const pend = pendentesSel_(), pendente = pend.indexOf(u.sym) >= 0 || pendentesHist_().indexOf(u.sym) >= 0;
   if (!forcar && !pendente && prev && prev.estado === 'OK' && u.ultimaVela >= ontemStr) return { resumo: prev, eventos: [], pulou: true };
   const b = atualizarBase_(u), o = b.ohlcv, n = o.closes.length;
   gravarLinhaUniverso_(u, b.fonte, o);
@@ -97,6 +100,7 @@ function processarAtivo_(u, forcar) {
     const res0 = Object.assign(base, { estado: 'HISTORICO_INSUFICIENTE', ultimaVela: n ? Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd') : '', preco: n ? o.closes[n - 1] : null });
     guardarRes_(u.sym, res0); return { resumo: res0, eventos: [] };
   }
+  if (u.status !== 'REFERENCIA') o.btcC = alinharBtc_(o, lerBase_('BTC'));
   const hoje = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
   const fixas = u.status === 'REFERENCIA' || !cfgSim_('SELECAO_ATIVA');
   let sel = null, res, cutStr, w0Str, dataSel = '';
@@ -104,26 +108,20 @@ function processarAtivo_(u, forcar) {
     res = rodarLista_(o, FIXAS_BTC); cutStr = '2023-06-02'; w0Str = dataStr_(o.dates[Math.min(200, n - 150)]); dataSel = 'fixas (Projeto 02)';
   } else {
     sel = lerSel_(u.sym);
-    const shMin = cfgNum_('SELECAO_SHARPE_MIN');
     const fazer = function () {
-      const pool = rodarLista_(o, POOL), s = selecionar_(o, pool, function () { return rodarLista_(o, gerarPoolAmpliado_()); });
+      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_()));
       guardarSel_(u.sym, s, hoje); gravarSelecaoCandidatos_(u.sym, s, hoje);
       sel = lerSel_(u.sym);
       res = s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; });
       if (pendente) setPendentesSel_(pend.filter(function (x) { return x !== u.sym; }));
     };
-    if (!sel || pendente || idadeDias_(sel.data) >= cfgNum_('SELECAO_REFRESH_DIAS')) fazer();
-    else {
-      const lista = sel.ids.map(function (id) { return POOL.concat(gerarPoolAmpliadoSeNecessario_(sel)).filter(function (e) { return e.id === id; })[0]; }).filter(Boolean);
-      res = rodarLista_(o, lista);
-      // permanência: estratégia cujo Sharpe de 24 meses cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
-      const caiu = res.filter(function (r) { return !r.erro && !cumprePermanencia_(r.eqCurve, n, cfgNum_('SELECAO_HISTERESE')).ok; }).length;
-      if ((caiu || sel.vagas > 0) && idadeDias_(sel.data) >= cfgNum_('SELECAO_REVISAO_DIAS')) fazer();
-    }
+    const idade = sel ? idadeDias_(sel.data) : 1e9;
+    if (!sel || pendente || idade >= cfgNum_('SELECAO_REFRESH_DIAS') || (idade >= cfgNum_('SELECAO_REVISAO_DIAS') && (sel.vagas > 0 || sel.naoPlenas > 0))) fazer();
+    else res = rodarLista_(o, defsPorId_(sel.ids));
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
   }
   if (!res.length) {
-    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, fase: sel ? sel.fase : '', ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
+    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
     guardarRes_(u.sym, res1); return { resumo: res1, eventos: [] };
   }
   res.forEach(function (r) {
@@ -141,7 +139,7 @@ function processarAtivo_(u, forcar) {
     return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
-      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, fora: r.ativa === false, isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
+      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
   const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
@@ -152,7 +150,7 @@ function processarAtivo_(u, forcar) {
     estic: termo.valor, faixa: termo.faixa, acao: termo.acao, regime: termo.regime, cobertura: termo.cobertura,
     painel: metricasPainel_(res, ini), painelIS: metricasPainel_(res, w0, cut), painelOOS: metricasPainel_(res, cut, n),
     bh: metricasJanela_(bhEq, ini), bhIS: metricasFaixa_(bhEq, w0, cut), bhOOS: metricasFaixa_(bhEq, cut, n),
-    selData: dataSel, w0: w0Str, corte: cutStr, fixas: fixas, parcial: sel ? !!sel.parcial : false, vagas: sel ? (sel.vagas || 0) : 0, fase: sel ? sel.fase : '', nTest: sel ? sel.nTest : null, nElig: sel ? sel.nElig : null, estr: estr, carga: b.carga,
+    selData: dataSel, w0: w0Str, corte: cutStr, fixas: fixas, parcial: sel ? !!sel.parcial : false, vagas: sel ? (sel.vagas || 0) : 0, naoPlenas: sel ? (sel.naoPlenas || 0) : 0, nTest: sel ? sel.nTest : null, nElig: sel ? sel.nElig : null, estr: estr, carga: b.carga,
   });
   guardarRes_(u.sym, out);
   return { resumo: out, eventos: eventos };

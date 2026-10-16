@@ -7,8 +7,8 @@ const MS_DIA = 86400000;
 
 function candle_(ts, o, h, l, c, v) { return { date: new Date(ts), open: +o, high: +h, low: +l, close: +c, volume: +v || 0 }; }
 
-function fetchBinance_(par, o) {
-  const base = 'https://data-api.binance.vision/api/v3/klines?symbol=' + par + '&interval=1d&limit=1000';
+function fetchBinance_(par, o, host) {
+  const base = (host || 'https://data-api.binance.vision/api/v3/klines') + '?symbol=' + par + '&interval=1d&limit=1000';
   let start = o.dias ? Date.now() - o.dias * MS_DIA : P2.HIST_INICIO_MS;
   const out = []; let g = 0;
   while (g++ < 20) {
@@ -85,7 +85,21 @@ function fetchBitfinex_(par, o) {
   const rows = fetchJson_(url, null, 2);
   return (Array.isArray(rows) ? rows : []).map(function (r) { return candle_(r[0], r[1], r[3], r[4], r[2], r[5]); });   // [MTS, OPEN, CLOSE, HIGH, LOW, VOLUME]
 }
-const ADAPTADORES = { binance: fetchBinance_, okx: fetchOkxPar_, bybit: fetchBybit_, kucoin: fetchKucoinPar_, coinbase: fetchCoinbasePar_, kraken: fetchKrakenPar_, bitfinex: fetchBitfinex_ };
+function fetchMexc_(par, o) { return fetchBinance_(par, o, 'https://api.mexc.com/api/v3/klines'); }
+/** Gate.io: janelas de até 900 dias para trás. Linha: [ts(s), volume_quote, close, high, low, open, volume_base, fechada]. */
+function fetchGate_(par, o) {
+  const by = {}, passo = 900 * 86400; let to = Math.floor(Date.now() / 1000), g = 0, vazios = 0; const desde = o.dias ? to - o.dias * 86400 : Math.floor(P2.HIST_INICIO_MS / 1000);
+  while (to > desde && g++ < 12) {
+    const from = Math.max(desde, to - passo);
+    const rows = fetchJson_('https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=' + par + '&interval=1d&from=' + from + '&to=' + to, null, 2);
+    const lista = Array.isArray(rows) ? rows : [];
+    if (!lista.length) { vazios++; if (Object.keys(by).length || vazios >= 2) break; } else vazios = 0;
+    lista.forEach(function (r) { const t = parseInt(r[0], 10) * 1000; by[t] = candle_(t, r[5], r[3], r[4], r[2], r[6]); });
+    to = from;
+  }
+  return Object.keys(by).map(function (k) { return by[k]; });
+}
+const ADAPTADORES = { mexc: fetchMexc_, gate: fetchGate_, binance: fetchBinance_, okx: fetchOkxPar_, bybit: fetchBybit_, kucoin: fetchKucoinPar_, coinbase: fetchCoinbasePar_, kraken: fetchKrakenPar_, bitfinex: fetchBitfinex_ };
 
 /** "binance:ETHUSDT,okx:ETH-USDT" -> [{src, par}] */
 function parseFontes_(txt) {
@@ -93,21 +107,28 @@ function parseFontes_(txt) {
     .filter(function (x) { return x && ADAPTADORES[x.src]; });
 }
 
+const HIST_BOM = 2500;   // velas: acima disso a carga completa para de procurar fonte mais longa
 /**
- * Tenta as fontes do ativo em ordem (a que já funcionou vai primeiro) e devolve a primeira com velas suficientes.
- * minVelas: 1 para incremental, MIN_CANDLES para carga completa.
+ * Atualização incremental (o.dias): usa a fonte que já funcionou, com cascata. Carga completa: consulta as fontes e fica com a de MAIOR
+ * histórico (a primeira que responde nem sempre é a mais longa: ex. Coinbase só tem XRP desde 2023), parando cedo se uma passar de HIST_BOM velas.
  */
 function baixarSerieAtivo_(u, o, minVelas) {
   const fontes = parseFontes_(u.fontes), falhas = [];
   if (u.fonteOk) { const i = fontes.map(function (f) { return f.src + ':' + f.par; }).indexOf(u.fonteOk); if (i > 0) fontes.unshift(fontes.splice(i, 1)[0]); }
+  let melhor = null;
   for (let i = 0; i < fontes.length; i++) {
     const f = fontes[i];
     try {
       const serie = sanearSerie_(ADAPTADORES[f.src](f.par, o));
-      if (serie.length >= minVelas) { serie.fonte = f.src + ':' + f.par; return serie; }
-      falhas.push(f.src + ': ' + serie.length + ' velas');
+      if (serie.length >= minVelas) {
+        serie.fonte = f.src + ':' + f.par;
+        if (o.dias) return serie;
+        if (!melhor || serie.length > melhor.length) melhor = serie;
+        if (serie.length >= HIST_BOM) break;
+      } else falhas.push(f.src + ': ' + serie.length + ' velas');
     } catch (e) { falhas.push(f.src + ': ' + e.message); }
   }
+  if (melhor) return melhor;
   throw new Error('Sem fonte para ' + u.sym + ' (' + (falhas.join(' | ') || 'nenhuma fonte configurada') + ')');
 }
 
@@ -142,8 +163,22 @@ function linhasBase_(serie, anterior) {
 function ontemUtcMs_() { const d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MS_DIA; }
 
 /** Atualiza a aba base do ativo. Retorna { ohlcv, novaVela, fonte, carga }. */
+function pendentesHist_() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('HIST_PENDENTES') || '[]'); } catch (e) { return []; } }
+function setPendentesHist_(l) { PropertiesService.getScriptProperties().setProperty('HIST_PENDENTES', JSON.stringify(l)); }
 function atualizarBase_(u) {
-  const sh = abaBase_(u.sym, true), atual = lerBase_(u.sym), n = atual.dates.length;
+  const sh = abaBase_(u.sym, true), atual = lerBase_(u.sym), n = atual.dates.length, pendH = pendentesHist_();
+  if (pendH.indexOf(u.sym) >= 0) {   // menu H: procura a fonte com mais histórico; só troca se ganhar pelo menos 30 velas
+    setPendentesHist_(pendH.filter(function (x) { return x !== u.sym; }));
+    const serie = baixarSerieAtivo_(u, {}, P2.MIN_CANDLES);
+    if (serie.length > n + 30) {
+      const linhas = linhasBase_(serie, null);
+      if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 7).clearContent();
+      sh.getRange(2, 1, linhas.length, 1).setNumberFormat('@');
+      sh.getRange(2, 1, linhas.length, 7).setValues(linhas);
+      const ps = pendentesSel_(); if (ps.indexOf(u.sym) < 0) { ps.push(u.sym); setPendentesSel_(ps); }
+      return { ohlcv: lerBase_(u.sym), novaVela: true, fonte: serie.fonte, carga: 'RECARGA (' + n + ' -> ' + serie.length + ' velas)' };
+    }
+  }
   if (n < P2.MIN_CANDLES) {
     const serie = baixarSerieAtivo_(u, {}, P2.MIN_CANDLES);
     const linhas = linhasBase_(serie, null);

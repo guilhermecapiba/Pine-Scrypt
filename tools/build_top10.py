@@ -17,6 +17,7 @@ parts = []
 parts.append(T('top10_head.gs'))
 parts.append(sep('copiado do Projeto 02: configuração e planilha') + fat('let _CFG_CACHE_ = null;', BAR + ' * 2. BIBLIOTECA'))
 parts.append(T('top10_lib.gs'))
+parts.append(T('top10_lib2.gs'))
 parts.append(T('top10_sel.gs'))
 parts.append(sep('copiado do Projeto 02: confluência SMC/ICT/Trendline') + fat('/* ---- Machine #1: Confluência', '/* ---- Gatilhos do prompt'))
 parts.append(sep('copiado do Projeto 02: gatilhos') + fat('function gatilhoPrecoMedia_', 'function gatilhoFearGreed_'))

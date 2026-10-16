@@ -72,19 +72,20 @@ const CFG_PADRAO = [
   ['ORCAMENTO_SEG', 270, 'Tempo máximo de cada execução (segundos); o Apps Script corta em 360'],
   ['UNIVERSO_N_ATIVOS', 8, 'Quantidade de moedas do ranking CoinGecko (além do BTC e das escolhas manuais)'],
   ['UNIVERSO_MANUAIS', 'chainlink,aave', 'IDs CoinGecko escolhidos manualmente: ficam no universo mesmo fora da janela do ranking'],
-  ['SELECAO_ATIVA', 'SIM', 'SIM = cada moeda usa as próprias 10 melhores; NAO = todas usam as 10 fixas do Projeto 02'],
+  ['SELECAO_ATIVA', 'SIM', 'SIM = cada moeda usa as próprias melhores estratégias; NAO = todas usam as 10 fixas do Projeto 02'],
   ['SELECAO_N_ESTRATEGIAS', 5, 'Quantidade de estratégias escolhidas por moeda'],
-  ['SELECAO_CORTE_IS', 0.70, 'Fração do histórico usada para NOTA (in-sample). O restante (out-of-sample) nunca entra na escolha'],
-  ['SELECAO_MIN_TRADES_IS', 12, 'Trades mínimos no IS (reduz automaticamente para moedas de histórico curto, piso 5)'],
-  ['SELECAO_SHARPE_MIN', 1.0, 'Sharpe mínimo (IS e 3 anos) para uma estratégia entrar e permanecer na tabela da moeda. Vaga sem candidato fica ABERTA'],
+  ['SELECAO_CORTE_IS', 0.70, 'Fração inicial do histórico para a divisão DESCRITIVA 70% iniciais x 30% finais (não é teste fora da amostra)'],
+  ['SELECAO_MIN_TRADES_IS', 12, 'Trades mínimos no histórico (reduz automaticamente para moedas de histórico curto, piso 5)'],
+  ['SELECAO_SHARPE_MIN', 1.0, 'Sharpe mínimo do histórico todo (régua cheia: níveis PLENA e RECENTE FRACA)'],
+  ['SELECAO_PISO_PROVISORIO', 0.8, 'Piso do nível PROVISORIA (Sharpe do histórico entre este valor e a régua). Só preenche vaga quando não há candidato acima da régua. Coloque o mesmo valor da régua (1) para desligar'],
   ['SELECAO_JANELA_PERM_DIAS', 730, 'Janela (dias) do Sharpe de 24 meses usado na permanência'],
-  ['SELECAO_SHARPE_MIN_24M', 0.8965, 'Sharpe mínimo dos últimos 24 meses para entrar e permanecer (vale também para o BTC)'],
-  ['SELECAO_SHARPE_MIN_12M', 0.3983, 'Sharpe mínimo dos últimos 12 meses para entrar e permanecer (vale também para o BTC)'],
-  ['SELECAO_HISTERESE', 0, 'Folga na saída: quem já está na tabela (e o BTC) só sai abaixo de (mínimo - folga). 0 = régua estrita; 0,1 evita sair por diferença de milésimos'],
-  ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que trocam estratégias que caíram abaixo do Sharpe mínimo ou preenchem vagas abertas'],
-  ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) no IS para um candidato ser elegível'],
-  ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as 10'],
-  ['SELECAO_CORR_MAX', 0.92, 'Correlação máxima dos retornos diários (IS) entre duas escolhidas'],
+  ['SELECAO_SHARPE_MIN_24M', 0.8965, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
+  ['SELECAO_SHARPE_MIN_12M', 0.3983, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
+  ['SELECAO_HISTERESE', 0, 'Folga na saída do BTC: estratégia fixa só sai do consenso abaixo de (mínimo - folga). 0 = régua estrita; 0,1 evita sair por diferença de milésimos'],
+  ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que tentam melhorar o nível das estratégias (vaga aberta ou fora do nível PLENA)'],
+  ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) do histórico para um candidato ser elegível'],
+  ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as escolhidas'],
+  ['SELECAO_CORR_MAX', 0.92, 'Correlação máxima dos retornos diários (histórico) entre duas escolhidas'],
   ['SELECAO_REFRESH_DIAS', 90, 'Dias até refazer a seleção sozinha (ou use o menu S). Entre reseleções, a escolha fica congelada'],
   ['UNIVERSO_EXCLUIR_IDS', 'tether,usd-coin,usds,dai,ethena-usde,usd1-world-liberty-financial,paypal-usd,first-digital-usd,true-usd,usdd,figure-heloc,tether-gold,pax-gold,wrapped-bitcoin,staked-ether,wrapped-steth,weth,coinbase-wrapped-btc,wrapped-eeth,usdt0,blackrock-usd-institutional-digital-liquidity-fund',
     'IDs CoinGecko que nunca entram no universo (stablecoins, RWA, wrapped/staked). Separe por vírgula'],
@@ -313,6 +314,238 @@ function gerarPoolAmpliado_() {
 }
 
 /* =============================================================================
+ * 2C. BUSCA ESTENDIDA — famílias adicionais de candidatos (indicadores, filtro de regime do BTC, stops por ATR,
+ *     reversão com filtro de tendência, volume). Só roda quando o conjunto base e a grade da seção 2 não completam as vagas.
+ *     Todas são causais: o sinal da vela D usa só dados até o fechamento de D; a execução é na abertura de D+1.
+ * ===========================================================================*/
+function wma_(v, len) {
+  const n = v.length, out = new Array(n).fill(NaN), den = len * (len + 1) / 2;
+  for (let i = len - 1; i < n; i++) { let s = 0, ok = true; for (let j = 0; j < len; j++) { const x = v[i - len + 1 + j]; if (isNaN(x)) { ok = false; break; } s += x * (j + 1); } if (ok) out[i] = s / den; }
+  return out;
+}
+function hma_(v, len) {
+  const a = wma_(v, Math.max(2, Math.round(len / 2))), b = wma_(v, len), d = v.map(function (x, i) { return 2 * a[i] - b[i]; });
+  return wma_(d, Math.max(2, Math.round(Math.sqrt(len))));
+}
+function kama_(C, len, fast, slow) {
+  const n = C.length, out = new Array(n).fill(NaN), f = 2 / (fast + 1), s = 2 / (slow + 1);
+  if (n <= len) return out;
+  out[len] = C[len];
+  for (let i = len + 1; i < n; i++) {
+    let vol = 0; for (let j = i - len + 1; j <= i; j++) vol += Math.abs(C[j] - C[j - 1]);
+    const er = vol > 0 ? Math.abs(C[i] - C[i - len]) / vol : 0, sc = Math.pow(er * (f - s) + s, 2);
+    out[i] = out[i - 1] + sc * (C[i] - out[i - 1]);
+  }
+  return out;
+}
+function linreg_(C, len) {
+  const n = C.length, slope = new Array(n).fill(NaN), val = new Array(n).fill(NaN), sx = len * (len - 1) / 2, sxx = (len - 1) * len * (2 * len - 1) / 6;
+  for (let i = len - 1; i < n; i++) {
+    let sy = 0, sxy = 0; for (let j = 0; j < len; j++) { const y = C[i - len + 1 + j]; sy += y; sxy += j * y; }
+    const b = (len * sxy - sx * sy) / (len * sxx - sx * sx), a = (sy - b * sx) / len; slope[i] = b; val[i] = a + b * (len - 1);
+  }
+  return { slope: slope, val: val };
+}
+function psar_(H, L, af0, afMax) {
+  const n = H.length, dir = new Array(n).fill(0); if (n < 3) return dir;
+  let up = true, sar = L[0], ep = H[0], af = af0; dir[0] = 1;
+  for (let i = 1; i < n; i++) {
+    sar = sar + af * (ep - sar);
+    if (up) {
+      sar = Math.min(sar, L[i - 1], i > 1 ? L[i - 2] : L[i - 1]);
+      if (L[i] < sar) { up = false; sar = ep; ep = L[i]; af = af0; } else if (H[i] > ep) { ep = H[i]; af = Math.min(afMax, af + af0); }
+    } else {
+      sar = Math.max(sar, H[i - 1], i > 1 ? H[i - 2] : H[i - 1]);
+      if (H[i] > sar) { up = true; sar = ep; ep = H[i]; af = af0; } else if (L[i] < ep) { ep = L[i]; af = Math.min(afMax, af + af0); }
+    }
+    dir[i] = up ? 1 : -1;
+  }
+  return dir;
+}
+function hhll_(H, L, len) {
+  const n = H.length, hh = new Array(n).fill(NaN), ll = new Array(n).fill(NaN);
+  for (let i = len - 1; i < n; i++) { let a = -Infinity, b = Infinity; for (let j = i - len + 1; j <= i; j++) { if (H[j] > a) a = H[j]; if (L[j] < b) b = L[j]; } hh[i] = a; ll[i] = b; }
+  return { hh: hh, ll: ll };
+}
+function adxDi_(H, L, C, len) {
+  const n = H.length, pdm = new Array(n).fill(0), mdm = new Array(n).fill(0), tr = new Array(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    const up = H[i] - H[i - 1], dn = L[i - 1] - L[i];
+    pdm[i] = up > dn && up > 0 ? up : 0; mdm[i] = dn > up && dn > 0 ? dn : 0; tr[i] = Math.max(H[i] - L[i], Math.abs(H[i] - C[i - 1]), Math.abs(L[i] - C[i - 1]));
+  }
+  const rma = function (v) { const o = new Array(n).fill(NaN); let p = null; for (let i = 1; i < n; i++) { if (p === null) { if (i >= len) { let s = 0; for (let j = i - len + 1; j <= i; j++) s += v[j]; p = s; o[i] = p; } } else { p = p - p / len + v[i]; o[i] = p; } } return o; };
+  const a = rma(pdm), b = rma(mdm), t = rma(tr), pdi = new Array(n).fill(NaN), mdi = new Array(n).fill(NaN), dx = new Array(n).fill(NaN);
+  for (let i = 0; i < n; i++) if (t[i] > 0) { pdi[i] = 100 * a[i] / t[i]; mdi[i] = 100 * b[i] / t[i]; const s = pdi[i] + mdi[i]; dx[i] = s > 0 ? 100 * Math.abs(pdi[i] - mdi[i]) / s : 0; }
+  const adx = new Array(n).fill(NaN); let p = null, k = 0, acc = 0;
+  for (let i = 0; i < n; i++) { if (isNaN(dx[i])) continue; if (p === null) { acc += dx[i]; if (++k === len) { p = acc / len; adx[i] = p; } } else { p = (p * (len - 1) + dx[i]) / len; adx[i] = p; } }
+  return { pdi: pdi, mdi: mdi, adx: adx };
+}
+
+/** Série de preços do BTC alinhada por data (NaN onde falta). Preenchida no processamento de cada moeda (o.btcC). */
+function alinharBtc_(o, bo) {
+  const mapa = {}; for (let i = 0; i < bo.dates.length; i++) mapa[dataStr_(bo.dates[i])] = bo.closes[i];
+  return o.dates.map(function (d) { const v = mapa[dataStr_(d)]; return v === undefined ? NaN : v; });
+}
+function btcRegime_(o, p) {
+  return cacheInd_(o, 'btcR' + p, function () {
+    const b = o.btcC || [], m = sma(b, p), r = new Array(b.length).fill(false);
+    for (let i = 0; i < b.length; i++) r[i] = isFinite(b[i]) && isFinite(m[i]) && b[i] > m[i];
+    return r;
+  });
+}
+/** Envolve um candidato: só compra com o BTC acima da média de p dias; sai quando o BTC perde a média. */
+function candBtcFiltro_(fnBase, p) {
+  return function (o) {
+    const s = fnBase(o), reg = btcRegime_(o, p), n = o.closes.length, en = new Array(n).fill(false), ex = new Array(n).fill(false);
+    for (let i = 0; i < n; i++) { en[i] = s.entrySignal[i] && reg[i]; ex[i] = s.exitSignal[i] || !reg[i]; }
+    return { entrySignal: en, exitSignal: ex, invalidationSeries: s.invalidationSeries, stopIfEnteredSeries: s.stopIfEnteredSeries };
+  };
+}
+/** Envolve um candidato com stop de k ATR abaixo do fechamento do sinal (congelado na entrada pelo motor). */
+function candStopAtr_(fnBase, k) {
+  return function (o) {
+    const s = fnBase(o), atr = atrC_(o, 14), n = o.closes.length, st = new Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) if (isFinite(atr[i])) st[i] = o.closes[i] - k * atr[i];
+    return { entrySignal: s.entrySignal, exitSignal: s.exitSignal, invalidationSeries: st, stopIfEnteredSeries: st };
+  };
+}
+/** Rompimento de N barras com saída por trailing de k ATR a partir da máxima de fechamento desde a entrada (Chandelier). */
+function candChandelier_(N, atrLen, k) {
+  return function (o) {
+    const H = o.highs, C = o.closes, n = C.length, atr = atrC_(o, atrLen), en = new Array(n).fill(false), ex = new Array(n).fill(false), inv = new Array(n).fill(NaN);
+    let pos = false, pico = 0;
+    for (let i = N; i < n; i++) {
+      if (!pos) {
+        let m = -Infinity; for (let j = i - N; j < i; j++) if (H[j] > m) m = H[j];
+        if (C[i] > m) { pos = true; pico = C[i]; en[i] = true; }
+      } else {
+        if (C[i] > pico) pico = C[i];
+        if (isFinite(atr[i])) { inv[i] = pico - k * atr[i]; if (C[i] < inv[i]) { pos = false; ex[i] = true; } }
+      }
+    }
+    return { entrySignal: en, exitSignal: ex, invalidationSeries: inv };
+  };
+}
+function candRsiPullback_(p, compra, saida, mTrend) {
+  return function (o) {
+    const r = cacheInd_(o, 'r' + p, function () { return rsi(o.closes, p); }), m = smaC_(o, mTrend), C = o.closes;
+    return sigGen_(o, function (i) { return isFinite(r[i]) && isFinite(m[i]) && r[i] < compra && C[i] > m[i]; }, function (i) { return isFinite(r[i]) && r[i] > saida; }, m);
+  };
+}
+function candBbReversaoTrend_(p, k, mTrend) {
+  return function (o) {
+    const m = smaC_(o, p), sd = cacheInd_(o, 'sd' + p, function () { return stdevPop_(o.closes, p); }), t = smaC_(o, mTrend), C = o.closes;
+    return sigGen_(o, function (i) { return isFinite(m[i]) && isFinite(t[i]) && C[i] < m[i] - k * sd[i] && C[i] > t[i]; }, function (i) { return isFinite(m[i]) && C[i] > m[i]; }, t);
+  };
+}
+function candMomCurto_(N, filtro) {
+  return function (o) {
+    const C = o.closes, m = filtro ? smaC_(o, filtro) : null;
+    return sigGen_(o, function (i) { return i >= N && C[i] / C[i - N] - 1 > 0 && (!m || (isFinite(m[i]) && C[i] > m[i])); }, function (i) { return i >= N && C[i] / C[i - N] - 1 < 0; }, m || undefined);
+  };
+}
+function candHma_(len) {
+  return function (o) { const h = cacheInd_(o, 'h' + len, function () { return hma_(o.closes, len); }), C = o.closes;
+    return sigGen_(o, function (i) { return i > 0 && isFinite(h[i]) && isFinite(h[i - 1]) && h[i] > h[i - 1] && C[i] > h[i]; }, function (i) { return i > 0 && isFinite(h[i]) && isFinite(h[i - 1]) && (h[i] < h[i - 1] || C[i] < h[i]); }, h); };
+}
+function candKama_(len, slow) {
+  return function (o) { const k = cacheInd_(o, 'k' + len + '_' + slow, function () { return kama_(o.closes, len, 2, slow); }), C = o.closes;
+    return sigGen_(o, function (i) { return i > 0 && isFinite(k[i]) && isFinite(k[i - 1]) && k[i] > k[i - 1] && C[i] > k[i]; }, function (i) { return isFinite(k[i]) && C[i] < k[i]; }, k); };
+}
+function candLinreg_(len) {
+  return function (o) { const L = cacheInd_(o, 'lr' + len, function () { return linreg_(o.closes, len); }), C = o.closes;
+    return sigGen_(o, function (i) { return isFinite(L.slope[i]) && L.slope[i] > 0 && C[i] > L.val[i]; }, function (i) { return isFinite(L.slope[i]) && (L.slope[i] < 0 || C[i] < L.val[i]); }, L.val); };
+}
+function candPsar_(af, mx) {
+  return function (o) { const d = cacheInd_(o, 'ps' + af + '_' + mx, function () { return psar_(o.highs, o.lows, af, mx); });
+    return sigGen_(o, function (i) { return d[i] === 1 && i > 0 && d[i - 1] === -1; }, function (i) { return d[i] === -1; }); };
+}
+function candPsarEstado_(af, mx) {
+  return function (o) { const d = cacheInd_(o, 'ps' + af + '_' + mx, function () { return psar_(o.highs, o.lows, af, mx); });
+    return sigGen_(o, function (i) { return i > 20 && d[i] === 1; }, function (i) { return d[i] === -1; }); };
+}
+function candIchimoku_(t, k, b) {
+  return function (o) {
+    const C = o.closes, n = C.length, a = hhll_(o.highs, o.lows, t), c = hhll_(o.highs, o.lows, k), d = hhll_(o.highs, o.lows, b);
+    const tenkan = a.hh.map(function (x, i) { return (x + a.ll[i]) / 2; }), kijun = c.hh.map(function (x, i) { return (x + c.ll[i]) / 2; }), spanB = d.hh.map(function (x, i) { return (x + d.ll[i]) / 2; });
+    const top = new Array(n).fill(NaN); for (let i = k; i < n; i++) { const sa = (tenkan[i - k] + kijun[i - k]) / 2, sb = spanB[i - k]; if (isFinite(sa) && isFinite(sb)) top[i] = Math.max(sa, sb); }
+    return sigGen_(o, function (i) { return isFinite(top[i]) && C[i] > top[i] && tenkan[i] > kijun[i]; }, function (i) { return isFinite(kijun[i]) && C[i] < kijun[i]; }, kijun);
+  };
+}
+function candAroon_(len) {
+  return function (o) {
+    const H = o.highs, L = o.lows, n = H.length, up = new Array(n).fill(NaN), dn = new Array(n).fill(NaN);
+    for (let i = len; i < n; i++) { let ih = i, il = i; for (let j = i - len; j <= i; j++) { if (H[j] >= H[ih]) ih = j; if (L[j] <= L[il]) il = j; } up[i] = 100 * (len - (i - ih)) / len; dn[i] = 100 * (len - (i - il)) / len; }
+    return sigGen_(o, function (i) { return isFinite(up[i]) && up[i] > 70 && up[i] > dn[i]; }, function (i) { return isFinite(up[i]) && up[i] < dn[i]; });
+  };
+}
+function candAdx_(len, lim) {
+  return function (o) { const a = cacheInd_(o, 'adx' + len, function () { return adxDi_(o.highs, o.lows, o.closes, len); });
+    return sigGen_(o, function (i) { return isFinite(a.adx[i]) && a.adx[i] > lim && a.pdi[i] > a.mdi[i]; }, function (i) { return isFinite(a.pdi[i]) && a.pdi[i] < a.mdi[i]; }); };
+}
+function candCci_(len) {
+  return function (o) {
+    const C = o.closes, n = C.length, tp = C.map(function (c, i) { return (o.highs[i] + o.lows[i] + c) / 3; }), m = sma(tp, len), cci = new Array(n).fill(NaN);
+    for (let i = len - 1; i < n; i++) { if (!isFinite(m[i])) continue; let d = 0; for (let j = i - len + 1; j <= i; j++) d += Math.abs(tp[j] - m[i]); d /= len; cci[i] = d > 0 ? (tp[i] - m[i]) / (0.015 * d) : 0; }
+    return sigGen_(o, function (i) { return isFinite(cci[i]) && cci[i] > 100; }, function (i) { return isFinite(cci[i]) && cci[i] < 0; });
+  };
+}
+function candTrix_(len) {
+  return function (o) {
+    const e3 = ema(ema(ema(o.closes, len), len), len), n = e3.length;
+    return sigGen_(o, function (i) { return i > 0 && isFinite(e3[i]) && e3[i] > e3[i - 1]; }, function (i) { return i > 0 && isFinite(e3[i]) && e3[i] < e3[i - 1]; });
+  };
+}
+function candObv_(len, mTrend) {
+  return function (o) {
+    const C = o.closes, V = o.volumes, n = C.length, obv = new Array(n).fill(0);
+    for (let i = 1; i < n; i++) obv[i] = obv[i - 1] + (C[i] > C[i - 1] ? V[i] : C[i] < C[i - 1] ? -V[i] : 0);
+    const m = sma(obv, len), t = smaC_(o, mTrend);
+    return sigGen_(o, function (i) { return isFinite(m[i]) && isFinite(t[i]) && obv[i] > m[i] && C[i] > t[i]; }, function (i) { return isFinite(m[i]) && (obv[i] < m[i] || C[i] < t[i]); });
+  };
+}
+function candCmf_(len, lim) {
+  return function (o) {
+    const n = o.closes.length, mf = new Array(n).fill(0), V = o.volumes;
+    for (let i = 0; i < n; i++) { const r = o.highs[i] - o.lows[i]; mf[i] = r > 0 ? ((o.closes[i] - o.lows[i]) - (o.highs[i] - o.closes[i])) / r * V[i] : 0; }
+    const a = sma(mf, len), b = sma(V, len);
+    return sigGen_(o, function (i) { return isFinite(a[i]) && b[i] > 0 && a[i] / b[i] > lim; }, function (i) { return isFinite(a[i]) && b[i] > 0 && a[i] / b[i] < 0; });
+  };
+}
+
+/** Constrói a lista estendida (~700 candidatos). IDs começam com Y-. */
+function gerarPoolEstendido_() {
+  const L = [], add = function (id, fam, nome, fn) { L.push({ id: id, fam: fam, nome: nome, fn: fn, ampliado: true }); };
+  const bases = [
+    ['sma50', 'Preço x SMA50', candPrecoMedia_('sma', 50)], ['sma100', 'Preço x SMA100', candPrecoMedia_('sma', 100)], ['sma200', 'Preço x SMA200', candPrecoMedia_('sma', 200)],
+    ['emax10-30', 'EMA10 x EMA30', candCruzamento_('ema', 10, 30)], ['emax20-50', 'EMA20 x EMA50', candCruzamento_('ema', 20, 50)],
+    ['don20-10', 'Donchian 20/10', candDonchian_(20, 10)], ['don55-20', 'Donchian 55/20', candDonchian_(55, 20)], ['roc60', 'ROC 60d + SMA200', candRoc_(60)],
+    ['st10-3', 'Supertrend ATR10 x 3', candSupertrend_(10, 3)], ['macd12', 'MACD 12/26/9', candMacd_(12, 26, 9)],
+  ];
+  bases.forEach(function (b) {
+    [100, 200].forEach(function (p) { add('Y-BTC' + p + '-' + b[0], 'regimeBTC', b[1] + ' com BTC acima da SMA' + p, candBtcFiltro_(b[2], p)); });
+    [2, 3, 4].forEach(function (k) { add('Y-STOP' + k + '-' + b[0], 'stop', b[1] + ' com stop de ' + k + ' ATR', candStopAtr_(b[2], k)); });
+  });
+  [20, 55].forEach(function (N) { [14, 22].forEach(function (a) { [2, 3, 4, 5].forEach(function (k) { add('Y-CH' + N + '-' + a + '-' + k, 'rompimento', 'Rompimento ' + N + 'd com trailing de ' + k + ' ATR' + a, candChandelier_(N, a, k)); }); }); });
+  [2, 3, 5].forEach(function (p) { [[10, 50], [15, 50], [25, 70]].forEach(function (x) { [100, 200].forEach(function (t) { add('Y-RSIP' + p + '-' + x[0] + '-' + t, 'reversao', 'RSI(' + p + ') < ' + x[0] + ' acima da SMA' + t + ', sai > ' + x[1], candRsiPullback_(p, x[0], x[1], t)); }); }); });
+  [[14, 30, 55], [14, 40, 60], [7, 35, 60]].forEach(function (x) { [100, 200].forEach(function (t) { add('Y-RSIP' + x[0] + '-' + x[1] + '-' + t, 'reversao', 'RSI(' + x[0] + ') < ' + x[1] + ' acima da SMA' + t + ', sai > ' + x[2], candRsiPullback_(x[0], x[1], x[2], t)); }); });
+  [[20, 2], [20, 2.5], [10, 2]].forEach(function (x) { [100, 200].forEach(function (t) { add('Y-BBR' + x[0] + '-' + x[1] + '-' + t, 'reversao', 'Reversão Bollinger (' + x[0] + ', ' + x[1] + ') acima da SMA' + t, candBbReversaoTrend_(x[0], x[1], t)); }); });
+  [5, 10, 15, 20, 30, 45].forEach(function (N) { [0, 100, 200].forEach(function (f) { add('Y-MOM' + N + '-' + f, 'momentum', 'Retorno de ' + N + 'd > 0' + (f ? ' acima da SMA' + f : ''), candMomCurto_(N, f)); }); });
+  [21, 34, 50, 89, 144].forEach(function (n) { add('Y-HMA' + n, 'media', 'Hull MA ' + n + ' (inclinação)', candHma_(n)); });
+  [[10, 30], [10, 60], [20, 30], [20, 60]].forEach(function (x) { add('Y-KAMA' + x[0] + '-' + x[1], 'media', 'KAMA ' + x[0] + '/' + x[1], candKama_(x[0], x[1])); });
+  [20, 30, 50, 75, 100].forEach(function (n) { add('Y-LR' + n, 'media', 'Regressão linear ' + n, candLinreg_(n)); });
+  [[0.02, 0.2], [0.01, 0.1], [0.03, 0.3]].forEach(function (x) { add('Y-PSAR' + x[0], 'supertrend', 'Parabolic SAR ' + x[0] + '/' + x[1], candPsarEstado_(x[0], x[1])); add('Y-PSARC' + x[0], 'supertrend', 'Parabolic SAR ' + x[0] + '/' + x[1] + ' (virada)', candPsar_(x[0], x[1])); });
+  [[9, 26, 52], [10, 30, 60], [7, 22, 44], [12, 36, 72]].forEach(function (x) { add('Y-ICH' + x.join('-'), 'rompimento', 'Ichimoku ' + x.join('/'), candIchimoku_(x[0], x[1], x[2])); });
+  [14, 25, 50].forEach(function (n) { add('Y-AROON' + n, 'momentum', 'Aroon ' + n, candAroon_(n)); });
+  [10, 14, 21].forEach(function (n) { [20, 25, 30].forEach(function (l) { add('Y-ADX' + n + '-' + l, 'momentum', 'ADX(' + n + ') > ' + l + ' com +DI > -DI', candAdx_(n, l)); }); });
+  [14, 20, 40].forEach(function (n) { add('Y-CCI' + n, 'momentum', 'CCI(' + n + ') > 100', candCci_(n)); });
+  [8, 15, 30].forEach(function (n) { add('Y-TRIX' + n, 'momentum', 'TRIX(' + n + ')', candTrix_(n)); });
+  [10, 20, 50].forEach(function (n) { [50, 100].forEach(function (t) { add('Y-OBV' + n + '-' + t, 'volume', 'OBV acima da média de ' + n + ' e preço acima da SMA' + t, candObv_(n, t)); }); });
+  [10, 20, 40].forEach(function (n) { [0, 0.05, 0.1].forEach(function (l) { add('Y-CMF' + n + '-' + l, 'volume', 'Fluxo de Chaikin(' + n + ') > ' + l, candCmf_(n, l)); }); });
+  return L;
+}
+
+/* =============================================================================
  * 2B. SELEÇÃO DAS 10 MELHORES ESTRATÉGIAS DE CADA MOEDA
  *
  * Princípio: escolher entre muitos candidatos contamina a medida (quem escolhe o melhor de 46 sempre vê um número
@@ -369,62 +602,66 @@ function percentis_(vals) {
   return out;
 }
 
-function avaliarCandidatos_(resLista, w0, cut, n, minTr, ddMax, shMin, idsBase) {
-  return resLista.map(function (r) {
-    const d = { id: r.id, fam: r.fam, nome: r.nome, r: r, situacao: '', slot: 0, base: !!idsBase[r.id] };
-    if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return d; }
-    d.isM = metricasFaixa_(r.eqCurve, w0, cut); d.oosM = metricasFaixa_(r.eqCurve, cut, n);
-    d.nTrIS = contarTrades_(r, w0, cut); d.perm = cumprePermanencia_(r.eqCurve, n);
-    if (!d.isM) d.situacao = 'sem dados no IS';
-    else if (d.isM.sharpe < shMin) d.situacao = 'Sharpe IS ' + d.isM.sharpe + ' < ' + shMin;
-    else if (!d.perm.ok) d.situacao = d.perm.s24 === null || d.perm.s12 === null ? 'histórico recente curto demais' : d.perm.s24 < cfgNum_('SELECAO_SHARPE_MIN_24M') ? 'Sharpe 24 meses ' + r_(d.perm.s24, 2) + ' < ' + cfgNum_('SELECAO_SHARPE_MIN_24M') : 'Sharpe 12 meses ' + r_(d.perm.s12, 2) + ' < ' + cfgNum_('SELECAO_SHARPE_MIN_12M');
-    else if (d.isM.dd > ddMax) d.situacao = 'drawdown IS acima de ' + ddMax + '%';
-    else if (d.nTrIS < minTr) d.situacao = 'poucos trades no IS (' + d.nTrIS + ' < ' + minTr + ')';
-    else d.elegivel = true;
-    return d;
-  });
+/**
+ * Nível de uma curva de equity em relação aos mínimos (calculado a cada dia, sobre os dados atuais):
+ *  PLENA          Sharpe do histórico todo >= SELECAO_SHARPE_MIN (1,00), 24 meses >= SELECAO_SHARPE_MIN_24M e 12 meses >= SELECAO_SHARPE_MIN_12M
+ *  RECENTE FRACA  histórico todo >= 1,00, mas 24 ou 12 meses abaixo do mínimo
+ *  PROVISORIA     histórico todo entre SELECAO_PISO_PROVISORIO (0,80) e 1,00
+ *  FORA           abaixo disso
+ */
+function nivelSharpe_(eq, n) {
+  const w0 = Math.min(210, n - 150), full = sharpeUlt_(eq, n, n - w0 - 1), p = cumprePermanencia_(eq, n), min = cfgNum_('SELECAO_SHARPE_MIN'), piso = cfgNum_('SELECAO_PISO_PROVISORIO');
+  let nivel = 'FORA';
+  if (full !== null && full >= min) nivel = p.ok ? 'PLENA' : 'RECENTE FRACA';
+  else if (full !== null && full >= piso) nivel = 'PROVISORIA';
+  return { nivel: nivel, full: full, s24: p.s24, s12: p.s12 };
 }
-/** Nota e escolha gulosa (diversificação por família e correlação). Marca slot/situacao em det e devolve as escolhidas. */
-function escolherDe_(det, alvo, maxFam, corrMax, w0, cut) {
-  const eleg = det.filter(function (d) { return d.elegivel; });
-  const pS = percentis_(eleg.map(function (d) { return d.isM.sharpe; })), pC = percentis_(eleg.map(function (d) { return d.isM.calmar; }));
-  eleg.forEach(function (d, i) { d.nota = (pS[i] + pC[i]) / 2; });
-  eleg.sort(function (a, b) { return b.nota - a.nota || b.isM.calmar - a.isM.calmar; });
-  const escolhidas = [], porFam = {};
-  eleg.forEach(function (d) {
-    if (escolhidas.length >= alvo) { d.situacao = 'elegível, não escolhida (nota ' + r_(d.nota, 2) + ')'; return; }
-    if ((porFam[d.fam] || 0) >= maxFam) { d.situacao = 'família ' + d.fam + ' já tem ' + maxFam; return; }
-    d.ret = retornos_(d.r.eqCurve, w0, cut);
-    for (let k = 0; k < escolhidas.length; k++) {
-      const c = correl_(d.ret, escolhidas[k].ret);
-      if (c > corrMax) { d.situacao = 'correlação ' + r_(c, 2) + ' com ' + escolhidas[k].id; return; }
-    }
-    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
-  });
-  return { escolhidas: escolhidas, nElegiveis: eleg.length };
-}
+const ORDEM_NIVEL = { 'PLENA': 0, 'RECENTE FRACA': 1, 'PROVISORIA': 2 };
 
 /**
- * Seleção em duas fases. Fase 1: conjunto base. Se faltarem estratégias com Sharpe mínimo, fase 2 (busca ampliada):
- * roda a grade de parâmetros (gerarAmpliado devolve os resultados já calculados) e refaz a escolha sobre base + grade.
- * Se mesmo assim faltar, as vagas ficam ABERTAS (nunca se completa com candidato abaixo do Sharpe mínimo).
+ * Seleciona as melhores estratégias de uma moeda entre todos os candidatos (base + grade + estendida), em uma passada
+ * (cada candidato é calculado, avaliado e só guarda a curva se for elegível, para poupar memória).
+ * Base de avaliação: histórico inteiro depois do aquecimento. As colunas IS (70% iniciais) e OOS (30% finais) são apenas descritivas.
+ * Ordem de preenchimento: PLENA, depois RECENTE FRACA, depois PROVISORIA; dentro de cada nível por nota (percentil do Sharpe e do Calmar).
+ * Diversificação gulosa: máximo SELECAO_MAX_POR_FAMILIA por família e correlação diária máxima SELECAO_CORR_MAX.
  */
-function selecionar_(o, resBase, gerarAmpliado) {
-  const n = o.closes.length, w0 = Math.min(210, n - 150);
-  const cut = w0 + Math.floor((n - w0) * cfgNum_('SELECAO_CORTE_IS'));
-  const isAnos = (cut - w0) / 365.25;
-  const minTr = Math.max(5, Math.min(cfgNum_('SELECAO_MIN_TRADES_IS'), Math.round(isAnos * 2)));
-  const ddMax = cfgNum_('SELECAO_DD_MAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = cfgNum_('SELECAO_N_ESTRATEGIAS'), shMin = cfgNum_('SELECAO_SHARPE_MIN');
-  const idsBase = {}; resBase.forEach(function (r) { idsBase[r.id] = true; });
-  let det = avaliarCandidatos_(resBase, w0, cut, n, minTr, ddMax, shMin, idsBase), esc = escolherDe_(det, alvo, maxFam, corrMax, w0, cut), fase = 'base', nTestados = resBase.length;
-  if (esc.escolhidas.length < alvo && gerarAmpliado) {
-    const extra = gerarAmpliado();
-    det = avaliarCandidatos_(resBase.concat(extra), w0, cut, n, minTr, ddMax, shMin, idsBase);
-    esc = escolherDe_(det, alvo, maxFam, corrMax, w0, cut); fase = 'ampliada'; nTestados = resBase.length + extra.length;
-  }
+function selecionar_(o, defs) {
+  const n = o.closes.length, w0 = Math.min(210, n - 150), cut = w0 + Math.floor((n - w0) * cfgNum_('SELECAO_CORTE_IS'));
+  const anos = (n - w0) / 365.25, minTr = Math.max(5, Math.min(cfgNum_('SELECAO_MIN_TRADES_IS'), Math.round(anos * 2)));
+  const ddMax = cfgNum_('SELECAO_DD_MAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = cfgNum_('SELECAO_N_ESTRATEGIAS');
+  const idsBase = {}; POOL.forEach(function (e) { idsBase[e.id] = true; });
+  const det = [];
+  defs.forEach(function (e) {
+    const r = rodarLista_(o, [e])[0], d = { id: e.id, fam: e.fam, nome: e.nome, situacao: '', slot: 0, base: !!idsBase[e.id] };
+    det.push(d);
+    if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return; }
+    const nv = nivelSharpe_(r.eqCurve, n), m = metricasFaixa_(r.eqCurve, w0, n);
+    d.nivel = nv.nivel; d.sFull = nv.full; d.s24 = nv.s24; d.s12 = nv.s12; d.isM = metricasFaixa_(r.eqCurve, w0, cut); d.oosM = metricasFaixa_(r.eqCurve, cut, n);
+    d.nTr = contarTrades_(r, w0, n); d.dd = m ? m.dd : null; d.calmar = m ? m.calmar : null;
+    if (nv.nivel === 'FORA') d.situacao = 'Sharpe do histórico ' + (nv.full === null ? 'indisponível' : r_(nv.full, 2)) + ' < ' + cfgNum_('SELECAO_PISO_PROVISORIO');
+    else if (!m || m.dd > ddMax) d.situacao = 'drawdown acima de ' + ddMax + '%';
+    else if (d.nTr < minTr) d.situacao = 'poucos trades (' + d.nTr + ' < ' + minTr + ')';
+    else { d.elegivel = true; d.r = r; d.ret = retornos_(r.eqCurve, w0, n); }
+  });
+  const eleg = det.filter(function (d) { return d.elegivel; }), pS = percentis_(eleg.map(function (d) { return d.sFull; })), pC = percentis_(eleg.map(function (d) { return d.calmar; }));
+  eleg.forEach(function (d, i) { d.nota = (pS[i] + pC[i]) / 2; });
+  eleg.sort(function (a, b) { return ORDEM_NIVEL[a.nivel] - ORDEM_NIVEL[b.nivel] || b.nota - a.nota; });
+  const escolhidas = [], porFam = {};
+  eleg.forEach(function (d) {
+    if (escolhidas.length >= alvo) { d.situacao = 'elegível (' + d.nivel + '), não escolhida'; return; }
+    if ((porFam[d.fam] || 0) >= maxFam) { d.situacao = 'família ' + d.fam + ' já tem ' + maxFam; return; }
+    for (let k = 0; k < escolhidas.length; k++) { const c = correl_(d.ret, escolhidas[k].ret); if (c > corrMax) { d.situacao = 'correlação ' + r_(c, 2) + ' com ' + escolhidas[k].id; return; } }
+    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ')'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+  });
+  // segunda passada: se sobraram vagas, aceita mais uma estratégia por família (a correlação continua valendo)
+  eleg.forEach(function (d) {
+    if (escolhidas.length >= alvo || d.slot || d.situacao.indexOf('família') !== 0 || (porFam[d.fam] || 0) >= maxFam + 1) return;
+    for (let k = 0; k < escolhidas.length; k++) { if (correl_(d.ret, escolhidas[k].ret) > corrMax) return; }
+    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ', família extra)'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+  });
   det.forEach(function (d) { if (!d.situacao) d.situacao = '—'; });
-  return { ids: esc.escolhidas.map(function (d) { return d.id; }), detalhe: det, w0Data: dataStr_(o.dates[w0]), corteData: dataStr_(o.dates[cut]),
-    parcial: esc.escolhidas.length < alvo, vagas: alvo - esc.escolhidas.length, nElegiveis: esc.nElegiveis, minTr: minTr, fase: fase, nTestados: nTestados, shMin: shMin };
+  return { ids: escolhidas.map(function (d) { return d.id; }), detalhe: det, w0Data: dataStr_(o.dates[w0]), corteData: dataStr_(o.dates[cut]), parcial: escolhidas.length < alvo, vagas: alvo - escolhidas.length,
+    naoPlenas: escolhidas.filter(function (d) { return d.nivel !== 'PLENA'; }).length, nElegiveis: eleg.length, minTr: minTr, nTestados: defs.length, shMin: cfgNum_('SELECAO_SHARPE_MIN') };
 }
 
 function lerSel_(sym) {
@@ -432,27 +669,25 @@ function lerSel_(sym) {
   try { return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }
 function guardarSel_(sym, sel, dataHoje) {
-  PropertiesService.getScriptProperties().setProperty('SEL_' + sym, JSON.stringify({ data: dataHoje, ids: sel.ids, w0: sel.w0Data, corte: sel.corteData, parcial: sel.parcial, vagas: sel.vagas, nElig: sel.nElegiveis, fase: sel.fase, nTest: sel.nTestados }));
+  PropertiesService.getScriptProperties().setProperty('SEL_' + sym, JSON.stringify({ data: dataHoje, ids: sel.ids, w0: sel.w0Data, corte: sel.corteData, parcial: sel.parcial, vagas: sel.vagas, naoPlenas: sel.naoPlenas, nElig: sel.nElegiveis, nTest: sel.nTestados }));
 }
 function idadeDias_(str) { return str ? (Date.now() - new Date(str + 'T00:00:00Z').getTime()) / 86400000 : 1e9; }
 
 function pendentesSel_() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('SEL_PENDENTES') || '[]'); } catch (e) { return []; } }
 function setPendentesSel_(l) { PropertiesService.getScriptProperties().setProperty('SEL_PENDENTES', JSON.stringify(l)); }
 
-const COLS_SELECAO = ['Ativo', 'Posicao_Nota', 'ID', 'Familia', 'Estrategia', 'Trades_IS', 'Sharpe_IS', 'Calmar_IS', 'CAGR_IS_pct', 'MaxDD_IS_pct', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'Situacao', 'Periodo_IS', 'Data_Selecao'];
+const COLS_SELECAO = ['Ativo', 'Posicao_Nota', 'ID', 'Familia', 'Estrategia', 'Trades', 'Sharpe_historico', 'Calmar_historico', 'Sharpe_24m', 'Sharpe_12m', 'Nivel', 'Sharpe_70pct_iniciais', 'Sharpe_30pct_finais', 'MaxDD_historico_pct', 'Situacao', 'Periodo_70_30', 'Data_Selecao'];
 /** Auditoria: todos os candidatos de uma moeda, com a razão de cada um ter entrado ou não. Substitui as linhas anteriores da moeda. */
 function gravarSelecaoCandidatos_(sym, sel, dataHoje) {
   const sh = ss_().getSheetByName(P2.ABAS.sel); if (!sh) return;
   let antigas = [];
   if (sh.getLastRow() > 1) antigas = sh.getRange(2, 1, sh.getLastRow() - 1, COLS_SELECAO.length).getValues().filter(function (r) { return r[0] !== sym; });
-  const visiveis = sel.detalhe.filter(function (d) { return d.base || d.elegivel || d.slot; }), ocultos = sel.detalhe.length - visiveis.length;
-  const ord = visiveis.sort(function (a, b) { return (b.slot ? 1000 - b.slot : 0) - (a.slot ? 1000 - a.slot : 0) || (b.nota || -1) - (a.nota || -1); });
-  const novas = ord.map(function (d, i) {
-    const a = d.isM || {}, b = d.oosM || {};
-    return [sym, d.slot || '', d.id, d.fam, d.nome, d.nTrIS === undefined ? '' : d.nTrIS, a.sharpe === undefined ? '' : a.sharpe, a.calmar === undefined ? '' : a.calmar, a.cagr === undefined ? '' : a.cagr, a.dd === undefined ? '' : a.dd,
-      b.sharpe === undefined ? '' : b.sharpe, b.calmar === undefined ? '' : b.calmar, b.cagr === undefined ? '' : b.cagr, b.dd === undefined ? '' : b.dd, d.situacao, sel.w0Data + ' a ' + sel.corteData, dataHoje];
+  const visiveis = sel.detalhe.filter(function (d) { return d.elegivel || d.slot; }), ocultos = sel.detalhe.length - visiveis.length, v = function (x) { return x === undefined || x === null ? '' : (typeof x === 'number' ? r_(x, 2) : x); };
+  const ord = visiveis.sort(function (a, b) { return (b.slot ? 1000 - b.slot : 0) - (a.slot ? 1000 - a.slot : 0) || (b.nota || -1) - (a.nota || -1); }).slice(0, 60);
+  const novas = ord.map(function (d) {
+    return [sym, d.slot || '', d.id, d.fam, d.nome, v(d.nTr), v(d.sFull), v(d.calmar), v(d.s24), v(d.s12), d.nivel || '', d.isM ? d.isM.sharpe : '', d.oosM ? d.oosM.sharpe : '', v(d.dd), d.situacao, sel.w0Data + ' a ' + sel.corteData, dataHoje];
   });
-  novas.push([sym, '', '(resumo)', '', 'Fase ' + sel.fase + ': ' + sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' passaram nos filtros (Sharpe IS >= ' + sel.shMin + ', 24 meses >= ' + cfgNum_('SELECAO_SHARPE_MIN_24M') + ', 12 meses >= ' + cfgNum_('SELECAO_SHARPE_MIN_12M') + ', drawdown, trades); ' + ocultos + ' da busca ampliada reprovados não listados. Vagas abertas: ' + sel.vagas, '', '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
+  novas.push([sym, '', '(resumo)', '', sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' elegíveis (Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ', drawdown, trades); ' + ocultos + ' reprovados não listados; mostrados os 60 melhores. Vagas abertas: ' + sel.vagas + '. Fora do nível PLENA: ' + sel.naoPlenas, '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
   const todas = antigas.concat(novas);
   sh.clear();
   sh.getRange(1, 1, 1, COLS_SELECAO.length).setValues([COLS_SELECAO]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
@@ -984,8 +1219,8 @@ const MS_DIA = 86400000;
 
 function candle_(ts, o, h, l, c, v) { return { date: new Date(ts), open: +o, high: +h, low: +l, close: +c, volume: +v || 0 }; }
 
-function fetchBinance_(par, o) {
-  const base = 'https://data-api.binance.vision/api/v3/klines?symbol=' + par + '&interval=1d&limit=1000';
+function fetchBinance_(par, o, host) {
+  const base = (host || 'https://data-api.binance.vision/api/v3/klines') + '?symbol=' + par + '&interval=1d&limit=1000';
   let start = o.dias ? Date.now() - o.dias * MS_DIA : P2.HIST_INICIO_MS;
   const out = []; let g = 0;
   while (g++ < 20) {
@@ -1062,7 +1297,21 @@ function fetchBitfinex_(par, o) {
   const rows = fetchJson_(url, null, 2);
   return (Array.isArray(rows) ? rows : []).map(function (r) { return candle_(r[0], r[1], r[3], r[4], r[2], r[5]); });   // [MTS, OPEN, CLOSE, HIGH, LOW, VOLUME]
 }
-const ADAPTADORES = { binance: fetchBinance_, okx: fetchOkxPar_, bybit: fetchBybit_, kucoin: fetchKucoinPar_, coinbase: fetchCoinbasePar_, kraken: fetchKrakenPar_, bitfinex: fetchBitfinex_ };
+function fetchMexc_(par, o) { return fetchBinance_(par, o, 'https://api.mexc.com/api/v3/klines'); }
+/** Gate.io: janelas de até 900 dias para trás. Linha: [ts(s), volume_quote, close, high, low, open, volume_base, fechada]. */
+function fetchGate_(par, o) {
+  const by = {}, passo = 900 * 86400; let to = Math.floor(Date.now() / 1000), g = 0, vazios = 0; const desde = o.dias ? to - o.dias * 86400 : Math.floor(P2.HIST_INICIO_MS / 1000);
+  while (to > desde && g++ < 12) {
+    const from = Math.max(desde, to - passo);
+    const rows = fetchJson_('https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=' + par + '&interval=1d&from=' + from + '&to=' + to, null, 2);
+    const lista = Array.isArray(rows) ? rows : [];
+    if (!lista.length) { vazios++; if (Object.keys(by).length || vazios >= 2) break; } else vazios = 0;
+    lista.forEach(function (r) { const t = parseInt(r[0], 10) * 1000; by[t] = candle_(t, r[5], r[3], r[4], r[2], r[6]); });
+    to = from;
+  }
+  return Object.keys(by).map(function (k) { return by[k]; });
+}
+const ADAPTADORES = { mexc: fetchMexc_, gate: fetchGate_, binance: fetchBinance_, okx: fetchOkxPar_, bybit: fetchBybit_, kucoin: fetchKucoinPar_, coinbase: fetchCoinbasePar_, kraken: fetchKrakenPar_, bitfinex: fetchBitfinex_ };
 
 /** "binance:ETHUSDT,okx:ETH-USDT" -> [{src, par}] */
 function parseFontes_(txt) {
@@ -1070,21 +1319,28 @@ function parseFontes_(txt) {
     .filter(function (x) { return x && ADAPTADORES[x.src]; });
 }
 
+const HIST_BOM = 2500;   // velas: acima disso a carga completa para de procurar fonte mais longa
 /**
- * Tenta as fontes do ativo em ordem (a que já funcionou vai primeiro) e devolve a primeira com velas suficientes.
- * minVelas: 1 para incremental, MIN_CANDLES para carga completa.
+ * Atualização incremental (o.dias): usa a fonte que já funcionou, com cascata. Carga completa: consulta as fontes e fica com a de MAIOR
+ * histórico (a primeira que responde nem sempre é a mais longa: ex. Coinbase só tem XRP desde 2023), parando cedo se uma passar de HIST_BOM velas.
  */
 function baixarSerieAtivo_(u, o, minVelas) {
   const fontes = parseFontes_(u.fontes), falhas = [];
   if (u.fonteOk) { const i = fontes.map(function (f) { return f.src + ':' + f.par; }).indexOf(u.fonteOk); if (i > 0) fontes.unshift(fontes.splice(i, 1)[0]); }
+  let melhor = null;
   for (let i = 0; i < fontes.length; i++) {
     const f = fontes[i];
     try {
       const serie = sanearSerie_(ADAPTADORES[f.src](f.par, o));
-      if (serie.length >= minVelas) { serie.fonte = f.src + ':' + f.par; return serie; }
-      falhas.push(f.src + ': ' + serie.length + ' velas');
+      if (serie.length >= minVelas) {
+        serie.fonte = f.src + ':' + f.par;
+        if (o.dias) return serie;
+        if (!melhor || serie.length > melhor.length) melhor = serie;
+        if (serie.length >= HIST_BOM) break;
+      } else falhas.push(f.src + ': ' + serie.length + ' velas');
     } catch (e) { falhas.push(f.src + ': ' + e.message); }
   }
+  if (melhor) return melhor;
   throw new Error('Sem fonte para ' + u.sym + ' (' + (falhas.join(' | ') || 'nenhuma fonte configurada') + ')');
 }
 
@@ -1119,8 +1375,22 @@ function linhasBase_(serie, anterior) {
 function ontemUtcMs_() { const d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MS_DIA; }
 
 /** Atualiza a aba base do ativo. Retorna { ohlcv, novaVela, fonte, carga }. */
+function pendentesHist_() { try { return JSON.parse(PropertiesService.getScriptProperties().getProperty('HIST_PENDENTES') || '[]'); } catch (e) { return []; } }
+function setPendentesHist_(l) { PropertiesService.getScriptProperties().setProperty('HIST_PENDENTES', JSON.stringify(l)); }
 function atualizarBase_(u) {
-  const sh = abaBase_(u.sym, true), atual = lerBase_(u.sym), n = atual.dates.length;
+  const sh = abaBase_(u.sym, true), atual = lerBase_(u.sym), n = atual.dates.length, pendH = pendentesHist_();
+  if (pendH.indexOf(u.sym) >= 0) {   // menu H: procura a fonte com mais histórico; só troca se ganhar pelo menos 30 velas
+    setPendentesHist_(pendH.filter(function (x) { return x !== u.sym; }));
+    const serie = baixarSerieAtivo_(u, {}, P2.MIN_CANDLES);
+    if (serie.length > n + 30) {
+      const linhas = linhasBase_(serie, null);
+      if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, 7).clearContent();
+      sh.getRange(2, 1, linhas.length, 1).setNumberFormat('@');
+      sh.getRange(2, 1, linhas.length, 7).setValues(linhas);
+      const ps = pendentesSel_(); if (ps.indexOf(u.sym) < 0) { ps.push(u.sym); setPendentesSel_(ps); }
+      return { ohlcv: lerBase_(u.sym), novaVela: true, fonte: serie.fonte, carga: 'RECARGA (' + n + ' -> ' + serie.length + ' velas)' };
+    }
+  }
   if (n < P2.MIN_CANDLES) {
     const serie = baixarSerieAtivo_(u, {}, P2.MIN_CANDLES);
     const linhas = linhasBase_(serie, null);
@@ -1203,19 +1473,19 @@ function calcularIndicadores_(o) {
 const COLS_UNIVERSO = ['Ordem', 'Simbolo', 'CoinGecko_ID', 'Nome', 'Rank_MC', 'Tipo', 'Status', 'Fontes', 'Fonte_OK', 'Inicio_Historico', 'N_Velas', 'Ultima_Vela', 'Ultima_Atualizacao', 'Observacao'];
 const SEED_UNIVERSO = [
   [1, 'BTC', 'bitcoin', 'Bitcoin', 'CRIPTO', 'REFERENCIA', 'coinbase:BTC-USD,binance:BTCUSDT,okx:BTC-USDT,kraken:XBTUSD', 'Referência: o mesmo motor roda no BTC para comparação com o Projeto 02'],
-  [2, 'ETH', 'ethereum', 'Ethereum', 'CRIPTO', 'ATIVO', 'binance:ETHUSDT,coinbase:ETH-USD,okx:ETH-USDT,kucoin:ETH-USDT,kraken:ETHUSD', ''],
+  [2, 'ETH', 'ethereum', 'Ethereum', 'CRIPTO', 'ATIVO', 'binance:ETHUSDT,kucoin:ETH-USDT,bitfinex:ETHUSD,okx:ETH-USDT,bybit:ETHUSDT,mexc:ETHUSDT,gate:ETH_USDT,coinbase:ETH-USD,kraken:ETHUSD', ''],
   [3, 'USDT', 'tether', 'Tether', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin: não há tendência para testar'],
-  [4, 'BNB', 'binancecoin', 'BNB', 'CRIPTO', 'ATIVO', 'binance:BNBUSDT,okx:BNB-USDT,kucoin:BNB-USDT,bybit:BNBUSDT', 'Não está na Coinbase nem na Kraken'],
-  [5, 'XRP', 'ripple', 'XRP', 'CRIPTO', 'ATIVO', 'binance:XRPUSDT,coinbase:XRP-USD,okx:XRP-USDT,kucoin:XRP-USDT,kraken:XRPUSD', ''],
+  [4, 'BNB', 'binancecoin', 'BNB', 'CRIPTO', 'ATIVO', 'binance:BNBUSDT,kucoin:BNB-USDT,okx:BNB-USDT,bybit:BNBUSDT,mexc:BNBUSDT,gate:BNB_USDT', 'Não está na Coinbase nem na Kraken'],
+  [5, 'XRP', 'ripple', 'XRP', 'CRIPTO', 'ATIVO', 'binance:XRPUSDT,kucoin:XRP-USDT,bitfinex:XRPUSD,okx:XRP-USDT,bybit:XRPUSDT,mexc:XRPUSDT,gate:XRP_USDT,coinbase:XRP-USD,kraken:XRPUSD', ''],
   [6, 'USDC', 'usd-coin', 'USDC', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin: não há tendência para testar'],
-  [7, 'SOL', 'solana', 'Solana', 'CRIPTO', 'ATIVO', 'binance:SOLUSDT,coinbase:SOL-USD,okx:SOL-USDT,kucoin:SOL-USDT,kraken:SOLUSD', 'Histórico desde 2020'],
-  [8, 'TRX', 'tron', 'TRON', 'CRIPTO', 'ATIVO', 'binance:TRXUSDT,okx:TRX-USDT,kucoin:TRX-USDT,kraken:TRXUSD', ''],
+  [7, 'SOL', 'solana', 'Solana', 'CRIPTO', 'ATIVO', 'binance:SOLUSDT,kucoin:SOL-USDT,bitfinex:SOLUSD,okx:SOL-USDT,bybit:SOLUSDT,mexc:SOLUSDT,gate:SOL_USDT,coinbase:SOL-USD,kraken:SOLUSD', 'Histórico desde 2020'],
+  [8, 'TRX', 'tron', 'TRON', 'CRIPTO', 'ATIVO', 'binance:TRXUSDT,kucoin:TRX-USDT,bitfinex:TRXUSD,okx:TRX-USDT,bybit:TRXUSDT,mexc:TRXUSDT,gate:TRX_USDT,kraken:TRXUSD', ''],
   [9, 'FIGR_HELOC', 'figure-heloc', 'Figure Heloc', 'RWA', 'EXCLUIDO', '', 'Empréstimo tokenizado cotado perto de US$ 1: não é um ativo de tendência'],
-  [10, 'ZEC', 'zcash', 'Zcash', 'CRIPTO', 'ATIVO', 'binance:ZECUSDT,coinbase:ZEC-USD,okx:ZEC-USDT,kucoin:ZEC-USDT,kraken:ZECUSD,bitfinex:ZECUSD', ''],
-  [11, 'HYPE', 'hyperliquid', 'Hyperliquid', 'CRIPTO', 'ATIVO', 'okx:HYPE-USDT,bybit:HYPEUSDT,kucoin:HYPE-USDT,binance:HYPEUSDT', 'Histórico curto (desde o fim de 2024): consenso só com 450+ velas'],
-  [12, 'DOGE', 'dogecoin', 'Dogecoin', 'CRIPTO', 'ATIVO', 'binance:DOGEUSDT,coinbase:DOGE-USD,okx:DOGE-USDT,kucoin:DOGE-USDT,kraken:XDGUSD', ''],
-  [13, 'LINK', 'chainlink', 'Chainlink', 'CRIPTO', 'ATIVO', 'binance:LINKUSDT,coinbase:LINK-USD,okx:LINK-USDT,kucoin:LINK-USDT,kraken:LINKUSD,bitfinex:LINK:USD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking)'],
-  [14, 'AAVE', 'aave', 'Aave', 'CRIPTO', 'ATIVO', 'binance:AAVEUSDT,coinbase:AAVE-USD,okx:AAVE-USDT,kucoin:AAVE-USDT,kraken:AAVEUSD,bitfinex:AAVE:USD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking). Histórico desde out/2020'],
+  [10, 'ZEC', 'zcash', 'Zcash', 'CRIPTO', 'ATIVO', 'binance:ZECUSDT,kucoin:ZEC-USDT,bitfinex:ZECUSD,okx:ZEC-USDT,bybit:ZECUSDT,mexc:ZECUSDT,gate:ZEC_USDT,coinbase:ZEC-USD,kraken:ZECUSD', ''],
+  [11, 'HYPE', 'hyperliquid', 'Hyperliquid', 'CRIPTO', 'ATIVO', 'kucoin:HYPE-USDT,bybit:HYPEUSDT,gate:HYPE_USDT,mexc:HYPEUSDT,bitfinex:HYPE:USD,okx:HYPE-USDT,binance:HYPEUSDT', 'Histórico curto: consenso só com 500+ velas; a carga completa escolhe a fonte com mais histórico'],
+  [12, 'DOGE', 'dogecoin', 'Dogecoin', 'CRIPTO', 'ATIVO', 'binance:DOGEUSDT,kucoin:DOGE-USDT,bitfinex:DOGE:USD,okx:DOGE-USDT,bybit:DOGEUSDT,mexc:DOGEUSDT,gate:DOGE_USDT,coinbase:DOGE-USD,kraken:XDGUSD', ''],
+  [13, 'LINK', 'chainlink', 'Chainlink', 'CRIPTO', 'ATIVO', 'binance:LINKUSDT,kucoin:LINK-USDT,bitfinex:LINK:USD,okx:LINK-USDT,bybit:LINKUSDT,mexc:LINKUSDT,gate:LINK_USDT,coinbase:LINK-USD,kraken:LINKUSD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking)'],
+  [14, 'AAVE', 'aave', 'Aave', 'CRIPTO', 'ATIVO', 'binance:AAVEUSDT,kucoin:AAVE-USDT,bitfinex:AAVE:USD,okx:AAVE-USDT,bybit:AAVEUSDT,mexc:AAVEUSDT,gate:AAVE_USDT,coinbase:AAVE-USD,kraken:AAVEUSD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking). Histórico desde out/2020'],
   [15, 'XMR', 'monero', 'Monero', 'CRIPTO', 'EXCLUIDO', 'bitfinex:XMRUSD,kucoin:XMR-USDT,kraken:XMRUSD', 'Retirada por decisão do usuário (substituída por LINK e AAVE)'],
   [16, 'USDS', 'usds', 'USDS', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin'],
 ];
@@ -1277,14 +1547,17 @@ function rodarLista_(o, lista) {
   });
 }
 
-/** Recompõe, só se a seleção usou a fase ampliada, os candidatos da grade (IDs começam com X-). */
-function gerarPoolAmpliadoSeNecessario_(sel) {
-  return sel.ids.some(function (id) { return id.indexOf('X-') === 0; }) ? gerarPoolAmpliado_() : [];
+/** Recompõe as definições dos candidatos escolhidos (só gera as grades se algum ID delas foi escolhido). */
+function defsPorId_(ids) {
+  const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
 }
 
 function processarAtivo_(u, forcar) {
   const prev = lerRes_(u.sym), ontemStr = Utilities.formatDate(new Date(ontemUtcMs_()), 'UTC', 'yyyy-MM-dd');
-  const pend = pendentesSel_(), pendente = pend.indexOf(u.sym) >= 0;
+  const pend = pendentesSel_(), pendente = pend.indexOf(u.sym) >= 0 || pendentesHist_().indexOf(u.sym) >= 0;
   if (!forcar && !pendente && prev && prev.estado === 'OK' && u.ultimaVela >= ontemStr) return { resumo: prev, eventos: [], pulou: true };
   const b = atualizarBase_(u), o = b.ohlcv, n = o.closes.length;
   gravarLinhaUniverso_(u, b.fonte, o);
@@ -1293,6 +1566,7 @@ function processarAtivo_(u, forcar) {
     const res0 = Object.assign(base, { estado: 'HISTORICO_INSUFICIENTE', ultimaVela: n ? Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd') : '', preco: n ? o.closes[n - 1] : null });
     guardarRes_(u.sym, res0); return { resumo: res0, eventos: [] };
   }
+  if (u.status !== 'REFERENCIA') o.btcC = alinharBtc_(o, lerBase_('BTC'));
   const hoje = Utilities.formatDate(new Date(), 'UTC', 'yyyy-MM-dd');
   const fixas = u.status === 'REFERENCIA' || !cfgSim_('SELECAO_ATIVA');
   let sel = null, res, cutStr, w0Str, dataSel = '';
@@ -1300,26 +1574,20 @@ function processarAtivo_(u, forcar) {
     res = rodarLista_(o, FIXAS_BTC); cutStr = '2023-06-02'; w0Str = dataStr_(o.dates[Math.min(200, n - 150)]); dataSel = 'fixas (Projeto 02)';
   } else {
     sel = lerSel_(u.sym);
-    const shMin = cfgNum_('SELECAO_SHARPE_MIN');
     const fazer = function () {
-      const pool = rodarLista_(o, POOL), s = selecionar_(o, pool, function () { return rodarLista_(o, gerarPoolAmpliado_()); });
+      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_()));
       guardarSel_(u.sym, s, hoje); gravarSelecaoCandidatos_(u.sym, s, hoje);
       sel = lerSel_(u.sym);
       res = s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; });
       if (pendente) setPendentesSel_(pend.filter(function (x) { return x !== u.sym; }));
     };
-    if (!sel || pendente || idadeDias_(sel.data) >= cfgNum_('SELECAO_REFRESH_DIAS')) fazer();
-    else {
-      const lista = sel.ids.map(function (id) { return POOL.concat(gerarPoolAmpliadoSeNecessario_(sel)).filter(function (e) { return e.id === id; })[0]; }).filter(Boolean);
-      res = rodarLista_(o, lista);
-      // permanência: estratégia cujo Sharpe de 24 meses cai abaixo do mínimo sai da tabela (revisão no máximo a cada SELECAO_REVISAO_DIAS)
-      const caiu = res.filter(function (r) { return !r.erro && !cumprePermanencia_(r.eqCurve, n, cfgNum_('SELECAO_HISTERESE')).ok; }).length;
-      if ((caiu || sel.vagas > 0) && idadeDias_(sel.data) >= cfgNum_('SELECAO_REVISAO_DIAS')) fazer();
-    }
+    const idade = sel ? idadeDias_(sel.data) : 1e9;
+    if (!sel || pendente || idade >= cfgNum_('SELECAO_REFRESH_DIAS') || (idade >= cfgNum_('SELECAO_REVISAO_DIAS') && (sel.vagas > 0 || sel.naoPlenas > 0))) fazer();
+    else res = rodarLista_(o, defsPorId_(sel.ids));
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
   }
   if (!res.length) {
-    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, fase: sel ? sel.fase : '', ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
+    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
     guardarRes_(u.sym, res1); return { resumo: res1, eventos: [] };
   }
   res.forEach(function (r) {
@@ -1337,7 +1605,7 @@ function processarAtivo_(u, forcar) {
     return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
-      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, fora: r.ativa === false, isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
+      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
   const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
@@ -1348,7 +1616,7 @@ function processarAtivo_(u, forcar) {
     estic: termo.valor, faixa: termo.faixa, acao: termo.acao, regime: termo.regime, cobertura: termo.cobertura,
     painel: metricasPainel_(res, ini), painelIS: metricasPainel_(res, w0, cut), painelOOS: metricasPainel_(res, cut, n),
     bh: metricasJanela_(bhEq, ini), bhIS: metricasFaixa_(bhEq, w0, cut), bhOOS: metricasFaixa_(bhEq, cut, n),
-    selData: dataSel, w0: w0Str, corte: cutStr, fixas: fixas, parcial: sel ? !!sel.parcial : false, vagas: sel ? (sel.vagas || 0) : 0, fase: sel ? sel.fase : '', nTest: sel ? sel.nTest : null, nElig: sel ? sel.nElig : null, estr: estr, carga: b.carga,
+    selData: dataSel, w0: w0Str, corte: cutStr, fixas: fixas, parcial: sel ? !!sel.parcial : false, vagas: sel ? (sel.vagas || 0) : 0, naoPlenas: sel ? (sel.naoPlenas || 0) : 0, nTest: sel ? sel.nTest : null, nElig: sel ? sel.nElig : null, estr: estr, carga: b.carga,
   });
   guardarRes_(u.sym, out);
   return { resumo: out, eventos: eventos };
@@ -1618,33 +1886,36 @@ function gravarPainel_() {
 function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
-    'Sharpe_Janela (3a, peso do consenso)', 'Peso_Consenso_pct', 'Sharpe_24m (mín. 0,8965)', 'Sharpe_12m (mín. 0,3983)', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
-  const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; };
+    'Nivel_Sharpe', 'Sharpe_historico (mín. 1,00)', 'Sharpe_24m (mín. 0,8965)', 'Sharpe_12m (mín. 0,3983)', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
+    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
+  const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; }, NC = cab.length;
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') return;
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.sh24), v(e.sh12), v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato passa nos mínimos de Sharpe (IS ' + cfgNum_('SELECAO_SHARPE_MIN') + ', 24m ' + cfgNum_('SELECAO_SHARPE_MIN_24M') + ', 12m ' + cfgNum_('SELECAO_SHARPE_MIN_12M') + ')', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
+      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; rows.push(l);
     }
   });
   sh.clear();
-  sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
+  sh.getRange(1, 1, 1, NC).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   if (rows.length) {
-    sh.getRange(2, 27, rows.length, 2).setNumberFormat('@');
-    sh.getRange(2, 1, rows.length, cab.length).setValues(rows);
+    sh.getRange(2, 28, rows.length, 2).setNumberFormat('@');
+    sh.getRange(2, 1, rows.length, NC).setValues(rows);
+    const cor = { 'PLENA': '#d9ead3', 'RECENTE FRACA': '#fff2cc', 'PROVISORIA': '#fce5cd', 'FORA': '#f4cccc' };
     rows.forEach(function (r, i) {
-      if (r[6] === 'VAGA') { sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee'); return; }
+      if (r[6] === 'VAGA' || r[6] === 'FORA DA REGRA (Sharpe)') { sh.getRange(i + 2, 1, 1, NC).setBackground('#eeeeee'); return; }
       sh.getRange(i + 2, 6, 1, 2).setBackground(r[5] === 1 ? '#d9ead3' : '#f4cccc');
+      if (cor[r[14]]) sh.getRange(i + 2, 15).setBackground(cor[r[14]]).setFontWeight('bold');
+      if (r[15] !== '' && r[15] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 16).setBackground('#fce5cd');
       if (r[16] !== '' && r[16] < cfgNum_('SELECAO_SHARPE_MIN_24M')) sh.getRange(i + 2, 17).setBackground('#f4cccc').setFontWeight('bold');
       if (r[17] !== '' && r[17] < cfgNum_('SELECAO_SHARPE_MIN_12M')) sh.getRange(i + 2, 18).setBackground('#f4cccc').setFontWeight('bold');
-      if (r[6] === 'FORA DA REGRA (Sharpe)') sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee');
-      if (r[21] !== '' && r[21] < 0) sh.getRange(i + 2, 22, 1, 4).setBackground('#fce5cd');
     });
   }
+  sh.getRange(rows.length + 3, 1).setValue('Nível: PLENA = Sharpe do histórico >= 1,00 e 24m/12m nos mínimos; RECENTE FRACA = histórico >= 1,00 mas 24m ou 12m abaixo do mínimo; PROVISORIA = histórico entre 0,80 e 1,00 (nenhum candidato atingiu 1,00 na moeda). As colunas 70%/30% descrevem o desempenho por período e NÃO são teste fora da amostra, pois a escolha usa o histórico todo.');
   sh.setFrozenRows(1); sh.setFrozenColumns(3); sh.setColumnWidth(5, 330);
 }
 
@@ -1654,19 +1925,19 @@ function gravarDesempenho_() {
   if (!lista.length) { sh.getRange(1, 1).setValue('Sem ativos carregados ainda. Rode o menu 2) Carga inicial.'); return; }
   sh.getRange(1, 1).setValue('DESEMPENHO DAS ESTRATÉGIAS ESCOLHIDAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
   sh.getRange(1, 1, 1, 22).setBackground('#081428');
-  sh.getRange(2, 1).setValue('IS = período usado para ESCOLHER as estratégias. OOS = período que não participou da escolha: é o número que deve ser levado a sério. Para o BTC (referência) as 10 são fixas e o corte é 02/06/2023. Verde = painel supera o buy and hold do mesmo período em Calmar.');
+  sh.getRange(2, 1).setValue('As estratégias de cada moeda são escolhidas com o histórico INTEIRO: os números abaixo são de dentro da amostra (otimistas). 70% iniciais x 30% finais é só descrição por período. Expectativa fora da amostra (teste walk-forward offline em 9 moedas, reseleção a cada 90 dias): Sharpe médio de 0,5 a 0,7, equivalente ao buy and hold e a escolhas aleatórias do mesmo conjunto, com drawdown médio de cerca de 40% contra 70% a 80% do buy and hold. Verde = painel supera o buy and hold do mesmo período em Calmar.');
   const cab = ['Ativo', 'Anos de histórico', 'Selecionada em', 'Período IS', 'Corte OOS',
-    'IS Calmar', 'IS Sharpe', 'IS CAGR %', 'IS MaxDD %',
-    'OOS Calmar', 'OOS Sharpe', 'OOS CAGR %', 'OOS MaxDD %',
-    'B&H OOS Calmar', 'B&H OOS CAGR %', 'B&H OOS MaxDD %',
-    'Estratégias com Calmar OOS > B&H OOS', 'Estratégias com Sharpe OOS < 0', 'Painel total Calmar', 'Painel total CAGR %', 'B&H total Calmar', 'Observação'];
+    '70% iniciais: Calmar', 'Sharpe', 'CAGR %', 'MaxDD %',
+    '30% finais: Calmar', 'Sharpe', 'CAGR %', 'MaxDD %',
+    'B&H 30% finais: Calmar', 'CAGR %', 'MaxDD %',
+    'Estratégias PLENAS', 'Estratégias fora do nível PLENA', 'Painel total Calmar', 'Painel total CAGR %', 'B&H total Calmar', 'Observação'];
   sh.getRange(4, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   const g = function (m, k) { return m && m[k] !== undefined && m[k] !== null ? m[k] : ''; };
   const rows = lista.map(function (x) {
     const r = x.r, bhO = r.bhOOS ? r.bhOOS.calmar : null;
-    const sup = r.bhOOS ? r.estr.filter(function (e) { return e.oosCa !== null && e.oosCa > bhO; }).length : '';
-    const neg = r.estr.filter(function (e) { return e.oosSh !== null && e.oosSh < 0; }).length;
-    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas + ' (só ' + r.estr.length + ' de ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ')' : '') + (r.fase === 'ampliada' ? ' · busca ampliada usada (' + r.nTest + ' candidatos testados)' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
+    const sup = r.estr.filter(function (e) { return e.nivel === 'PLENA'; }).length;
+    const neg = r.estr.length - sup;
+    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas : '') + (r.nTest ? ' · ' + r.nTest + ' candidatos testados' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
     return [x.u.sym + (x.u.status === 'REFERENCIA' ? ' (ref.)' : ''), r_(r.n / 365.25, 1), r.selData, r.w0 + ' a ' + r.corte, r.corte,
       g(r.painelIS, 'calmar'), g(r.painelIS, 'sharpe'), g(r.painelIS, 'cagr'), g(r.painelIS, 'dd'),
       g(r.painelOOS, 'calmar'), g(r.painelOOS, 'sharpe'), g(r.painelOOS, 'cagr'), g(r.painelOOS, 'dd'),
@@ -1676,10 +1947,9 @@ function gravarDesempenho_() {
   sh.getRange(5, 1, rows.length, cab.length).setValues(rows);
   rows.forEach(function (row, i) {
     if (row[9] !== '' && row[13] !== '') sh.getRange(5 + i, 10).setBackground(row[9] > row[13] ? '#d9ead3' : '#f4cccc').setFontWeight('bold');
-    if (row[5] !== '' && row[9] !== '') sh.getRange(5 + i, 6).setBackground(row[9] >= row[5] * 0.5 ? '#fff2cc' : '#fce5cd');
   });
   const nota = 5 + rows.length + 1;
-  sh.getRange(nota, 1).setValue('Decaída = OOS contra IS. Quando o Calmar OOS cai a menos de metade do IS (célula laranja em IS Calmar), parte do desempenho histórico era sorte de seleção. Moedas com menos de 3 anos de histórico (HYPE, e AAVE/SOL em parte) têm OOS curto demais para conclusão firme.');
+  sh.getRange(nota, 1).setValue('Moedas com pouco histórico (HYPE, e AAVE/SOL em parte) têm medidas frágeis. Escolher o melhor de centenas de candidatos produz Sharpe alto também por acaso: leia estes números como teto, não como previsão.');
   sh.setFrozenRows(4); sh.setFrozenColumns(1); sh.setColumnWidth(1, 110); sh.setColumnWidth(4, 190); sh.setColumnWidth(22, 330);
   for (let c = 2; c <= 21; c++) if (c !== 4) sh.setColumnWidth(c, 92);
 }
@@ -1785,6 +2055,18 @@ function reselecionarTodas() {
   const syms = ativosUniverso_().filter(function (u) { return u.status === 'ATIVO'; }).map(function (u) { return u.sym; });
   setPendentesSel_(syms); PropertiesService.getScriptProperties().setProperty('CURSOR', '0');
   cargaInicial();
+}
+/** Menu H: refaz a carga do histórico de cada moeda escolhendo a fonte com mais dados (só troca se ganhar 30+ velas) e refaz a seleção. Repita o menu 2 até concluir. */
+function recarregarHistorico() {
+  const syms = ativosUniverso_().filter(function (u) { return u.status === 'ATIVO'; }).map(function (u) { return u.sym; });
+  setPendentesHist_(syms); PropertiesService.getScriptProperties().setProperty('CURSOR', '0');
+  cargaInicial();
+}
+/** Menu F: reescreve a coluna Fontes da UNIVERSO com a lista do código (mais corretoras) e limpa a fonte já escolhida. */
+function atualizarFontes() {
+  const sh = ss_().getSheetByName(P2.ABAS.universo), mapa = {}; SEED_UNIVERSO.forEach(function (s) { mapa[s[1]] = s[6]; });
+  let k = 0; universo_().forEach(function (u) { if (mapa[u.sym] && u.status !== 'EXCLUIDO') { sh.getRange(u.row, 8).setValue(mapa[u.sym]); sh.getRange(u.row, 9).setValue(''); k++; } });
+  safeToast_('Fontes atualizadas para ' + k + ' ativo(s). Rode o menu 1 (diagnóstico) e depois o H (recarregar histórico).');
 }
 function reprocessarTudo() { PropertiesService.getScriptProperties().setProperty('CURSOR', '0'); cargaInicial(); }
 
@@ -1931,6 +2213,8 @@ function onOpen() {
     .addSeparator()
     .addItem('R) Atualizar ranking CoinGecko (sugere ajustes ao universo)', 'atualizarRanking')
     .addItem('T) Teste de e-mail (somente 1º destinatário)', 'testarEmailInterno')
+    .addItem('F) Atualizar a lista de fontes de dados (pelo código)', 'atualizarFontes')
+    .addItem('H) Recarregar o histórico pela fonte mais longa', 'recarregarHistorico')
     .addItem('S) Refazer a seleção das 10 estratégias de cada moeda', 'reselecionarTodas')
     .addItem('P) Reprocessar tudo do zero (recalcula todos os ativos)', 'reprocessarTudo')
     .addItem('G) Instalar gatilhos automáticos', 'instalarGatilhosAutomaticos')

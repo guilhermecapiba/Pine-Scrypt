@@ -46,33 +46,36 @@ function gravarPainel_() {
 function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
-    'Sharpe_Janela (3a, peso do consenso)', 'Peso_Consenso_pct', 'Sharpe_24m (mín. 0,8965)', 'Sharpe_12m (mín. 0,3983)', 'Trades_IS', 'Sharpe_IS (seleção)', 'Calmar_IS (seleção)', 'Sharpe_OOS', 'Calmar_OOS', 'CAGR_OOS_pct', 'MaxDD_OOS_pct', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
-  const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; };
+    'Nivel_Sharpe', 'Sharpe_historico (mín. 1,00)', 'Sharpe_24m (mín. 0,8965)', 'Sharpe_12m (mín. 0,3983)', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
+    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
+  const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; }, NC = cab.length;
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') return;
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.sh3, e.peso, v(e.sh24), v(e.sh12), v(e.isTr), v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      rows.push([x.u.sym, k, '—', '—', 'VAGA ABERTA: nenhum candidato passa nos mínimos de Sharpe (IS ' + cfgNum_('SELECAO_SHARPE_MIN') + ', 24m ' + cfgNum_('SELECAO_SHARPE_MIN_24M') + ', 12m ' + cfgNum_('SELECAO_SHARPE_MIN_12M') + ')', '', 'VAGA', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', x.r.selData, x.r.ultimaVela]);
+      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; rows.push(l);
     }
   });
   sh.clear();
-  sh.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
+  sh.getRange(1, 1, 1, NC).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   if (rows.length) {
-    sh.getRange(2, 27, rows.length, 2).setNumberFormat('@');
-    sh.getRange(2, 1, rows.length, cab.length).setValues(rows);
+    sh.getRange(2, 28, rows.length, 2).setNumberFormat('@');
+    sh.getRange(2, 1, rows.length, NC).setValues(rows);
+    const cor = { 'PLENA': '#d9ead3', 'RECENTE FRACA': '#fff2cc', 'PROVISORIA': '#fce5cd', 'FORA': '#f4cccc' };
     rows.forEach(function (r, i) {
-      if (r[6] === 'VAGA') { sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee'); return; }
+      if (r[6] === 'VAGA' || r[6] === 'FORA DA REGRA (Sharpe)') { sh.getRange(i + 2, 1, 1, NC).setBackground('#eeeeee'); return; }
       sh.getRange(i + 2, 6, 1, 2).setBackground(r[5] === 1 ? '#d9ead3' : '#f4cccc');
+      if (cor[r[14]]) sh.getRange(i + 2, 15).setBackground(cor[r[14]]).setFontWeight('bold');
+      if (r[15] !== '' && r[15] < cfgNum_('SELECAO_SHARPE_MIN')) sh.getRange(i + 2, 16).setBackground('#fce5cd');
       if (r[16] !== '' && r[16] < cfgNum_('SELECAO_SHARPE_MIN_24M')) sh.getRange(i + 2, 17).setBackground('#f4cccc').setFontWeight('bold');
       if (r[17] !== '' && r[17] < cfgNum_('SELECAO_SHARPE_MIN_12M')) sh.getRange(i + 2, 18).setBackground('#f4cccc').setFontWeight('bold');
-      if (r[6] === 'FORA DA REGRA (Sharpe)') sh.getRange(i + 2, 1, 1, cab.length).setBackground('#eeeeee');
-      if (r[21] !== '' && r[21] < 0) sh.getRange(i + 2, 22, 1, 4).setBackground('#fce5cd');
     });
   }
+  sh.getRange(rows.length + 3, 1).setValue('Nível: PLENA = Sharpe do histórico >= 1,00 e 24m/12m nos mínimos; RECENTE FRACA = histórico >= 1,00 mas 24m ou 12m abaixo do mínimo; PROVISORIA = histórico entre 0,80 e 1,00 (nenhum candidato atingiu 1,00 na moeda). As colunas 70%/30% descrevem o desempenho por período e NÃO são teste fora da amostra, pois a escolha usa o histórico todo.');
   sh.setFrozenRows(1); sh.setFrozenColumns(3); sh.setColumnWidth(5, 330);
 }
 
@@ -82,19 +85,19 @@ function gravarDesempenho_() {
   if (!lista.length) { sh.getRange(1, 1).setValue('Sem ativos carregados ainda. Rode o menu 2) Carga inicial.'); return; }
   sh.getRange(1, 1).setValue('DESEMPENHO DAS ESTRATÉGIAS ESCOLHIDAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
   sh.getRange(1, 1, 1, 22).setBackground('#081428');
-  sh.getRange(2, 1).setValue('IS = período usado para ESCOLHER as estratégias. OOS = período que não participou da escolha: é o número que deve ser levado a sério. Para o BTC (referência) as 10 são fixas e o corte é 02/06/2023. Verde = painel supera o buy and hold do mesmo período em Calmar.');
+  sh.getRange(2, 1).setValue('As estratégias de cada moeda são escolhidas com o histórico INTEIRO: os números abaixo são de dentro da amostra (otimistas). 70% iniciais x 30% finais é só descrição por período. Expectativa fora da amostra (teste walk-forward offline em 9 moedas, reseleção a cada 90 dias): Sharpe médio de 0,5 a 0,7, equivalente ao buy and hold e a escolhas aleatórias do mesmo conjunto, com drawdown médio de cerca de 40% contra 70% a 80% do buy and hold. Verde = painel supera o buy and hold do mesmo período em Calmar.');
   const cab = ['Ativo', 'Anos de histórico', 'Selecionada em', 'Período IS', 'Corte OOS',
-    'IS Calmar', 'IS Sharpe', 'IS CAGR %', 'IS MaxDD %',
-    'OOS Calmar', 'OOS Sharpe', 'OOS CAGR %', 'OOS MaxDD %',
-    'B&H OOS Calmar', 'B&H OOS CAGR %', 'B&H OOS MaxDD %',
-    'Estratégias com Calmar OOS > B&H OOS', 'Estratégias com Sharpe OOS < 0', 'Painel total Calmar', 'Painel total CAGR %', 'B&H total Calmar', 'Observação'];
+    '70% iniciais: Calmar', 'Sharpe', 'CAGR %', 'MaxDD %',
+    '30% finais: Calmar', 'Sharpe', 'CAGR %', 'MaxDD %',
+    'B&H 30% finais: Calmar', 'CAGR %', 'MaxDD %',
+    'Estratégias PLENAS', 'Estratégias fora do nível PLENA', 'Painel total Calmar', 'Painel total CAGR %', 'B&H total Calmar', 'Observação'];
   sh.getRange(4, 1, 1, cab.length).setValues([cab]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);
   const g = function (m, k) { return m && m[k] !== undefined && m[k] !== null ? m[k] : ''; };
   const rows = lista.map(function (x) {
     const r = x.r, bhO = r.bhOOS ? r.bhOOS.calmar : null;
-    const sup = r.bhOOS ? r.estr.filter(function (e) { return e.oosCa !== null && e.oosCa > bhO; }).length : '';
-    const neg = r.estr.filter(function (e) { return e.oosSh !== null && e.oosSh < 0; }).length;
-    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas + ' (só ' + r.estr.length + ' de ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' com Sharpe >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ')' : '') + (r.fase === 'ampliada' ? ' · busca ampliada usada (' + r.nTest + ' candidatos testados)' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
+    const sup = r.estr.filter(function (e) { return e.nivel === 'PLENA'; }).length;
+    const neg = r.estr.length - sup;
+    const obs = (r.fixas ? 'estratégias fixas do Projeto 02' : 'seleção própria da moeda') + (r.parcial ? ' · VAGAS ABERTAS: ' + r.vagas : '') + (r.nTest ? ' · ' + r.nTest + ' candidatos testados' : '') + (r.n < 1000 ? ' · histórico curto: leitura frágil' : '');
     return [x.u.sym + (x.u.status === 'REFERENCIA' ? ' (ref.)' : ''), r_(r.n / 365.25, 1), r.selData, r.w0 + ' a ' + r.corte, r.corte,
       g(r.painelIS, 'calmar'), g(r.painelIS, 'sharpe'), g(r.painelIS, 'cagr'), g(r.painelIS, 'dd'),
       g(r.painelOOS, 'calmar'), g(r.painelOOS, 'sharpe'), g(r.painelOOS, 'cagr'), g(r.painelOOS, 'dd'),
@@ -104,10 +107,9 @@ function gravarDesempenho_() {
   sh.getRange(5, 1, rows.length, cab.length).setValues(rows);
   rows.forEach(function (row, i) {
     if (row[9] !== '' && row[13] !== '') sh.getRange(5 + i, 10).setBackground(row[9] > row[13] ? '#d9ead3' : '#f4cccc').setFontWeight('bold');
-    if (row[5] !== '' && row[9] !== '') sh.getRange(5 + i, 6).setBackground(row[9] >= row[5] * 0.5 ? '#fff2cc' : '#fce5cd');
   });
   const nota = 5 + rows.length + 1;
-  sh.getRange(nota, 1).setValue('Decaída = OOS contra IS. Quando o Calmar OOS cai a menos de metade do IS (célula laranja em IS Calmar), parte do desempenho histórico era sorte de seleção. Moedas com menos de 3 anos de histórico (HYPE, e AAVE/SOL em parte) têm OOS curto demais para conclusão firme.');
+  sh.getRange(nota, 1).setValue('Moedas com pouco histórico (HYPE, e AAVE/SOL em parte) têm medidas frágeis. Escolher o melhor de centenas de candidatos produz Sharpe alto também por acaso: leia estes números como teto, não como previsão.');
   sh.setFrozenRows(4); sh.setFrozenColumns(1); sh.setColumnWidth(1, 110); sh.setColumnWidth(4, 190); sh.setColumnWidth(22, 330);
   for (let c = 2; c <= 21; c++) if (c !== 4) sh.setColumnWidth(c, 92);
 }
@@ -213,6 +215,18 @@ function reselecionarTodas() {
   const syms = ativosUniverso_().filter(function (u) { return u.status === 'ATIVO'; }).map(function (u) { return u.sym; });
   setPendentesSel_(syms); PropertiesService.getScriptProperties().setProperty('CURSOR', '0');
   cargaInicial();
+}
+/** Menu H: refaz a carga do histórico de cada moeda escolhendo a fonte com mais dados (só troca se ganhar 30+ velas) e refaz a seleção. Repita o menu 2 até concluir. */
+function recarregarHistorico() {
+  const syms = ativosUniverso_().filter(function (u) { return u.status === 'ATIVO'; }).map(function (u) { return u.sym; });
+  setPendentesHist_(syms); PropertiesService.getScriptProperties().setProperty('CURSOR', '0');
+  cargaInicial();
+}
+/** Menu F: reescreve a coluna Fontes da UNIVERSO com a lista do código (mais corretoras) e limpa a fonte já escolhida. */
+function atualizarFontes() {
+  const sh = ss_().getSheetByName(P2.ABAS.universo), mapa = {}; SEED_UNIVERSO.forEach(function (s) { mapa[s[1]] = s[6]; });
+  let k = 0; universo_().forEach(function (u) { if (mapa[u.sym] && u.status !== 'EXCLUIDO') { sh.getRange(u.row, 8).setValue(mapa[u.sym]); sh.getRange(u.row, 9).setValue(''); k++; } });
+  safeToast_('Fontes atualizadas para ' + k + ' ativo(s). Rode o menu 1 (diagnóstico) e depois o H (recarregar histórico).');
 }
 function reprocessarTudo() { PropertiesService.getScriptProperties().setProperty('CURSOR', '0'); cargaInicial(); }
 
@@ -359,6 +373,8 @@ function onOpen() {
     .addSeparator()
     .addItem('R) Atualizar ranking CoinGecko (sugere ajustes ao universo)', 'atualizarRanking')
     .addItem('T) Teste de e-mail (somente 1º destinatário)', 'testarEmailInterno')
+    .addItem('F) Atualizar a lista de fontes de dados (pelo código)', 'atualizarFontes')
+    .addItem('H) Recarregar o histórico pela fonte mais longa', 'recarregarHistorico')
     .addItem('S) Refazer a seleção das 10 estratégias de cada moeda', 'reselecionarTodas')
     .addItem('P) Reprocessar tudo do zero (recalcula todos os ativos)', 'reprocessarTudo')
     .addItem('G) Instalar gatilhos automáticos', 'instalarGatilhosAutomaticos')

@@ -4,7 +4,7 @@ const SRC = process.env.SRC || require('path').join(__dirname, '../../apps_scrip
 class Range {
   constructor(sh, r, c, nr, nc) { this.sh = sh; this.r = r; this.c = c; this.nr = nr || 1; this.nc = nc || 1; }
   getValues() { const o = []; for (let i = 0; i < this.nr; i++) { const row = []; for (let j = 0; j < this.nc; j++) { const v = this.sh.cells[(this.r + i) + ',' + (this.c + j)]; row.push(v === undefined ? '' : v); } o.push(row); } return o; }
-  setValues(v) { for (let i = 0; i < v.length; i++) for (let j = 0; j < v[i].length; j++) { this.sh.cells[(this.r + i) + ',' + (this.c + j)] = v[i][j]; this.sh.maxRow = Math.max(this.sh.maxRow, this.r + i); } return this; }
+  setValues(v) { if (v.length !== this.nr || v.some(r => r.length !== this.nc)) throw new Error('O número de colunas nos dados não corresponde ao intervalo: dados ' + v.length + 'x' + (v[0] || []).length + ' vs intervalo ' + this.nr + 'x' + this.nc + ' (' + this.sh.name + ')'); for (let i = 0; i < v.length; i++) for (let j = 0; j < v[i].length; j++) { this.sh.cells[(this.r + i) + ',' + (this.c + j)] = v[i][j]; this.sh.maxRow = Math.max(this.sh.maxRow, this.r + i); } return this; }
   setValue(v) { return this.setValues([[v]]); }
   clearContent() { for (let i = 0; i < this.nr; i++) for (let j = 0; j < this.nc; j++) delete this.sh.cells[(this.r + i) + ',' + (this.c + j)]; return this; }
 }
