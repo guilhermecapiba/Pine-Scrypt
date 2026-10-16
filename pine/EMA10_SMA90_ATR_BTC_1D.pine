@@ -1,0 +1,36 @@
+//@version=5
+// EMA10_SMA90_ATR | BTC 1D | cruzamento do preco sobre a EMA10 com filtro SMA90, stop 3 ATR e alvo 2.5R
+// Origem: STRAT-095/099 e demais linhas SUPERTREND_10_1D da 05_RESERVADAS. O rotulo SUPERTREND era enganoso:
+// o template do pipeline nunca calculou Supertrend, e esta e a unica combinacao de parametros que passa na regua.
+// Com RR=2.0 cobre tambem a variante STRAT-024.
+// Convencao do backtest padronizado (identica a usada para comparar com a planilha MVP):
+// sinal avaliado no fechamento, execucao na abertura da barra seguinte (padrao TradingView),
+// long only, 100% do capital, comissao 0.125% por lado, slippage 0, historico a partir de 2015-07-20.
+// Metricas esperadas e racional: RELATORIO_REFINO_BTC_1D.md
+strategy("EMA10_SMA90_ATR BTC 1D", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.125, slippage=0, pyramiding=0)
+pCurto   = input.int(10, "EMA de gatilho", minval=2)
+pLongo   = input.int(90, "SMA de filtro", minval=2)
+stopMult = input.float(3.0, "Multiplicador ATR do stop", step=0.5)
+rr       = input.float(2.5, "Alvo em multiplos de R", step=0.5)
+start    = input.time(timestamp("2015-07-20 00:00 +0000"), "Inicio do backtest")
+inRange  = time >= start
+
+emaC = ta.ema(close, pCurto)
+smaL = ta.sma(close, pLongo)
+atrV = ta.atr(14)
+
+longCond  = ta.crossover(close, emaC) and close > smaL
+shortCond = ta.crossunder(close, emaC)
+
+var float sl = na
+var float tp = na
+if inRange and longCond and strategy.position_size == 0
+    sl := close - atrV * stopMult
+    tp := close + (close - sl) * rr
+    strategy.entry("Long", strategy.long)
+    strategy.exit("Exit", "Long", stop=sl, limit=tp)
+if shortCond and strategy.position_size > 0
+    strategy.close("Long", comment="Sinal contrario")
+
+plot(emaC, "EMA gatilho", color=color.new(color.yellow, 0))
+plot(smaL, "SMA filtro", color=color.new(color.white, 0))

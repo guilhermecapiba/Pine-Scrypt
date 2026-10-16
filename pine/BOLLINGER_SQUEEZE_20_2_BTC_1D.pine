@@ -1,0 +1,32 @@
+//@version=5
+// BOLLINGER_SQUEEZE_20_2 | BTC 1D | fechamento acima da banda superior com largura (BandWidth) acima da sua media
+// Origem: HYP-Q036 (reservada). Com o filtro SMA200 ligado (useMacro=true, k=2.25) vira a campea M2 ja em producao.
+// Convencao do backtest padronizado (identica a usada para comparar com a planilha MVP):
+// sinal avaliado no fechamento, execucao na abertura da barra seguinte (padrao TradingView),
+// long only, 100% do capital, comissao 0.125% por lado, slippage 0, historico a partir de 2015-07-20.
+// Metricas esperadas e racional: RELATORIO_REFINO_BTC_1D.md
+strategy("BOLLINGER_SQUEEZE_20_2 BTC 1D", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.125, slippage=0, pyramiding=0)
+bbLen    = input.int(20, "Periodo das bandas", minval=2)
+bbMult   = input.float(2.0, "Desvios", step=0.25)
+bwLen    = input.int(50, "Media da largura (BandWidth)", minval=2)
+useMacro = input.bool(false, "Filtro SMA macro (liga = campea M2 em producao)")
+macroLen = input.int(200, "Periodo da SMA macro", minval=2)
+start    = input.time(timestamp("2015-07-20 00:00 +0000"), "Inicio do backtest")
+inRange  = time >= start
+
+basis = ta.sma(close, bbLen)
+dev   = bbMult * ta.stdev(close, bbLen)
+upper = basis + dev
+bw    = (2 * dev) / basis
+bwMa  = ta.sma(bw, bwLen)
+
+longEntry = inRange and close > upper and bw > bwMa and (not useMacro or close > ta.sma(close, macroLen))
+longExit  = close < basis
+
+if longEntry and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+if longExit and strategy.position_size > 0
+    strategy.close("Long", comment="Fechou abaixo da media")
+
+plot(basis, "Media", color=color.new(color.yellow, 0))
+plot(upper, "Banda superior", color=color.new(color.aqua, 0))

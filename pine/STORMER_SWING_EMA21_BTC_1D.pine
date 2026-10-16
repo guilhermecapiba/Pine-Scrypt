@@ -1,0 +1,27 @@
+//@version=5
+// STORMER_SWING_EMA21 | BTC 1D | tendencia EMA21 > EMA lenta, entrada no retorno do preco acima da EMA21, saida abaixo da EMA lenta
+// Origem: HYP-Q012 (reservada). REFINO: EMA lenta 50 -> 60 (original 21/50 reprovava por Calmar 0.96 < 0.98).
+// Ressalva: refino pos-hoc com platô moderado (6 de 16 vizinhos passam); validar no TradingView antes de promover.
+// Convencao do backtest padronizado (identica a usada para comparar com a planilha MVP):
+// sinal avaliado no fechamento, execucao na abertura da barra seguinte (padrao TradingView),
+// long only, 100% do capital, comissao 0.125% por lado, slippage 0, historico a partir de 2015-07-20.
+// Metricas esperadas e racional: RELATORIO_REFINO_BTC_1D.md
+strategy("STORMER_SWING_EMA21 BTC 1D", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.125, slippage=0, pyramiding=0)
+fastLen = input.int(21, "EMA rapida", minval=2)
+slowLen = input.int(60, "EMA lenta (saida e filtro)", minval=2)
+start   = input.time(timestamp("2015-07-20 00:00 +0000"), "Inicio do backtest")
+inRange = time >= start
+
+emaF = ta.ema(close, fastLen)
+emaS = ta.ema(close, slowLen)
+
+longEntry = inRange and emaF > emaS and ta.crossover(close, emaF)
+longExit  = close < emaS
+
+if longEntry and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+if longExit and strategy.position_size > 0
+    strategy.close("Long", comment="Fechou abaixo da EMA lenta")
+
+plot(emaF, "EMA rapida", color=color.new(color.yellow, 0))
+plot(emaS, "EMA lenta", color=color.new(color.white, 0))

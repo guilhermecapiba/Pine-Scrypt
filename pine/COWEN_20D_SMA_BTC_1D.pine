@@ -1,0 +1,27 @@
+//@version=5
+// COWEN_20D_SMA | BTC 1D | cruzamento do preco sobre a SMA20 com filtro de tendencia, saida ao fechar abaixo da SMA20
+// Origem: HYP-Q111 (reservada). REFINO: filtro SMA 200 -> 150 (original 20/200 reprovava por Calmar 0.97 < 0.98).
+// Ressalva: refino pos-hoc com platô moderado (5 de 12 vizinhos passam); validar no TradingView antes de promover.
+// Convencao do backtest padronizado (identica a usada para comparar com a planilha MVP):
+// sinal avaliado no fechamento, execucao na abertura da barra seguinte (padrao TradingView),
+// long only, 100% do capital, comissao 0.125% por lado, slippage 0, historico a partir de 2015-07-20.
+// Metricas esperadas e racional: RELATORIO_REFINO_BTC_1D.md
+strategy("COWEN_20D_SMA BTC 1D", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.125, slippage=0, pyramiding=0)
+smaLen   = input.int(20, "SMA de gatilho", minval=2)
+macroLen = input.int(150, "SMA de filtro de tendencia", minval=2)
+start    = input.time(timestamp("2015-07-20 00:00 +0000"), "Inicio do backtest")
+inRange  = time >= start
+
+smaT  = ta.sma(close, smaLen)
+macro = ta.sma(close, macroLen)
+
+longEntry = inRange and ta.crossover(close, smaT) and close > macro
+longExit  = close < smaT
+
+if longEntry and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+if longExit and strategy.position_size > 0
+    strategy.close("Long", comment="Fechou abaixo da SMA20")
+
+plot(smaT, "SMA gatilho", color=color.new(color.yellow, 0))
+plot(macro, "SMA filtro", color=color.new(color.white, 0))

@@ -1,0 +1,7 @@
+painel,cagr,maxdd,sharpe,calmar,corr_max
+"producao (6 estrategias, peso igual)",60.9,46.5,1.45,1.31,
+producao + DONCHIAN_20_10,61.9,47.2,1.46,1.31,0.87
+producao + BOLL_SQZ_20_2.0,58.8,43.2,1.46,1.36,0.86
+producao + STORMER_21_60,60.0,45.6,1.44,1.32,0.86
+producao + COWEN_20_150,60.1,44.1,1.46,1.36,0.84
+producao + EMA10_SMA90_ATR3_RR2.5,59.1,42.3,1.49,1.4,0.76
