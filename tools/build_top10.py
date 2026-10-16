@@ -46,6 +46,7 @@ for old, new in [('MVP Projeto Cripto · Terminal Quantitativo', 'Crypto Top 10 
     email = email.replace(old, new)
 parts.append(sep('copiado do Projeto 02: e-mail institucional') + email)
 parts.append(T('top10_out.gs'))
+parts.append(T('top10_audit.gs'))
 tail = fat('function safeToast_', None).replace("'Projeto 02'", "'Top 10'")
 parts.append('\n' + tail)
 

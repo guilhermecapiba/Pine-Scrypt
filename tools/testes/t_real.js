@@ -16,6 +16,7 @@ for (let k = 0; k < 8; k++) { const r = run('motorTop10(true)'); console.log('ro
 const dump = (n, rows, cols) => { const s = sh(n); for (let r = 1; r <= Math.min(rows, s.getLastRow()); r++) { const row = []; for (let c = 1; c <= cols; c++) row.push(s.cells[r + ',' + c] === undefined ? '' : s.cells[r + ',' + c]); console.log(row.join(' | ')); } };
 dump('PAINEL_TOP10', 16, 16);
 console.log('--- ESTRATEGIAS'); const e = sh('ESTRATEGIAS_TOP10'); for (let r = 2; r <= e.getLastRow(); r++) { const g = c => e.cells[r + ',' + c] === undefined ? '' : e.cells[r + ',' + c]; if (g(1) && g(2) !== undefined) console.log([g(1), g(2), g(3), g(5).toString().slice(0, 38), g(7), g(15), 'H', g(16), '24m', g(17), '12m', g(18)].join(' | ')); }
+if (process.env.AUD) { run('auditoria()'); console.log('--- AUDITORIA'); dump('AUDITORIA', 400, 5); }
 console.log('props bytes', Object.keys(props).filter(k => /^(RES|SEL)_/.test(k)).map(k => k + ':' + props[k].length).join(' '));
 Object.keys(props).filter(k => /^BASE|HIST/.test(k)).forEach(k => console.log(k, props[k]));
 for (const s of ['XRP']) console.log('BASE_XRP linhas', sh('BASE_XRP').getLastRow());

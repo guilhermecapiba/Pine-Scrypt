@@ -5,13 +5,13 @@ O script é montado por `tools/build_top10.py` (cópias fiéis do `MVP_Projeto02
 
 ## O que a planilha faz
 
-Uma planilha e um script cobrem o BTC (referência, 10 estratégias fixas do Projeto 02) e dez moedas: ETH, BNB, XRP, SOL, TRX, ZEC, HYPE, DOGE, LINK e AAVE. Cada moeda tem as próprias 5 estratégias (`SELECAO_N_ESTRATEGIAS`), escolhidas entre cerca de 1.650 candidatos. Motor de backtest, custos (0,125% por lado), consenso, esticamento e alertas são os do BTC.
+Uma planilha e um script cobrem o BTC (referência, 10 estratégias fixas do Projeto 02) e dez moedas: ETH, BNB, XRP, SOL, TRX, ZEC, HYPE, DOGE, LINK e AAVE. Cada moeda tem as próprias 5 estratégias (`SELECAO_N_ESTRATEGIAS`), escolhidas entre cerca de 2.700 candidatos. Motor de backtest, custos (0,125% por lado), consenso, esticamento e alertas são os do BTC.
 
 ## Como as estratégias são escolhidas
 
 1. Candidatos: 51 base (as 10 do Projeto 02, gatilhos e famílias clássicas), cerca de 280 variações de parâmetros, 171 de famílias adicionais (Ichimoku, KAMA, Hull, regressão linear, Parabolic SAR, ADX, CCI, TRIX, volume, trailing por ATR, reversão com filtro de tendência e filtro do regime do BTC) e 850 da busca massiva: as combinações "estratégia + SMA50/100/150/200" da planilha de vídeos, grades densas, VWAP, estocástico, DEMA/TEMA, pullback, força relativa contra o BTC e comitês de votação entre indicadores, mais 310 de reversão em tendência (IBS, mínimas de N dias, quedas seguidas, Williams %R, CCI e RSI curto com saídas rápidas).
 2. A medida é o Sharpe do histórico inteiro depois do aquecimento das médias. Níveis:
-   - PLENA: Sharpe do histórico >= 1,00, 24 meses >= 0,8965 e 12 meses >= 0,3983.
+   - PLENA: Sharpe do histórico >= 1,00, 24 meses >= 1,00 e 12 meses >= 0,50 (`SELECAO_SHARPE_MIN`, `_24M`, `_12M`).
    - RECENTE FRACA: histórico >= 1,00, mas 24 ou 12 meses abaixo do mínimo.
    - PROVISORIA: histórico entre `SELECAO_PISO_PROVISORIO` e 1,00. Desligado por padrão (mesma régua para todas as moedas).
 3. Preenchimento por nível (PLENA, depois RECENTE FRACA, depois PROVISORIA) e, dentro do nível, pela nota (percentil do Sharpe e do Calmar). Diversificação: no máximo 2 por família (3 se sobrar vaga) e correlação diária máxima de 0,92.
@@ -33,6 +33,14 @@ As estratégias são escolhidas com o histórico inteiro, então os números da 
 Quanto mais se exige Sharpe alto no passado e mais candidatos se testam, pior o resultado futuro: a regra estrita ficou abaixo do sorteio e do buy and hold (DOGE -0,05, LINK -0,86). O ganho real das cestas é menos drawdown. Para o perfil mais robusto nos testes, use `SELECAO_EXIGE_PLENA` = NAO e `SELECAO_PISO_PROVISORIO` = 0,8. Detalhes em `tools/pesquisa/README.md`.
 
 Limite da regra: para TRX (melhor Sharpe 0,97), DOGE (0,91) e LINK (cerca de 1,00 sem passar nos mínimos de 24 e 12 meses), nem 4.000 candidatos aleatórios adicionais cruzaram a régua de 1,00 com os mínimos recentes. É um teto da classe de estratégias long-only diárias com custo de 0,125% por lado, não falta de busca.
+
+## BTC, auditoria e dados
+
+O BTC roda as 10 fixas do Projeto 02. A que ficar abaixo dos mínimos (histórico, 24m ou 12m) sai e é substituída pela melhor candidata que cumpre a régua (`SELECAO_BTC_SUBSTITUI` = SIM); a coluna `Criterio_secundario` mostra quem substituiu quem. Com os mínimos atuais saem M1-01 (12 meses 0,40) e M1-05 (24 meses 0,90).
+
+O menu A (Auditoria) cria a aba `AUDITORIA`: concilia PAINEL, ESTRATEGIAS, DESEMPENHO, SELECAO e UNIVERSO entre si e contra a aba BASE, recalcula do zero os Sharpe, trades, posição, índice de exposição e Calmar de cada estratégia, confere a integridade dos dados (lacunas, repetidas, OHLC, saltos) e lista gatilhos, parâmetros obsoletos e falhas do log. Rode depois de cada carga ou seleção.
+
+O começo da série é aparado automaticamente quando há salto de preço maior que 20x em um dia (a HYPE tinha 66 velas de pré-lançamento). Moedas sem estratégia aceita aparecem em ESTRATEGIAS_TOP10 com as vagas abertas, para as abas baterem. Alertas por e-mail não saem na primeira leitura de uma moeda e, fora do BTC, o consenso só alerta quando a leitura muda de faixa.
 
 ## Fontes de dados
 

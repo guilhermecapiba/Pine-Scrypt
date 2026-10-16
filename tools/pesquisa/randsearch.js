@@ -16,8 +16,8 @@ for (const s of syms) {
       else if (t===8) { const p = ri(10,100), m = ri(10,40)/10; d = {id:'R-KC'+p+'-'+m, fam:'rompimento', fn: candKeltner_(p, m)}; }
       else { const p = ri(2,6), c = ri(5,30), sa = ri(40,75), tr = pick([100,150,200]); d = {id:'R-RSIP'+p+'-'+c+'-'+sa+'-'+tr, fam:'reversao', fn: candRsiPullback_(p, c, sa, tr)}; }
       d.nome = d.id; defs.push(d); }
-    const w0 = Math.min(210, __o.closes.length-150), n = __o.closes.length; let ge1 = 0, plena = 0, max = -9; const top = [];
-    defs.forEach(function(e){ const r = rodarLista_(__o,[e])[0]; if (r.erro||!r.eqCurve) return; const nv = nivelSharpe_(r.eqCurve, n); if (nv.full>max) max = nv.full; if (nv.full>=1) { ge1++; if (nv.nivel==='PLENA') plena++; } top.push([nv.full, e.id]); });
-    top.sort(function(a,b){return b[0]-a[0]}); return {ge1:ge1, plena:plena, max:r_(max,2), top:top.slice(0,4).map(function(x){return x[1]+':'+r_(x[0],2)})}; })()`);
+    const w0 = Math.min(210, __o.closes.length-150), n = __o.closes.length; let ge1 = 0, plena = 0, max = -9; const top = [], plist = [];
+    defs.forEach(function(e){ const r = rodarLista_(__o,[e])[0]; if (r.erro||!r.eqCurve) return; const nv = nivelSharpe_(r.eqCurve, n); if (nv.full>max) max = nv.full; if (nv.full>=1) { ge1++; } if (nv.nivel==='PLENA') { plena++; plist.push(e.id+':'+r_(nv.full,2)+'/'+r_(nv.s24,2)+'/'+r_(nv.s12,2)); } top.push([nv.full, e.id]); });
+    top.sort(function(a,b){return b[0]-a[0]}); return {ge1:ge1, plena:plena, plist: plist.slice(0,12), max:r_(max,2), top:top.slice(0,4).map(function(x){return x[1]+':'+r_(x[0],2)})}; })()`);
   console.log(s, 'N=' + N, JSON.stringify(out));
 }

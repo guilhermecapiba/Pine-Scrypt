@@ -6,20 +6,20 @@
  * ===========================================================================*/
 const COLS_UNIVERSO = ['Ordem', 'Simbolo', 'CoinGecko_ID', 'Nome', 'Rank_MC', 'Tipo', 'Status', 'Fontes', 'Fonte_OK', 'Inicio_Historico', 'N_Velas', 'Ultima_Vela', 'Ultima_Atualizacao', 'Observacao'];
 const SEED_UNIVERSO = [
-  [1, 'BTC', 'bitcoin', 'Bitcoin', 'CRIPTO', 'REFERENCIA', 'coinbase:BTC-USD,binance:BTCUSDT,okx:BTC-USDT,kraken:XBTUSD', 'Referência: o mesmo motor roda no BTC para comparação com o Projeto 02'],
-  [2, 'ETH', 'ethereum', 'Ethereum', 'CRIPTO', 'ATIVO', 'binance:ETHUSDT,kucoin:ETH-USDT,bitfinex:ETHUSD,okx:ETH-USDT,bybit:ETHUSDT,mexc:ETHUSDT,gate:ETH_USDT,coinbase:ETH-USD,kraken:ETHUSD', ''],
+  [1, 'BTC', 'bitcoin', 'Bitcoin', 'CRIPTO', 'REFERENCIA', 'coinbase:BTC-USD,okx:BTC-USDT,kraken:XBTUSD,binance:BTCUSDT', 'Referência: o mesmo motor roda no BTC para comparação com o Projeto 02. Binance e Bybit bloqueiam o Apps Script (HTTP 403): ficam por último'],
+  [2, 'ETH', 'ethereum', 'Ethereum', 'CRIPTO', 'ATIVO', 'kucoin:ETH-USDT,bitfinex:ETHUSD,okx:ETH-USDT,mexc:ETHUSDT,gate:ETH_USDT,coinbase:ETH-USD,kraken:ETHUSD,binance:ETHUSDT,bybit:ETHUSDT', ''],
   [3, 'USDT', 'tether', 'Tether', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin: não há tendência para testar'],
-  [4, 'BNB', 'binancecoin', 'BNB', 'CRIPTO', 'ATIVO', 'binance:BNBUSDT,kucoin:BNB-USDT,okx:BNB-USDT,bybit:BNBUSDT,mexc:BNBUSDT,gate:BNB_USDT', 'Não está na Coinbase nem na Kraken'],
-  [5, 'XRP', 'ripple', 'XRP', 'CRIPTO', 'ATIVO', 'binance:XRPUSDT,kucoin:XRP-USDT,bitfinex:XRPUSD,okx:XRP-USDT,bybit:XRPUSDT,mexc:XRPUSDT,gate:XRP_USDT,coinbase:XRP-USD,kraken:XRPUSD', ''],
+  [4, 'BNB', 'binancecoin', 'BNB', 'CRIPTO', 'ATIVO', 'kucoin:BNB-USDT,okx:BNB-USDT,mexc:BNBUSDT,gate:BNB_USDT,binance:BNBUSDT,bybit:BNBUSDT', 'Não está na Coinbase nem na Kraken'],
+  [5, 'XRP', 'ripple', 'XRP', 'CRIPTO', 'ATIVO', 'kucoin:XRP-USDT,bitfinex:XRPUSD,okx:XRP-USDT,mexc:XRPUSDT,gate:XRP_USDT,coinbase:XRP-USD,kraken:XRPUSD,binance:XRPUSDT,bybit:XRPUSDT', ''],
   [6, 'USDC', 'usd-coin', 'USDC', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin: não há tendência para testar'],
-  [7, 'SOL', 'solana', 'Solana', 'CRIPTO', 'ATIVO', 'binance:SOLUSDT,kucoin:SOL-USDT,bitfinex:SOLUSD,okx:SOL-USDT,bybit:SOLUSDT,mexc:SOLUSDT,gate:SOL_USDT,coinbase:SOL-USD,kraken:SOLUSD', 'Histórico desde 2020'],
-  [8, 'TRX', 'tron', 'TRON', 'CRIPTO', 'ATIVO', 'binance:TRXUSDT,kucoin:TRX-USDT,bitfinex:TRXUSD,okx:TRX-USDT,bybit:TRXUSDT,mexc:TRXUSDT,gate:TRX_USDT,kraken:TRXUSD', ''],
+  [7, 'SOL', 'solana', 'Solana', 'CRIPTO', 'ATIVO', 'kucoin:SOL-USDT,bitfinex:SOLUSD,okx:SOL-USDT,mexc:SOLUSDT,gate:SOL_USDT,coinbase:SOL-USD,kraken:SOLUSD,binance:SOLUSDT,bybit:SOLUSDT', 'Histórico desde 2020'],
+  [8, 'TRX', 'tron', 'TRON', 'CRIPTO', 'ATIVO', 'kucoin:TRX-USDT,bitfinex:TRXUSD,okx:TRX-USDT,mexc:TRXUSDT,gate:TRX_USDT,kraken:TRXUSD,binance:TRXUSDT,bybit:TRXUSDT', ''],
   [9, 'FIGR_HELOC', 'figure-heloc', 'Figure Heloc', 'RWA', 'EXCLUIDO', '', 'Empréstimo tokenizado cotado perto de US$ 1: não é um ativo de tendência'],
-  [10, 'ZEC', 'zcash', 'Zcash', 'CRIPTO', 'ATIVO', 'binance:ZECUSDT,kucoin:ZEC-USDT,bitfinex:ZECUSD,okx:ZEC-USDT,bybit:ZECUSDT,mexc:ZECUSDT,gate:ZEC_USDT,coinbase:ZEC-USD,kraken:ZECUSD', ''],
-  [11, 'HYPE', 'hyperliquid', 'Hyperliquid', 'CRIPTO', 'ATIVO', 'kucoin:HYPE-USDT,bybit:HYPEUSDT,gate:HYPE_USDT,mexc:HYPEUSDT,bitfinex:HYPE:USD,okx:HYPE-USDT,binance:HYPEUSDT', 'Histórico curto: consenso só com 500+ velas; a carga completa escolhe a fonte com mais histórico'],
-  [12, 'DOGE', 'dogecoin', 'Dogecoin', 'CRIPTO', 'ATIVO', 'binance:DOGEUSDT,kucoin:DOGE-USDT,bitfinex:DOGE:USD,okx:DOGE-USDT,bybit:DOGEUSDT,mexc:DOGEUSDT,gate:DOGE_USDT,coinbase:DOGE-USD,kraken:XDGUSD', ''],
-  [13, 'LINK', 'chainlink', 'Chainlink', 'CRIPTO', 'ATIVO', 'binance:LINKUSDT,kucoin:LINK-USDT,bitfinex:LINK:USD,okx:LINK-USDT,bybit:LINKUSDT,mexc:LINKUSDT,gate:LINK_USDT,coinbase:LINK-USD,kraken:LINKUSD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking)'],
-  [14, 'AAVE', 'aave', 'Aave', 'CRIPTO', 'ATIVO', 'binance:AAVEUSDT,kucoin:AAVE-USDT,bitfinex:AAVE:USD,okx:AAVE-USDT,bybit:AAVEUSDT,mexc:AAVEUSDT,gate:AAVE_USDT,coinbase:AAVE-USD,kraken:AAVEUSD', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking). Histórico desde out/2020'],
+  [10, 'ZEC', 'zcash', 'Zcash', 'CRIPTO', 'ATIVO', 'kucoin:ZEC-USDT,bitfinex:ZECUSD,okx:ZEC-USDT,mexc:ZECUSDT,gate:ZEC_USDT,coinbase:ZEC-USD,kraken:ZECUSD,binance:ZECUSDT,bybit:ZECUSDT', ''],
+  [11, 'HYPE', 'hyperliquid', 'Hyperliquid', 'CRIPTO', 'ATIVO', 'kucoin:HYPE-USDT,gate:HYPE_USDT,mexc:HYPEUSDT,bitfinex:HYPE:USD,okx:HYPE-USDT,bybit:HYPEUSDT,binance:HYPEUSDT', 'Histórico curto: consenso só com 500+ velas; a carga completa escolhe a fonte com mais histórico'],
+  [12, 'DOGE', 'dogecoin', 'Dogecoin', 'CRIPTO', 'ATIVO', 'kucoin:DOGE-USDT,bitfinex:DOGE:USD,okx:DOGE-USDT,mexc:DOGEUSDT,gate:DOGE_USDT,coinbase:DOGE-USD,kraken:XDGUSD,binance:DOGEUSDT,bybit:DOGEUSDT', ''],
+  [13, 'LINK', 'chainlink', 'Chainlink', 'CRIPTO', 'ATIVO', 'kucoin:LINK-USDT,bitfinex:LINK:USD,okx:LINK-USDT,mexc:LINKUSDT,gate:LINK_USDT,coinbase:LINK-USD,kraken:LINKUSD,binance:LINKUSDT,bybit:LINKUSDT', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking)'],
+  [14, 'AAVE', 'aave', 'Aave', 'CRIPTO', 'ATIVO', 'kucoin:AAVE-USDT,bitfinex:AAVE:USD,okx:AAVE-USDT,mexc:AAVEUSDT,gate:AAVE_USDT,coinbase:AAVE-USD,kraken:AAVEUSD,binance:AAVEUSDT,bybit:AAVEUSDT', 'MANUAL: escolha do usuário (fora da janela #2 a #13 do ranking). Histórico desde out/2020'],
   [15, 'XMR', 'monero', 'Monero', 'CRIPTO', 'EXCLUIDO', 'bitfinex:XMRUSD,kucoin:XMR-USDT,kraken:XMRUSD', 'Retirada por decisão do usuário (substituída por LINK e AAVE)'],
   [16, 'USDS', 'usds', 'USDS', 'STABLECOIN', 'EXCLUIDO', '', 'Stablecoin'],
 ];
@@ -86,6 +86,7 @@ function defsPorId_(ids) {
   const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-N-') === 0; })) gerarPoolFino_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().concat(gerarPoolReversao_()).forEach(function (e) { mapa[e.id] = e; });
   return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
 }
@@ -96,11 +97,13 @@ function minVelas_(sym) {
   return m[String(sym).toUpperCase()] || cfgNum_('MIN_VELAS_CONSENSO');
 }
 
+function todosDefs_() { return POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_(), gerarPoolFino_()); }
+
 function processarAtivo_(u, forcar) {
   const prev = lerRes_(u.sym), ontemStr = Utilities.formatDate(new Date(ontemUtcMs_()), 'UTC', 'yyyy-MM-dd');
   const pend = pendentesSel_(), pendente = pend.indexOf(u.sym) >= 0 || pendentesHist_().indexOf(u.sym) >= 0;
   if (!forcar && !pendente && prev && prev.estado === 'OK' && u.ultimaVela >= ontemStr) return { resumo: prev, eventos: [], pulou: true };
-  const b = atualizarBase_(u), o = b.ohlcv, n = o.closes.length;
+  const b = atualizarBase_(u), o = aparaInicio_(b.ohlcv), n = o.closes.length;
   gravarLinhaUniverso_(u, b.fonte, o);
   const base = { sym: u.sym, ordem: u.ordem, nome: u.nome, status: u.status, fonte: b.fonte || u.fonteOk, n: n, atualizado: new Date().toISOString() };
   if (n < minVelas_(u.sym)) {
@@ -112,11 +115,29 @@ function processarAtivo_(u, forcar) {
   const fixas = u.status === 'REFERENCIA' || !cfgSim_('SELECAO_ATIVA');
   let sel = null, res, cutStr, w0Str, dataSel = '';
   if (fixas) {
-    res = rodarLista_(o, FIXAS_BTC); cutStr = '2023-06-02'; w0Str = dataStr_(o.dates[Math.min(200, n - 150)]); dataSel = 'fixas (Projeto 02)';
+    // BTC: as 10 fixas do Projeto 02; a que ficar abaixo dos mínimos de Sharpe sai e é substituída pela melhor candidata que cumpre a régua
+    const fx = rodarLista_(o, FIXAS_BTC), hist = cfgNum_('SELECAO_HISTERESE'), min = cfgNum_('SELECAO_SHARPE_MIN');
+    const cumpre = function (r) { return !r.erro && r.eqCurve && nivelSharpe_(r.eqCurve, n).full >= min - hist && cumprePermanencia_(r.eqCurve, n, hist).ok; };
+    const okFx = fx.filter(cumpre), fora = fx.filter(function (r) { return !cumpre(r); });
+    cutStr = '2023-06-02'; w0Str = dataStr_(o.dates[Math.min(200, n - 150)]); dataSel = 'fixas (Projeto 02)';
+    if (fora.length && cfgSim_('SELECAO_BTC_SUBSTITUI')) {
+      const sig = fora.map(function (r) { return r.id; }).join(','), pBtc = pend.indexOf('BTC') >= 0;
+      let sb = lerSel_('BTC');
+      if (!sb || sb.sig !== sig || pBtc || idadeDias_(sb.data) >= cfgNum_('SELECAO_REFRESH_DIAS')) {
+        const s = selecionar_(o, todosDefs_(), { mantidas: okFx, alvo: FIXAS_BTC.length }), rel = {};
+        const motivo = fora.map(function (r) { const nv = r.eqCurve ? nivelSharpe_(r.eqCurve, n) : { full: null, s24: null, s12: null }; return r.id + ' (Sharpe histórico ' + r_(nv.full, 2) + ', 24m ' + r_(nv.s24, 2) + ', 12m ' + r_(nv.s12, 2) + ')'; });
+        s.ids.forEach(function (id, k) { rel[id] = 'substitui ' + motivo[k % motivo.length]; });
+        s.rel = Object.assign(s.rel || {}, rel); s.sig = sig;
+        guardarSel_('BTC', s, hoje); gravarSelecaoCandidatos_('BTC', s, hoje); sb = lerSel_('BTC');
+        res = okFx.concat(s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; }));
+        if (pBtc) setPendentesSel_(pend.filter(function (x) { return x !== 'BTC'; }));
+      } else res = okFx.concat(rodarLista_(o, defsPorId_(sb.ids)));
+      sel = sb; dataSel = 'fixas + ' + (sb.ids.length) + ' substituta(s)';
+    } else res = fx;
   } else {
     sel = lerSel_(u.sym);
     const fazer = function () {
-      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_()));
+      const s = selecionar_(o, todosDefs_());
       guardarSel_(u.sym, s, hoje); gravarSelecaoCandidatos_(u.sym, s, hoje);
       sel = lerSel_(u.sym);
       res = s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; });
@@ -149,7 +170,11 @@ function processarAtivo_(u, forcar) {
       sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', rel: sel && sel.rel && sel.rel[r.id] ? sel.rel[r.id] : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
-  const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
+  const bhEq = C;
+  let eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
+  // alertas: sem e-mail na primeira leitura da moeda (não há "mudança" a comunicar) e, fora do BTC, o consenso só alerta quando a leitura muda de faixa
+  if (!prev || prev.estado !== 'OK') eventos = [];
+  else if (!fixas) { const mudou = prev.leitura !== cons.leitura; eventos = eventos.filter(function (e) { return !/^CONSENSO_/.test(e.tipo) || mudou; }); }
   const out = Object.assign(base, {
     estado: 'OK', ultimaVela: Utilities.formatDate(o.dates[L], 'UTC', 'yyyy-MM-dd'), preco: C[L],
     v1: r_((C[L] / C[L - 1] - 1) * 100, 2), v7: r_((C[L] / C[L - 7] - 1) * 100, 2), v30: r_((C[L] / C[L - 30] - 1) * 100, 2),

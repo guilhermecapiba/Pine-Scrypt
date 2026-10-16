@@ -19,7 +19,7 @@
  *  - Indicadores técnicos são calculados em memória (não gravados em aba): a planilha fica leve.
  *  - Uma planilha, um script, onze ativos processados em rodízio dentro do limite de 6 minutos do Apps Script.
  *
- * ABAS: PAINEL_TOP10 | DESEMPENHO_10 | ESTRATEGIAS_TOP10 | SELECAO_CANDIDATAS | UNIVERSO | RANKING_COINGECKO | DIAGNOSTICO_FONTES |
+ * ABAS: PAINEL_TOP10 | DESEMPENHO_10 | ESTRATEGIAS_TOP10 | SELECAO_CANDIDATAS | AUDITORIA | UNIVERSO | RANKING_COINGECKO | DIAGNOSTICO_FONTES |
  *       LOG_DISPAROS | CONFIG_SISTEMA | BASE_<SIMBOLO> (uma por ativo, OHLCV diário)
  *
  * INSTALAÇÃO
@@ -43,6 +43,7 @@ const P2 = {
     desemp: 'DESEMPENHO_10',
     estr: 'ESTRATEGIAS_TOP10',
     sel: 'SELECAO_CANDIDATAS',
+    audit: 'AUDITORIA',
     universo: 'UNIVERSO',
     ranking: 'RANKING_COINGECKO',
     diag: 'DIAGNOSTICO_FONTES',
@@ -81,12 +82,14 @@ const CFG_PADRAO = [
   ['SELECAO_EXIGE_PLENA', 'SIM', 'SIM = só entra estratégia no nível PLENA (histórico >= 1,00, 24m >= 0,8965, 12m >= 0,3983). NAO = aceita também RECENTE FRACA e PROVISORIA'],
   ['SELECAO_PISO_PROVISORIO', 1.0, 'Piso do nível PROVISORIA (Sharpe do histórico entre este valor e a régua). Só preenche vaga quando não há candidato acima da régua. Padrão 1 = desligado (mesma régua para todas as moedas). Use 0,8 para permitir estratégias provisórias'],
   ['SELECAO_JANELA_PERM_DIAS', 730, 'Janela (dias) do Sharpe de 24 meses usado na permanência'],
-  ['SELECAO_SHARPE_MIN_24M', 0.8965, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
-  ['SELECAO_SHARPE_MIN_12M', 0.3983, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
+  ['SELECAO_SHARPE_MIN_24M', 1.0, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
+  ['SELECAO_SHARPE_MIN_12M', 0.5, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
+  ['SELECAO_BTC_SUBSTITUI', 'SIM', 'SIM = a estratégia fixa do BTC que ficar abaixo dos mínimos de Sharpe sai e é substituída pela melhor candidata que cumpre a régua. NAO = só sai do consenso'],
   ['SELECAO_HISTERESE', 0, 'Folga na saída do BTC: estratégia fixa só sai do consenso abaixo de (mínimo - folga). 0 = régua estrita; 0,1 evita sair por diferença de milésimos'],
   ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que tentam melhorar o nível das estratégias (vaga aberta ou fora do nível PLENA)'],
   ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) do histórico para um candidato ser elegível'],
   ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as escolhidas'],
+  ['SELECAO_ORCAMENTO_SEG', 150, 'Tempo máximo (segundos) da busca de candidatos de uma moeda; passado disso a busca é interrompida e a resposta indica'],
   ['SELECAO_RELAXAR_SE_FALTAR', 'SIM', 'SIM = se faltarem estratégias PLENA, relaxa SÓ os filtros secundários (drawdown, trades, correlação, família) para completar as vagas; o Sharpe mínimo nunca é relaxado. A coluna Criterio_secundario mostra o que foi relaxado'],
   ['SELECAO_DD_MAX_RELAX', 85, 'Drawdown máximo (%) do histórico na passada relaxada'],
   ['SELECAO_MIN_TRADES_RELAX', 5, 'Trades mínimos na passada relaxada'],

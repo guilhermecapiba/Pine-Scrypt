@@ -7,15 +7,16 @@ const MS_DIA = 86400000;
 
 function candle_(ts, o, h, l, c, v) { return { date: new Date(ts), open: +o, high: +h, low: +l, close: +c, volume: +v || 0 }; }
 
-function fetchBinance_(par, o, host) {
-  const base = (host || 'https://data-api.binance.vision/api/v3/klines') + '?symbol=' + par + '&interval=1d&limit=1000';
+function fetchBinance_(par, o, host, lim) {
+  lim = lim || 1000;
+  const base = (host || 'https://data-api.binance.vision/api/v3/klines') + '?symbol=' + par + '&interval=1d&limit=' + lim;
   let start = o.dias ? Date.now() - o.dias * MS_DIA : P2.HIST_INICIO_MS;
   const out = []; let g = 0;
   while (g++ < 20) {
     const rows = fetchJson_(base + '&startTime=' + start, null, 2);
     if (!Array.isArray(rows) || !rows.length) break;
     rows.forEach(function (r) { out.push(candle_(r[0], r[1], r[2], r[3], r[4], r[5])); });
-    if (rows.length < 1000) break;
+    if (rows.length < lim) break;
     start = rows[rows.length - 1][0] + MS_DIA;
   }
   return out;
@@ -85,7 +86,7 @@ function fetchBitfinex_(par, o) {
   const rows = fetchJson_(url, null, 2);
   return (Array.isArray(rows) ? rows : []).map(function (r) { return candle_(r[0], r[1], r[3], r[4], r[2], r[5]); });   // [MTS, OPEN, CLOSE, HIGH, LOW, VOLUME]
 }
-function fetchMexc_(par, o) { return fetchBinance_(par, o, 'https://api.mexc.com/api/v3/klines'); }
+function fetchMexc_(par, o) { return fetchBinance_(par, o, 'https://api.mexc.com/api/v3/klines', 500); }   // a MEXC devolve no máximo 500 velas por chamada
 /** Gate.io: janelas de até 900 dias para trás. Linha: [ts(s), volume_quote, close, high, low, open, volume_base, fechada]. */
 function fetchGate_(par, o) {
   const by = {}, passo = 900 * 86400; let to = Math.floor(Date.now() / 1000), g = 0, vazios = 0; const desde = o.dias ? to - o.dias * 86400 : Math.floor(P2.HIST_INICIO_MS / 1000);
@@ -159,6 +160,17 @@ function linhasBase_(serie, anterior) {
     const p = i ? serie[i - 1].close : anterior;
     return [Utilities.formatDate(c.date, 'UTC', 'yyyy-MM-dd'), c.open, c.high, c.low, c.close, r_(c.volume, 4), p ? r_((c.close / p - 1) * 100, 4) : ''];
   });
+}
+/**
+ * Remove o começo não confiável da série: se houver uma descontinuidade de preço maior que 20x em um dia nos primeiros 70% do histórico
+ * (pré-lançamento ou mercado ilíquido, como a HYPE antes de dez/2024), descarta tudo até esse dia. Não altera a aba BASE.
+ */
+function aparaInicio_(o) {
+  const C = o.closes, lim = Math.floor(C.length * 0.7); let corte = 0;
+  for (let i = 1; i < lim; i++) { const r = C[i] / C[i - 1]; if (r > 20 || r < 0.05) corte = i; }
+  if (!corte) return o;
+  ['dates', 'opens', 'highs', 'lows', 'closes', 'volumes'].forEach(function (k) { o[k] = o[k].slice(corte); });
+  o.aparadas = corte; return o;
 }
 function ontemUtcMs_() { const d = new Date(); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - MS_DIA; }
 

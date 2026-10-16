@@ -78,13 +78,15 @@ const ORDEM_NIVEL = { 'PLENA': 0, 'RECENTE FRACA': 1, 'PROVISORIA': 2 };
  * Ordem de preenchimento: PLENA, depois RECENTE FRACA, depois PROVISORIA; dentro de cada nível por nota (percentil do Sharpe e do Calmar).
  * Diversificação gulosa: máximo SELECAO_MAX_POR_FAMILIA por família e correlação diária máxima SELECAO_CORR_MAX.
  */
-function selecionar_(o, defs) {
+function selecionar_(o, defs, opc) {
+  opc = opc || {};
   const n = o.closes.length, w0 = Math.min(210, n - 150), cut = w0 + Math.floor((n - w0) * cfgNum_('SELECAO_CORTE_IS'));
   const anos = (n - w0) / 365.25, minTr = Math.max(5, Math.min(cfgNum_('SELECAO_MIN_TRADES_IS'), Math.round(anos * 2)));
-  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), famR = cfgNum_('SELECAO_MAX_POR_FAMILIA_RELAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = cfgNum_('SELECAO_N_ESTRATEGIAS');
+  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), famR = cfgNum_('SELECAO_MAX_POR_FAMILIA_RELAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS');
   const idsBase = {}; POOL.forEach(function (e) { idsBase[e.id] = true; });
-  const det = [];
+  const det = [], tIni = Date.now(), orc = cfgNum_('SELECAO_ORCAMENTO_SEG') * 1000; let interrompida = false;
   defs.forEach(function (e) {
+    if (Date.now() - tIni > orc) { interrompida = true; return; }   // guarda: a busca nunca estoura o limite de 6 minutos do Apps Script
     const r = rodarLista_(o, [e])[0], d = { id: e.id, fam: e.fam, nome: e.nome, situacao: '', slot: 0, base: !!idsBase[e.id] };
     det.push(d);
     if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return; }
@@ -101,6 +103,9 @@ function selecionar_(o, defs) {
   eleg.forEach(function (d, i) { d.nota = (pS[i] + pC[i]) / 2; });
   eleg.sort(function (a, b) { return ORDEM_NIVEL[a.nivel] - ORDEM_NIVEL[b.nivel] || b.nota - a.nota; });
   const escolhidas = [], porFam = {};
+  (opc.mantidas || []).forEach(function (r, k) {   // estratégias já aceitas (ex.: fixas do BTC que cumprem a régua) entram na conta de vagas, família e correlação
+    const d = { id: r.id, fam: r.fam || 'p02', ret: retornos_(r.eqCurve, w0, n), slot: k + 1, mantida: true, situacao: 'MANTIDA' }; escolhidas.push(d); porFam[d.fam] = (porFam[d.fam] || 0) + 1;
+  });
   eleg.forEach(function (d) {
     if (escolhidas.length >= alvo) { d.situacao = 'elegível (' + d.nivel + '), não escolhida'; return; }
     if ((porFam[d.fam] || 0) >= maxFam) { d.situacao = 'família ' + d.fam + ' já tem ' + maxFam; return; }
@@ -130,8 +135,8 @@ function selecionar_(o, defs) {
     });
   }
   det.forEach(function (d) { if (!d.situacao) d.situacao = '—'; });
-  return { rel: relax, ids: escolhidas.map(function (d) { return d.id; }), detalhe: det, w0Data: dataStr_(o.dates[w0]), corteData: dataStr_(o.dates[cut]), parcial: escolhidas.length < alvo, vagas: alvo - escolhidas.length,
-    naoPlenas: escolhidas.filter(function (d) { return d.nivel !== 'PLENA'; }).length, nRelax: Object.keys(relax).length, nElegiveis: eleg.length, minTr: minTr, nTestados: defs.length, shMin: cfgNum_('SELECAO_SHARPE_MIN') };
+  return { rel: relax, ids: escolhidas.filter(function (d) { return !d.mantida; }).map(function (d) { return d.id; }), detalhe: det, w0Data: dataStr_(o.dates[w0]), corteData: dataStr_(o.dates[cut]), parcial: escolhidas.length < alvo, vagas: alvo - escolhidas.length,
+    naoPlenas: escolhidas.filter(function (d) { return d.nivel !== 'PLENA'; }).length, nRelax: Object.keys(relax).length, nElegiveis: eleg.length, minTr: minTr, nTestados: det.length, interrompida: interrompida, shMin: cfgNum_('SELECAO_SHARPE_MIN') };
 }
 
 function lerSel_(sym) {
@@ -139,7 +144,7 @@ function lerSel_(sym) {
   try { return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }
 function guardarSel_(sym, sel, dataHoje) {
-  PropertiesService.getScriptProperties().setProperty('SEL_' + sym, JSON.stringify({ data: dataHoje, ids: sel.ids, w0: sel.w0Data, corte: sel.corteData, parcial: sel.parcial, vagas: sel.vagas, naoPlenas: sel.naoPlenas, nElig: sel.nElegiveis, nTest: sel.nTestados, rel: sel.rel }));
+  PropertiesService.getScriptProperties().setProperty('SEL_' + sym, JSON.stringify({ data: dataHoje, ids: sel.ids, w0: sel.w0Data, corte: sel.corteData, parcial: sel.parcial, vagas: sel.vagas, naoPlenas: sel.naoPlenas, nElig: sel.nElegiveis, nTest: sel.nTestados, rel: sel.rel, sig: sel.sig || '' }));
 }
 function idadeDias_(str) { return str ? (Date.now() - new Date(str + 'T00:00:00Z').getTime()) / 86400000 : 1e9; }
 
@@ -157,7 +162,7 @@ function gravarSelecaoCandidatos_(sym, sel, dataHoje) {
   const novas = ord.map(function (d) {
     return [sym, d.slot || '', d.id, d.fam, d.nome, v(d.nTr), v(d.sFull), v(d.calmar), v(d.s24), v(d.s12), d.nivel || '', d.isM ? d.isM.sharpe : '', d.oosM ? d.oosM.sharpe : '', v(d.dd), d.situacao, sel.w0Data + ' a ' + sel.corteData, dataHoje];
   });
-  novas.push([sym, '', '(resumo)', '', sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' elegíveis (Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ', drawdown, trades); ' + ocultos + ' reprovados não listados; mostrados os 60 melhores. Vagas abertas: ' + sel.vagas + '. Fora do nível PLENA: ' + sel.naoPlenas, '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
+  novas.push([sym, '', '(resumo)', '', sel.nTestados + ' candidatos testados; ' + sel.nElegiveis + ' elegíveis (Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ', drawdown, trades); ' + ocultos + ' reprovados não listados; mostrados os 60 melhores.' + (sel.interrompida ? ' BUSCA INTERROMPIDA POR TEMPO (parte dos candidatos não foi testada).' : '') + ' Vagas abertas: ' + sel.vagas + '. Fora do nível PLENA: ' + sel.naoPlenas, '', '', '', '', '', '', '', '', '', sel.parcial ? 'VAGAS ABERTAS' : 'COMPLETA', sel.w0Data + ' a ' + sel.corteData, dataHoje]);
   const todas = antigas.concat(novas);
   sh.clear();
   sh.getRange(1, 1, 1, COLS_SELECAO.length).setValues([COLS_SELECAO]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true);

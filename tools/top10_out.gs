@@ -6,7 +6,7 @@ function resultadosOrdenados_() {
 }
 function fmtPreco_(v) {
   if (v === null || v === undefined || isNaN(v)) return '—';
-  const d = v >= 100 ? 0 : v >= 1 ? 2 : 4;
+  const d = v >= 1000 ? 0 : v >= 10 ? 2 : v >= 1 ? 3 : 4;
   return '$ ' + Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 function fmtPct_(v) { return v === null || v === undefined || isNaN(v) ? '—' : (v > 0 ? '+' : '') + v + '%'; }
@@ -43,17 +43,25 @@ function gravarPainel_() {
   sh.setColumnWidth(8, 215); sh.setColumnWidth(9, 190); sh.setColumnWidth(10, 105); sh.setColumnWidth(11, 125); sh.setColumnWidth(12, 130); sh.setColumnWidth(13, 90); sh.setColumnWidth(14, 140); sh.setColumnWidth(15, 105); sh.setColumnWidth(16, 190);
 }
 
+function fmtMin_(k) { return String(cfgNum_(k)).replace('.', ','); }
+
 function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
-    'Nivel_Sharpe', 'Sharpe_historico (mín. 1,00)', 'Sharpe_24m (mín. 0,8965)', 'Sharpe_12m (mín. 0,3983)', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
+    'Nivel_Sharpe', 'Sharpe_historico (mín. ' + fmtMin_('SELECAO_SHARPE_MIN') + ')', 'Sharpe_24m (mín. ' + fmtMin_('SELECAO_SHARPE_MIN_24M') + ')', 'Sharpe_12m (mín. ' + fmtMin_('SELECAO_SHARPE_MIN_12M') + ')', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
     'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela', 'Criterio_secundario'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; }, NC = cab.length;
   lista.forEach(function (x) {
-    if (!x.r || x.r.estado !== 'OK') return;
+    if (!x.r || x.r.estado !== 'OK') {   // moeda sem estratégia aceita (ou sem histórico): aparece com as vagas abertas para o painel e esta aba baterem
+      if (x.u.status === 'REFERENCIA') return;
+      for (let k = 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
+        const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA (' + (x.r ? x.r.estado : 'AGUARDANDO CARGA') + '): nenhum candidato atende aos mínimos de Sharpe'; l[6] = 'VAGA'; rows.push(l);
+      }
+      return;
+    }
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, e.rel ? 'RELAXADO: ' + e.rel : 'padrão']);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, (e.rel ? 'RELAXADO: ' + e.rel : 'padrão') + (e.nt < 15 ? ' · amostra curta (' + e.nt + ' trades)' : '')]);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
@@ -86,7 +94,7 @@ function gravarDesempenho_() {
   sh.getRange(1, 1).setValue('DESEMPENHO DAS ESTRATÉGIAS ESCOLHIDAS DE CADA MOEDA (peso igual) CONTRA COMPRAR E SEGURAR — custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte.').setFontWeight('bold').setFontColor('#f5c542');
   sh.getRange(1, 1, 1, 22).setBackground('#081428');
   sh.getRange(2, 1).setValue('As estratégias de cada moeda são escolhidas com o histórico INTEIRO: os números abaixo são de dentro da amostra (otimistas). 70% iniciais x 30% finais é só descrição por período. Expectativa fora da amostra (teste walk-forward offline em 9 moedas, reseleção a cada 90 dias): Sharpe médio de 0,5 a 0,7, equivalente ao buy and hold e a escolhas aleatórias do mesmo conjunto, com drawdown médio de cerca de 40% contra 70% a 80% do buy and hold. Verde = painel supera o buy and hold do mesmo período em Calmar.');
-  const cab = ['Ativo', 'Anos de histórico', 'Selecionada em', 'Período IS', 'Corte OOS',
+  const cab = ['Ativo', 'Anos de histórico', 'Selecionada em', 'Período dos 70% iniciais', 'Início dos 30% finais',
     '70% iniciais: Calmar', 'Sharpe', 'CAGR %', 'MaxDD %',
     '30% finais: Calmar', 'Sharpe', 'CAGR %', 'MaxDD %',
     'B&H 30% finais: Calmar', 'CAGR %', 'MaxDD %',
@@ -186,6 +194,7 @@ function motorTop10(forcar) {
     }
     props.setProperty('CURSOR', String((cursor + feitos) % us.length));
     gravarPainel_(); gravarEstrategiasTop10_(); gravarDesempenho_();
+    if (Date.now() - t0 > 200000) logDisparo_('TEMPO_ALTO', 'Execução de ' + Math.round((Date.now() - t0) / 1000) + 's com ' + feitos + ' ativo(s); o limite do Apps Script é 360s', '—', '—', 'AVISO', '');
     enviarAlertasConsolidados_(eventos);
     if (falhas.length) logDisparo_('FALHA_DADOS', falhas.join(' | ').substring(0, 450), '—', '—', 'FALHA', '');
     return { processados: feitos, restantes: us.length - feitos, falhas: falhas };
@@ -300,7 +309,7 @@ function atualizarRanking() {
 
 function setupPlanilha() {
   const ss = ss_();
-  const abas = [P2.ABAS.painel, P2.ABAS.desemp, P2.ABAS.estr, P2.ABAS.sel, P2.ABAS.universo, P2.ABAS.ranking, P2.ABAS.diag, P2.ABAS.log, P2.ABAS.cfg];
+  const abas = [P2.ABAS.painel, P2.ABAS.desemp, P2.ABAS.estr, P2.ABAS.sel, P2.ABAS.audit, P2.ABAS.universo, P2.ABAS.ranking, P2.ABAS.diag, P2.ABAS.log, P2.ABAS.cfg];
   const velha = ss.getSheetByName('Página1');
   if (velha && !ss.getSheetByName(P2.ABAS.painel)) velha.setName(P2.ABAS.painel);
   abas.forEach(function (nome, i) {
@@ -314,6 +323,12 @@ function setupPlanilha() {
   const existentes = {}; if (cfgSh.getLastRow() > 1) cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 1).getValues().forEach(function (r) { existentes[r[0]] = true; });
   const novos = CFG_PADRAO.filter(function (r) { return !existentes[r[0]]; });
   if (novos.length) cfgSh.getRange(cfgSh.getLastRow() + 1, 1, novos.length, 3).setValues(novos);
+  if (cfgSh.getLastRow() > 1) {   // sincroniza as descrições com o código e marca parâmetros que não são mais usados
+    const desc = {}; CFG_PADRAO.forEach(function (r) { desc[r[0]] = r[2]; });
+    cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 3).getValues().forEach(function (r, i) {
+      const d = desc[r[0]]; cfgSh.getRange(i + 2, 3).setValue(d !== undefined ? d : (String(r[2]).indexOf('OBSOLETO') === 0 ? r[2] : 'OBSOLETO (não usado pelo código): ' + r[2]));
+    });
+  }
   cfgSh.setColumnWidth(1, 260); cfgSh.setColumnWidth(2, 330); cfgSh.setColumnWidth(3, 620);
   const uni = ss.getSheetByName(P2.ABAS.universo);
   uni.getRange(1, 1, 1, COLS_UNIVERSO.length).setValues([COLS_UNIVERSO]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff').setWrap(true); uni.setFrozenRows(1);
@@ -375,6 +390,7 @@ function onOpen() {
     .addItem('T) Teste de e-mail (somente 1º destinatário)', 'testarEmailInterno')
     .addItem('F) Atualizar a lista de fontes de dados (pelo código)', 'atualizarFontes')
     .addItem('H) Recarregar o histórico pela fonte mais longa', 'recarregarHistorico')
+    .addItem('A) Auditoria: conciliar abas e recalcular os números', 'auditoria')
     .addItem('S) Refazer a seleção das 10 estratégias de cada moeda', 'reselecionarTodas')
     .addItem('P) Reprocessar tudo do zero (recalcula todos os ativos)', 'reprocessarTudo')
     .addItem('G) Instalar gatilhos automáticos', 'instalarGatilhosAutomaticos')

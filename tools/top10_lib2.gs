@@ -417,3 +417,17 @@ function gerarPoolReversao_() {
   }); });
   return L;
 }
+
+/* =============================================================================
+ * 2F. GRADE FINA — passos curtos de parâmetros em MACD, Bollinger, Keltner, CCI e Supertrend (famílias que mais produziram candidatos
+ *     aprovados). São variações da MESMA ideia: ajudam a completar vagas, mas contam como pouca diversificação. IDs começam com Z-N-.
+ * ===========================================================================*/
+function gerarPoolFino_() {
+  const L = [], add = function (id, fam, nome, fn) { L.push({ id: 'Z-N-' + id, fam: fam, nome: nome, fn: fn, ampliado: true }); };
+  [4, 5, 6, 8, 10, 12, 14, 16, 19, 20, 23, 26, 29].forEach(function (f) { [13, 17, 21, 26, 30, 34, 39, 42, 46, 50, 55, 60].forEach(function (s) { if (s >= f * 1.5) [5, 7, 9, 12, 16, 20].forEach(function (g) { add('MACD' + f + '-' + s + '-' + g, 'momentum', 'MACD ' + f + '/' + s + '/' + g + ' (histograma, grade fina)', candMacd_(f, s, g)); }); }); });
+  [10, 12, 14, 16, 18, 20, 22, 25, 30, 40, 50].forEach(function (p) { [1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.5, 3].forEach(function (k) { add('BB' + p + '-' + k, 'rompimento', 'Bollinger rompimento (' + p + ', ' + k + ', grade fina)', candBollRompe_(p, k)); }); });
+  [8, 10, 12, 14, 16, 18, 20, 25, 30].forEach(function (p) { [1, 1.2, 1.5, 1.9, 2, 2.5, 3].forEach(function (m) { add('KC' + p + '-' + m, 'rompimento', 'Keltner EMA' + p + ' + ' + m + ' ATR10 (grade fina)', candKeltner_(p, m)); }); });
+  for (let n = 14; n <= 60; n += 2) add('CCI' + n, 'momentum', 'CCI(' + n + ') > 100 (grade fina)', candCci_(n));
+  [5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 21, 25, 28].forEach(function (a) { [1, 1.5, 1.8, 2, 2.2, 2.5, 3, 3.5, 4].forEach(function (m) { add('ST' + a + '-' + m, 'supertrend', 'Supertrend ATR' + a + ' x ' + m + ' (grade fina)', candSupertrend_(a, m)); }); });
+  return L;
+}

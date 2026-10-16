@@ -11,6 +11,7 @@ class Range {
 ['setNumberFormat','setBackground','setFontWeight','setFontColor','setFontSize','setWrap','setVerticalAlignment','setHorizontalAlignment'].forEach(m => Range.prototype[m] = function () { return this; });
 class Sheet {
   constructor(name) { this.name = name; this.cells = {}; this.maxRow = 0; }
+  getLastColumn() { let m = 1; for (const k in this.cells) { if (this.cells[k] !== '') m = Math.max(m, +k.split(',')[1]); } return m; }
   getLastRow() { let m = 0; for (const k in this.cells) { if (this.cells[k] !== '' ) m = Math.max(m, +k.split(',')[0]); } return m; }
   getRange(r, c, nr, nc) { return new Range(this, r, c, nr, nc); }
   clear() { this.cells = {}; return this; }
