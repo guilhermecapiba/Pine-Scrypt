@@ -67,6 +67,7 @@ const CFG_PADRAO = [
   ['MACD_DIVERGENCIA_MIN_BARRAS', 20, 'Barras mínimas do regime anterior para inflexão MACD relevante'],
   ['CONSENSO_PESO_REF', 5, 'Soma de pesos (Sharpe 3 anos, cada um entre 0 e 3) a partir da qual o Consenso é 100% ponderado'],
   ['CONSENSO_JANELA_SHARPE_DIAS', 1095, 'Janela (dias) do Sharpe que pondera cada componente do consenso (se o ativo tiver menos histórico, usa o que existe)'],
+  ['MIN_VELAS_POR_ATIVO', 'HYPE:345', 'Mínimo de velas por ativo quando diferente do padrão (formato SIMBOLO:VELAS, separados por vírgula). Moedas recentes: use com cautela, a amostra é curta'],
   ['MIN_VELAS_CONSENSO', 500, 'Velas diárias mínimas para calcular consenso e esticamento (abaixo disso: HISTORICO_INSUFICIENTE)'],
   ['JANELA_INICIO_BARRAS', 200, 'Barra a partir da qual o desempenho (CAGR, MaxDD, Calmar) é medido, depois do aquecimento das médias'],
   ['ORCAMENTO_SEG', 270, 'Tempo máximo de cada execução (segundos); o Apps Script corta em 360'],
@@ -77,7 +78,8 @@ const CFG_PADRAO = [
   ['SELECAO_CORTE_IS', 0.70, 'Fração inicial do histórico para a divisão DESCRITIVA 70% iniciais x 30% finais (não é teste fora da amostra)'],
   ['SELECAO_MIN_TRADES_IS', 12, 'Trades mínimos no histórico (reduz automaticamente para moedas de histórico curto, piso 5)'],
   ['SELECAO_SHARPE_MIN', 1.0, 'Sharpe mínimo do histórico todo (régua cheia: níveis PLENA e RECENTE FRACA)'],
-  ['SELECAO_PISO_PROVISORIO', 0.8, 'Piso do nível PROVISORIA (Sharpe do histórico entre este valor e a régua). Só preenche vaga quando não há candidato acima da régua. Coloque o mesmo valor da régua (1) para desligar'],
+  ['SELECAO_EXIGE_PLENA', 'SIM', 'SIM = só entra estratégia no nível PLENA (histórico >= 1,00, 24m >= 0,8965, 12m >= 0,3983). NAO = aceita também RECENTE FRACA e PROVISORIA'],
+  ['SELECAO_PISO_PROVISORIO', 1.0, 'Piso do nível PROVISORIA (Sharpe do histórico entre este valor e a régua). Só preenche vaga quando não há candidato acima da régua. Padrão 1 = desligado (mesma régua para todas as moedas). Use 0,8 para permitir estratégias provisórias'],
   ['SELECAO_JANELA_PERM_DIAS', 730, 'Janela (dias) do Sharpe de 24 meses usado na permanência'],
   ['SELECAO_SHARPE_MIN_24M', 0.8965, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
   ['SELECAO_SHARPE_MIN_12M', 0.3983, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],
@@ -546,6 +548,146 @@ function gerarPoolEstendido_() {
 }
 
 /* =============================================================================
+ * 2D. BUSCA MASSIVA — grades densas, famílias da planilha de vídeos (VWAP, estocástico, DEMA/TEMA, pullback, força relativa contra o BTC)
+ *     e as combinações "estratégia + filtro de tendência SMA" que a planilha de vídeos testa (X + SMA50/100/150/200).
+ *     IDs começam com Z-.
+ * ===========================================================================*/
+function candFiltroSma_(fnBase, f, sairPeloFiltro) {
+  return function (o) {
+    const s = fnBase(o), m = smaC_(o, f), C = o.closes, n = C.length, en = new Array(n).fill(false), ex = new Array(n).fill(false);
+    for (let i = 0; i < n; i++) { const ok = isFinite(m[i]) && C[i] > m[i]; en[i] = s.entrySignal[i] && ok; ex[i] = s.exitSignal[i] || (sairPeloFiltro && isFinite(m[i]) && C[i] < m[i]); }
+    return { entrySignal: en, exitSignal: ex, invalidationSeries: s.invalidationSeries || m, stopIfEnteredSeries: s.stopIfEnteredSeries };
+  };
+}
+function candVwap_(len) {
+  return function (o) {
+    const C = o.closes, n = C.length, vw = cacheInd_(o, 'vw' + len, function () {
+      const tp = o.highs.map(function (h, i) { return (h + o.lows[i] + C[i]) / 3; }), pv = tp.map(function (x, i) { return x * o.volumes[i]; }), a = sma(pv, len), b = sma(o.volumes, len);
+      return a.map(function (x, i) { return b[i] > 0 ? x / b[i] : NaN; });
+    });
+    return sigGen_(o, function (i) { return isFinite(vw[i]) && C[i] > vw[i]; }, function (i) { return isFinite(vw[i]) && C[i] < vw[i]; }, vw);
+  };
+}
+function candEstocastico_(k, f, sobrevendido, saida) {
+  return function (o) {
+    const hl = hhll_(o.highs, o.lows, k), C = o.closes, n = C.length, raw = new Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) if (isFinite(hl.hh[i]) && hl.hh[i] > hl.ll[i]) raw[i] = 100 * (C[i] - hl.ll[i]) / (hl.hh[i] - hl.ll[i]);
+    const st = sma(raw, 3), m = smaC_(o, f);
+    return sigGen_(o, function (i) { return isFinite(st[i]) && isFinite(m[i]) && st[i] < sobrevendido && C[i] > m[i]; }, function (i) { return isFinite(st[i]) && st[i] > saida; }, m);
+  };
+}
+function candDema_(len, tripla) {
+  return function (o) {
+    const C = o.closes, e1 = emaC_(o, len), e2 = ema(e1, len), e3 = tripla ? ema(e2, len) : null, n = C.length, d = new Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) d[i] = tripla ? 3 * e1[i] - 3 * e2[i] + e3[i] : 2 * e1[i] - e2[i];
+    return sigGen_(o, function (i) { return isFinite(d[i]) && C[i] > d[i]; }, function (i) { return isFinite(d[i]) && C[i] < d[i]; }, d);
+  };
+}
+function candPullbackSma_(trend, toque) {
+  return function (o) {
+    const C = o.closes, L = o.lows, t = smaC_(o, trend), m = smaC_(o, toque);
+    return sigGen_(o, function (i) { return isFinite(t[i]) && isFinite(m[i]) && C[i] > t[i] && L[i] <= m[i] && C[i] > m[i]; }, function (i) { return isFinite(t[i]) && C[i] < Math.min(t[i], m[i]); }, t);
+  };
+}
+function candForcaRelativa_(n, f) {
+  return function (o) {
+    const C = o.closes, b = o.btcC || [], N = C.length, r = new Array(N).fill(NaN);
+    for (let i = 0; i < N; i++) if (isFinite(b[i]) && b[i] > 0) r[i] = C[i] / b[i];
+    const m = sma(r, n), t = smaC_(o, f);
+    return sigGen_(o, function (i) { return isFinite(m[i]) && isFinite(t[i]) && r[i] > m[i] && C[i] > t[i]; }, function (i) { return (isFinite(m[i]) && r[i] < m[i]) || (isFinite(t[i]) && C[i] < t[i]); }, t);
+  };
+}
+function candRompeVol_(k, saidaMedia) {
+  return function (o) {
+    const C = o.closes, atr = atrC_(o, 14), m = smaC_(o, saidaMedia);
+    return sigGen_(o, function (i) { return i > 0 && isFinite(atr[i - 1]) && C[i] > C[i - 1] + k * atr[i - 1]; }, function (i) { return isFinite(m[i]) && C[i] < m[i]; }, m);
+  };
+}
+
+/** Bases usadas nas combinações com filtro de tendência. [id curto, família, nome, função] */
+function basesFiltro_() {
+  const B = [];
+  [20, 50, 100, 200].forEach(function (p) { B.push(['SMA' + p, 'media', 'Preço x SMA' + p, candPrecoMedia_('sma', p)]); });
+  [21, 50, 100].forEach(function (p) { B.push(['EMA' + p, 'media', 'Preço x EMA' + p, candPrecoMedia_('ema', p)]); });
+  [[9, 21], [10, 30], [12, 26], [20, 50], [21, 55]].forEach(function (x) { B.push(['EX' + x[0] + '-' + x[1], 'cruzamento', 'EMA' + x[0] + ' x EMA' + x[1], candCruzamento_('ema', x[0], x[1])]); });
+  [[20, 50], [50, 200]].forEach(function (x) { B.push(['SX' + x[0] + '-' + x[1], 'cruzamento', 'SMA' + x[0] + ' x SMA' + x[1], candCruzamento_('sma', x[0], x[1])]); });
+  [[20, 10], [40, 20], [55, 20]].forEach(function (x) { B.push(['DON' + x[0] + '-' + x[1], 'rompimento', 'Donchian ' + x[0] + '/' + x[1], candDonchian_(x[0], x[1])]); });
+  [[12, 26, 9], [8, 17, 9]].forEach(function (x) { B.push(['MACD' + x.join('-'), 'momentum', 'MACD ' + x.join('/'), candMacd_(x[0], x[1], x[2])]); });
+  [[10, 2], [20, 2], [12, 2.5]].forEach(function (x) { B.push(['KC' + x[0] + '-' + x[1], 'rompimento', 'Keltner EMA' + x[0] + ' + ' + x[1] + ' ATR', candKeltner_(x[0], x[1])]); });
+  [[20, 2], [20, 2.5]].forEach(function (x) { B.push(['BB' + x[0] + '-' + x[1], 'rompimento', 'Bollinger rompimento (' + x[0] + ', ' + x[1] + ')', candBollRompe_(x[0], x[1])]); });
+  [[14, 55, 45], [21, 50, 50]].forEach(function (x) { B.push(['RSI' + x[0] + '-' + x[1], 'momentum', 'RSI(' + x[0] + ') regime ' + x[1] + '/' + x[2], candRsiRegime_(x[0], x[1], x[2])]); });
+  [[10, 3], [14, 2], [7, 3]].forEach(function (x) { B.push(['ST' + x[0] + '-' + x[1], 'supertrend', 'Supertrend ATR' + x[0] + ' x ' + x[1], candSupertrend_(x[0], x[1])]); });
+  [30, 60].forEach(function (n) { B.push(['ROC' + n, 'momentum', 'ROC ' + n + 'd', candMomCurto_(n, 0)]); });
+  [[20, 22, 3], [55, 22, 3]].forEach(function (x) { B.push(['CH' + x[0] + '-' + x[2], 'rompimento', 'Chandelier ' + x[0] + 'd ATR' + x[1] + ' x ' + x[2], candChandelier_(x[0], x[1], x[2])]); });
+  B.push(['VWAP20', 'vwap', 'Preço x VWAP 20', candVwap_(20)], ['VWAP50', 'vwap', 'Preço x VWAP 50', candVwap_(50)], ['PSAR', 'supertrend', 'Parabolic SAR 0.02/0.2', candPsarEstado_(0.02, 0.2)]);
+  return B;
+}
+
+
+/** Estado (1 = comprado) implícito nos sinais de um candidato: liga na entrada, desliga na saída. */
+function estadoSinal_(sg) {
+  const n = sg.entrySignal.length, out = new Array(n).fill(0); let st = 0;
+  for (let i = 0; i < n; i++) { if (!st && sg.entrySignal[i]) st = 1; else if (st && sg.exitSignal[i]) st = 0; out[i] = st; }
+  return out;
+}
+/** Comitê: fração dos membros comprados; entra quando >= hi e sai quando < lo (histerese entre os dois). */
+function candComite_(fns, hi, lo, btcP) {
+  return function (o) {
+    const est = fns.map(function (f) { return estadoSinal_(f(o)); }), n = o.closes.length, reg = btcP ? btcRegime_(o, btcP) : null, en = new Array(n).fill(false), ex = new Array(n).fill(false), K = fns.length;
+    for (let i = 0; i < n; i++) { let v = 0; for (let k = 0; k < K; k++) v += est[k][i]; v /= K; en[i] = v >= hi && (!reg || reg[i]); ex[i] = v < lo || (reg && !reg[i]); }
+    return { entrySignal: en, exitSignal: ex };
+  };
+}
+function comitesMassivo_() {
+  const sma_ = function (p) { return candPrecoMedia_('sma', p); }, ema_ = function (p) { return candPrecoMedia_('ema', p); };
+  const grupos = {
+    'sma': [20, 50, 100, 150, 200].map(sma_),
+    'ema': [10, 21, 50, 100, 200].map(ema_),
+    'cruz': [candCruzamento_('ema', 9, 21), candCruzamento_('ema', 12, 26), candCruzamento_('ema', 20, 50), candCruzamento_('ema', 21, 55), candCruzamento_('sma', 20, 50), candCruzamento_('sma', 50, 200)],
+    'don': [candDonchian_(20, 10), candDonchian_(40, 20), candDonchian_(55, 20), candDonchian_(100, 50), candDonchian_(150, 50)],
+    'mix8': [sma_(50), ema_(21), candCruzamento_('ema', 20, 50), candDonchian_(40, 20), candMacd_(12, 26, 9), candSupertrend_(10, 3), candKeltner_(20, 2), candRoc_(60)],
+    'mix12': [sma_(20), sma_(100), ema_(50), candCruzamento_('ema', 12, 26), candCruzamento_('sma', 50, 200), candDonchian_(20, 10), candDonchian_(100, 50), candMacd_(8, 17, 9), candSupertrend_(14, 2), candKeltner_(10, 2), candBollRompe_(20, 2), candHma_(50)],
+    'curto': [sma_(10), ema_(10), candCruzamento_('ema', 5, 13), candDonchian_(10, 5), candMacd_(5, 17, 5), candSupertrend_(7, 2), candRsiRegime_(7, 55, 45), candMomCurto_(10, 0)],
+    'lento': [sma_(150), sma_(200), candCruzamento_('sma', 50, 200), candDonchian_(150, 50), candMacd_(24, 52, 18), candSupertrend_(28, 3), candMomCurto_(120, 0), candMomCurto_(180, 0)],
+  };
+  const L = []; const lims = [[0.5, 0.5], [0.6, 0.4], [0.75, 0.5], [0.4, 0.2], [0.8, 0.4]];
+  Object.keys(grupos).forEach(function (g) {
+    lims.forEach(function (l) {
+      [0, 100, 200].forEach(function (b) { L.push({ id: 'Z-CM' + g + '-' + l[0] + '-' + l[1] + (b ? '-B' + b : ''), fam: 'comite', nome: 'Comitê ' + g + ' (entra com ' + Math.round(l[0] * 100) + '% dos votos, sai abaixo de ' + Math.round(l[1] * 100) + '%)' + (b ? ' com BTC acima da SMA' + b : ''), fn: candComite_(grupos[g], l[0], l[1], b), ampliado: true }); });
+    });
+  });
+  return L;
+}
+
+/** Constrói a lista massiva. */
+function gerarPoolMassivo_() {
+  const L = [], add = function (id, fam, nome, fn) { L.push({ id: id, fam: fam, nome: nome, fn: fn, ampliado: true }); };
+  // 1. combinações da planilha de vídeos: base + filtro SMA (entra só acima da SMA) e a variante que também sai ao perder a SMA
+  basesFiltro_().forEach(function (b) {
+    [50, 100, 150, 200].forEach(function (f) {
+      add('Z-F' + f + '-' + b[0], b[1], b[2] + ' + SMA' + f + ' (filtro de entrada)', candFiltroSma_(b[3], f, false));
+      add('Z-FS' + f + '-' + b[0], b[1], b[2] + ' + SMA' + f + ' (filtro e saída)', candFiltroSma_(b[3], f, true));
+    });
+  });
+  // 2. grades densas
+  [8, 10, 14, 21, 28, 40].forEach(function (a) { [1, 1.5, 2, 2.5, 3, 3.5, 4, 5].forEach(function (m) { add('Z-ST' + a + '-' + m, 'supertrend', 'Supertrend ATR' + a + ' x ' + m, candSupertrend_(a, m)); }); });
+  [10, 15, 20, 30, 40, 55, 70, 100, 150, 200].forEach(function (N) { [5, 7, 10, 15, 20, 30, 50, 100].forEach(function (M) { if (M < N) add('Z-DON' + N + '-' + M, 'rompimento', 'Donchian ' + N + '/' + M, candDonchian_(N, M)); }); });
+  [10, 15, 20, 30, 50].forEach(function (p) { [1, 1.5, 2, 2.5, 3].forEach(function (m) { add('Z-KC' + p + '-' + m, 'rompimento', 'Keltner EMA' + p + ' + ' + m + ' ATR10', candKeltner_(p, m)); add('Z-BB' + p + '-' + m, 'rompimento', 'Bollinger rompimento (' + p + ', ' + m + ')', candBollRompe_(p, m)); }); });
+  [7, 10, 14, 21, 30].forEach(function (p) { [50, 55, 60, 65].forEach(function (a) { [40, 45, 50].forEach(function (b) { add('Z-RSI' + p + '-' + a + '-' + b, 'momentum', 'RSI(' + p + ') regime ' + a + '/' + b, candRsiRegime_(p, a, b)); }); }); });
+  [5, 8, 12, 16, 20, 24].forEach(function (f) { [17, 21, 26, 34, 50, 52].forEach(function (s) { if (s > f * 1.4) [5, 9, 12, 18].forEach(function (g) { add('Z-MACD' + f + '-' + s + '-' + g, 'momentum', 'MACD ' + f + '/' + s + '/' + g + ' (histograma)', candMacd_(f, s, g)); }); }); });
+  [5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 250].forEach(function (N) { [0, 50, 100, 200].forEach(function (f) { add('Z-ROC' + N + '-' + f, 'momentum', 'Retorno de ' + N + 'd > 0' + (f ? ' acima da SMA' + f : ''), candMomCurto_(N, f)); }); });
+  [10, 15, 20, 30, 40, 50, 75, 100, 150, 200, 250].forEach(function (p) { add('Z-S' + p, 'media', 'Preço x SMA' + p, candPrecoMedia_('sma', p)); add('Z-E' + p, 'media', 'Preço x EMA' + p, candPrecoMedia_('ema', p)); });
+  // 3. famílias da planilha de vídeos
+  [10, 20, 30, 50, 100].forEach(function (n) { add('Z-VWAP' + n, 'vwap', 'Preço x VWAP ' + n, candVwap_(n)); });
+  [[14, 100, 20, 50], [14, 200, 20, 70], [14, 100, 30, 70], [9, 100, 20, 60], [21, 200, 25, 70], [14, 50, 20, 50]].forEach(function (x) { add('Z-STO' + x.join('-'), 'reversao', 'Estocástico(' + x[0] + ') < ' + x[2] + ' acima da SMA' + x[1] + ', sai > ' + x[3], candEstocastico_(x[0], x[1], x[2], x[3])); });
+  [10, 20, 34, 55, 89].forEach(function (n) { add('Z-DEMA' + n, 'media', 'Preço x DEMA ' + n, candDema_(n, false)); add('Z-TEMA' + n, 'media', 'Preço x TEMA ' + n, candDema_(n, true)); });
+  [[200, 20], [100, 20], [100, 50], [200, 50], [50, 10], [50, 20]].forEach(function (x) { add('Z-PB' + x[0] + '-' + x[1], 'reversao', 'Pullback à SMA' + x[1] + ' em tendência acima da SMA' + x[0], candPullbackSma_(x[0], x[1])); });
+  [20, 50, 100].forEach(function (n) { [50, 100, 200].forEach(function (f) { add('Z-RS' + n + '-' + f, 'forcaRelativa', 'Força relativa contra o BTC (média ' + n + ') com preço acima da SMA' + f, candForcaRelativa_(n, f)); }); });
+  [1, 1.5, 2].forEach(function (k) { [10, 20, 50].forEach(function (m) { add('Z-VB' + k + '-' + m, 'rompimento', 'Rompimento de volatilidade ' + k + ' ATR, sai abaixo da SMA' + m, candRompeVol_(k, m)); }); });
+  return L.concat(comitesMassivo_());
+}
+
+/* =============================================================================
  * 2B. SELEÇÃO DAS 10 MELHORES ESTRATÉGIAS DE CADA MOEDA
  *
  * Princípio: escolher entre muitos candidatos contamina a medida (quem escolhe o melhor de 46 sempre vê um número
@@ -639,6 +781,7 @@ function selecionar_(o, defs) {
     d.nivel = nv.nivel; d.sFull = nv.full; d.s24 = nv.s24; d.s12 = nv.s12; d.isM = metricasFaixa_(r.eqCurve, w0, cut); d.oosM = metricasFaixa_(r.eqCurve, cut, n);
     d.nTr = contarTrades_(r, w0, n); d.dd = m ? m.dd : null; d.calmar = m ? m.calmar : null;
     if (nv.nivel === 'FORA') d.situacao = 'Sharpe do histórico ' + (nv.full === null ? 'indisponível' : r_(nv.full, 2)) + ' < ' + cfgNum_('SELECAO_PISO_PROVISORIO');
+    else if (cfgSim_('SELECAO_EXIGE_PLENA') && nv.nivel !== 'PLENA') d.situacao = 'nível ' + nv.nivel + ' (a regra exige PLENA)';
     else if (!m || m.dd > ddMax) d.situacao = 'drawdown acima de ' + ddMax + '%';
     else if (d.nTr < minTr) d.situacao = 'poucos trades (' + d.nTr + ' < ' + minTr + ')';
     else { d.elegivel = true; d.r = r; d.ret = retornos_(r.eqCurve, w0, n); }
@@ -1552,7 +1695,14 @@ function defsPorId_(ids) {
   const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().forEach(function (e) { mapa[e.id] = e; });
   return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
+}
+
+/** Mínimo de velas do ativo: MIN_VELAS_POR_ATIVO (SIMBOLO:VELAS) ou, na falta, MIN_VELAS_CONSENSO. */
+function minVelas_(sym) {
+  const m = {}; String(cfg_('MIN_VELAS_POR_ATIVO') || '').split(',').forEach(function (x) { const p = x.split(':'); if (p.length === 2 && parseInt(p[1], 10) > 0) m[p[0].trim().toUpperCase()] = parseInt(p[1], 10); });
+  return m[String(sym).toUpperCase()] || cfgNum_('MIN_VELAS_CONSENSO');
 }
 
 function processarAtivo_(u, forcar) {
@@ -1562,7 +1712,7 @@ function processarAtivo_(u, forcar) {
   const b = atualizarBase_(u), o = b.ohlcv, n = o.closes.length;
   gravarLinhaUniverso_(u, b.fonte, o);
   const base = { sym: u.sym, ordem: u.ordem, nome: u.nome, status: u.status, fonte: b.fonte || u.fonteOk, n: n, atualizado: new Date().toISOString() };
-  if (n < cfgNum_('MIN_VELAS_CONSENSO')) {
+  if (n < minVelas_(u.sym)) {
     const res0 = Object.assign(base, { estado: 'HISTORICO_INSUFICIENTE', ultimaVela: n ? Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd') : '', preco: n ? o.closes[n - 1] : null });
     guardarRes_(u.sym, res0); return { resumo: res0, eventos: [] };
   }
@@ -1575,7 +1725,7 @@ function processarAtivo_(u, forcar) {
   } else {
     sel = lerSel_(u.sym);
     const fazer = function () {
-      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_()));
+      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_()));
       guardarSel_(u.sym, s, hoje); gravarSelecaoCandidatos_(u.sym, s, hoje);
       sel = lerSel_(u.sym);
       res = s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; });

@@ -86,7 +86,14 @@ function defsPorId_(ids) {
   const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().forEach(function (e) { mapa[e.id] = e; });
   return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
+}
+
+/** Mínimo de velas do ativo: MIN_VELAS_POR_ATIVO (SIMBOLO:VELAS) ou, na falta, MIN_VELAS_CONSENSO. */
+function minVelas_(sym) {
+  const m = {}; String(cfg_('MIN_VELAS_POR_ATIVO') || '').split(',').forEach(function (x) { const p = x.split(':'); if (p.length === 2 && parseInt(p[1], 10) > 0) m[p[0].trim().toUpperCase()] = parseInt(p[1], 10); });
+  return m[String(sym).toUpperCase()] || cfgNum_('MIN_VELAS_CONSENSO');
 }
 
 function processarAtivo_(u, forcar) {
@@ -96,7 +103,7 @@ function processarAtivo_(u, forcar) {
   const b = atualizarBase_(u), o = b.ohlcv, n = o.closes.length;
   gravarLinhaUniverso_(u, b.fonte, o);
   const base = { sym: u.sym, ordem: u.ordem, nome: u.nome, status: u.status, fonte: b.fonte || u.fonteOk, n: n, atualizado: new Date().toISOString() };
-  if (n < cfgNum_('MIN_VELAS_CONSENSO')) {
+  if (n < minVelas_(u.sym)) {
     const res0 = Object.assign(base, { estado: 'HISTORICO_INSUFICIENTE', ultimaVela: n ? Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd') : '', preco: n ? o.closes[n - 1] : null });
     guardarRes_(u.sym, res0); return { resumo: res0, eventos: [] };
   }
@@ -109,7 +116,7 @@ function processarAtivo_(u, forcar) {
   } else {
     sel = lerSel_(u.sym);
     const fazer = function () {
-      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_()));
+      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_()));
       guardarSel_(u.sym, s, hoje); gravarSelecaoCandidatos_(u.sym, s, hoje);
       sel = lerSel_(u.sym);
       res = s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; });

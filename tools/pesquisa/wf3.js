@@ -11,7 +11,7 @@ function sel(cands, T, o) {
   const minTr = Math.max(5, Math.min(12, Math.round((T - W0) / 365.25 * 2))), rows = [];
   cands.forEach(c => { const f = sharpe(rets(c.eq, W0 + 1, T)); if (f === null || f < o.piso) return; const m = cal(c.eq, W0, T); if (m.dd > 70 || ntr(c, W0, T) < minTr) return;
     const s24 = sharpe(rets(c.eq, Math.max(W0 + 1, T - 730), T)), s12 = sharpe(rets(c.eq, Math.max(W0 + 1, T - 365), T));
-    const nivel = f >= 1 ? ((s24 !== null && s12 !== null && s24 >= .8965 && s12 >= .3983) ? 0 : 1) : 2; rows.push({ c, f, calmar: m.calmar, nivel }); });
+    const nivel = f >= 1 ? ((s24 !== null && s12 !== null && s24 >= .8965 && s12 >= .3983) ? 0 : 1) : 2; if (o.soPlena && nivel !== 0) return; rows.push({ c, f, calmar: m.calmar, nivel }); });
   const a = pct(rows.map(r => r.f)), b = pct(rows.map(r => r.calmar)); rows.forEach((r, i) => r.nota = (a[i] + b[i]) / 2);
   rows.sort((x, y) => x.nivel - y.nivel || y.nota - x.nota); const pk = [], fam = {};
   for (const r of rows) { if (pk.length >= 5) break; if ((fam[r.c.fam] || 0) >= 2) continue; r.rr = rets(r.c.eq, W0 + 1, T); if (pk.some(q => corr(q.rr, r.rr) > .92)) continue; pk.push(r); fam[r.c.fam] = (fam[r.c.fam] || 0) + 1; }
@@ -20,10 +20,10 @@ function sel(cands, T, o) {
 let seed = 11; const rnd = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
 const out = []; 
 for (const s of SYMS) {
-  const d = carregar(s, 'tudo'), n = d.n, C = d.o.closes, st = [], bh = [], rd = [], N = 20; let sem = 0, tot = 0, nivP = [0, 0, 0];
+  const d = carregar(s, process.env.NIVEL || 'tudo'), n = d.n, C = d.o.closes, st = [], bh = [], rd = [], N = 20; let sem = 0, tot = 0, nivP = [0, 0, 0];
   const rdAcc = [];
   for (let T = W0 + 730; T + 30 <= n; T += H) {
-    const end = Math.min(n, T + H), pk = sel(d.cands, T, { piso: .8 }); tot++; if (!pk.length) sem++; pk.forEach(p => nivP[p.nivel]++);
+    const end = Math.min(n, T + H), pk = sel(d.cands, T, { piso: +(process.env.PISO || .8), soPlena: process.env.PLENA === '1' }); tot++; if (!pk.length) sem++; pk.forEach(p => nivP[p.nivel]++);
     for (let i = T; i < end; i++) { let x = 0; pk.forEach(p => x += p.c.eq[i] / p.c.eq[i - 1] - 1); st.push(pk.length ? x / pk.length : 0); bh.push(C[i] / C[i - 1] - 1); }
     // controle: 5 aleatórios do conjunto (média de N sorteios) — cobre os mesmos dias
     const base = rdAcc.length; for (let i = T; i < end; i++) rdAcc.push(0);

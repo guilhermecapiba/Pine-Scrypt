@@ -17,7 +17,10 @@ Conclusões (9 moedas, reseleção a cada 90 dias, 5 estratégias, custos de 0,1
 | Idem com o conjunto de 500 | 0,23 | 39% |
 | Ranking pelo treino todo | 0,66 | 44% |
 | Treino todo, IS 100% | 0,73 | 43% |
-| Final (níveis) | 0,67 | 39% |
+| Final com níveis liberados (conjunto de 500) | 0,67 | 39% |
+| Regra estrita: só PLENA, conjunto de 1.350 | 0,36 | 44% |
 | Comprar e segurar | 0,63 | 69% |
 
 A seleção por desempenho passado não prevê Sharpe futuro melhor que o acaso neste conjunto; as cestas reduzem drawdown pela metade. Nove moedas em um período de baixa são uma amostra pequena e correlacionada: as diferenças entre variantes (0,5 a 0,7) estão dentro do ruído.
+
+`randsearch.js`: 4.000 candidatos aleatórios por moeda mostram que TRX (máx. 0,97), DOGE (0,86) e LINK (1,00) têm um teto de Sharpe do histórico em torno de 1,0 para estratégias long-only diárias; a régua de 1,00 com os mínimos de 24 e 12 meses não é atingida por busca maior.

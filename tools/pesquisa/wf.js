@@ -33,7 +33,7 @@ function selecionar(cands, T, o) {
 }
 function carregar(sym, nivel) {
   const o = withBtc(loadO(sym)); ctx.__o = o;
-  const lista = run(`(function(){ let L = POOL.concat(gerarPoolAmpliado_()); if ('${nivel}' === 'tudo') L = L.concat(gerarPoolEstendido_()); const res = rodarLista_(__o, L); return res.map(function(r){ return r.erro ? null : { id: r.id, fam: r.fam, eq: r.eqCurve, tr: r.tradeIdx }; }); })()`).filter(Boolean);
+  const lista = run(`(function(){ let L = POOL.concat(gerarPoolAmpliado_()); if ('${nivel}' === 'tudo' || '${nivel}' === 'massivo') L = L.concat(gerarPoolEstendido_()); if ('${nivel}' === 'massivo') L = L.concat(gerarPoolMassivo_()); const res = rodarLista_(__o, L); return res.map(function(r){ return r.erro ? null : { id: r.id, fam: r.fam, eq: r.eqCurve, tr: r.tradeIdx }; }); })()`).filter(Boolean);
   return { o, cands: lista, n: o.closes.length };
 }
 function wf(sym, data, opts) {

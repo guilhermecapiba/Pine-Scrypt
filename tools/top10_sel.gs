@@ -92,6 +92,7 @@ function selecionar_(o, defs) {
     d.nivel = nv.nivel; d.sFull = nv.full; d.s24 = nv.s24; d.s12 = nv.s12; d.isM = metricasFaixa_(r.eqCurve, w0, cut); d.oosM = metricasFaixa_(r.eqCurve, cut, n);
     d.nTr = contarTrades_(r, w0, n); d.dd = m ? m.dd : null; d.calmar = m ? m.calmar : null;
     if (nv.nivel === 'FORA') d.situacao = 'Sharpe do histórico ' + (nv.full === null ? 'indisponível' : r_(nv.full, 2)) + ' < ' + cfgNum_('SELECAO_PISO_PROVISORIO');
+    else if (cfgSim_('SELECAO_EXIGE_PLENA') && nv.nivel !== 'PLENA') d.situacao = 'nível ' + nv.nivel + ' (a regra exige PLENA)';
     else if (!m || m.dd > ddMax) d.situacao = 'drawdown acima de ' + ddMax + '%';
     else if (d.nTr < minTr) d.situacao = 'poucos trades (' + d.nTr + ' < ' + minTr + ')';
     else { d.elegivel = true; d.r = r; d.ret = retornos_(r.eqCurve, w0, n); }
