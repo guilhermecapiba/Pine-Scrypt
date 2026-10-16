@@ -1,0 +1,82 @@
+//@version=6
+indicator("Nuvem RSI Preditiva + MA Fixa", overlay=true)
+
+// =========================================================================
+// 1. CONFIGURAÇÕES (Inputs)
+// =========================================================================
+grp_rsi = "Configurações da Nuvem RSI"
+rsi_len     = input.int(14, "Período do RSI", group=grp_rsi)
+rsi_upper1  = input.float(65, "Alvo RSI Venda 1 (Início da Nuvem)", group=grp_rsi)
+rsi_upper2  = input.float(85, "Alvo RSI Venda 2 (Extremo da Nuvem)", group=grp_rsi)
+rsi_lower1  = input.float(35, "Alvo RSI Compra 1 (Início da Nuvem)", group=grp_rsi)
+rsi_lower2  = input.float(15, "Alvo RSI Compra 2 (Extremo da Nuvem)", group=grp_rsi)
+
+grp_ma = "Configurações da Média Móvel Fixa"
+ma_type     = input.string("EMA", "Tipo da MA", options=["SMA", "EMA", "WMA", "RMA", "HMA", "VWMA"], group=grp_ma)
+ma_len      = input.int(1320, "Período da MA (ex: 1320h)", group=grp_ma)
+ma_tf       = input.timeframe("60", "Tempo Gráfico da MA (60 = 1 Hora)", group=grp_ma)
+
+// =========================================================================
+// 2. PROJEÇÃO DOS NÍVEIS DE RSI NO PREÇO
+// =========================================================================
+change_close = ta.change(close)
+up = math.max(change_close, 0)
+down = math.max(-change_close, 0)
+
+// Pega os valores da barra anterior para projetar o futuro
+p_up = nz(ta.rma(up, rsi_len)[1])
+p_down = nz(ta.rma(down, rsi_len)[1])
+
+// Função matemática que prevê o preço necessário para atingir um alvo de RSI
+f_rsi_price_proj(target_rsi, length, _p_up, _p_down) =>
+    rsi_cap = math.min(math.max(target_rsi, 0.001), 99.999)
+    rs = rsi_cap / (100 - rsi_cap)
+    diff = (rs * _p_down * (length - 1)) - (_p_up * (length - 1))
+    target_price = diff >= 0 ? close[1] + diff : close[1] + (diff / rs)
+    target_price
+
+// Calculando as 4 faixas
+upper_band_1 = f_rsi_price_proj(rsi_upper1, rsi_len, p_up, p_down)
+upper_band_2 = f_rsi_price_proj(rsi_upper2, rsi_len, p_up, p_down)
+lower_band_1 = f_rsi_price_proj(rsi_lower1, rsi_len, p_up, p_down)
+lower_band_2 = f_rsi_price_proj(rsi_lower2, rsi_len, p_up, p_down)
+
+// =========================================================================
+// 3. CÁLCULO DA MÉDIA MÓVEL FIXA (Multi-Timeframe)
+// =========================================================================
+f_get_ma(type, length) =>
+    switch type
+        "SMA"  => ta.sma(close, length)
+        "EMA"  => ta.ema(close, length)
+        "WMA"  => ta.wma(close, length)
+        "RMA"  => ta.rma(close, length)
+        "HMA"  => ta.hma(close, length)
+        "VWMA" => ta.vwma(close, length)
+        => ta.ema(close, length)
+
+// Calculado no escopo global para evitar erros de MTF no Pine Script v6
+ma_base = f_get_ma(ma_type, ma_len)
+// Trava o tempo gráfico da média
+ma_val = request.security(syminfo.tickerid, ma_tf, ma_base, lookahead=barmerge.lookahead_off)
+
+// =========================================================================
+// 4. PLOTAGEM NO GRÁFICO (Nuvens e Média)
+// =========================================================================
+color_sell       = color.red
+color_sell_cloud = color.new(color.red, 85)
+color_buy        = color.green
+color_buy_cloud  = color.new(color.green, 85)
+color_ma         = color.new(#FF8C00, 0) // Laranja Escuro
+
+// Nuvem Superior de Venda
+p_u1 = plot(upper_band_1, title="Venda 65", color=color.new(color_sell, 60), linewidth=1)
+p_u2 = plot(upper_band_2, title="Venda 85", color=color.new(color_sell, 60), linewidth=1)
+fill(p_u1, p_u2, title="Nuvem de Venda", color=color_sell_cloud)
+
+// Nuvem Inferior de Compra
+p_l1 = plot(lower_band_1, title="Compra 35", color=color.new(color_buy, 60), linewidth=1)
+p_l2 = plot(lower_band_2, title="Compra 15", color=color.new(color_buy, 60), linewidth=1)
+fill(p_l1, p_l2, title="Nuvem de Compra", color=color_buy_cloud)
+
+// Média Móvel
+plot(ma_val, title="MA Fixa MTF", color=color_ma, linewidth=3)
