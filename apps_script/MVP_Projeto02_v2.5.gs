@@ -2,18 +2,18 @@
  * =============================================================================
  * MVP PROJETO CRIPTO (PROJETO 02) — MOTOR QUANTITATIVO UNIFICADO v2.5
  *
- * v2.5 (16/10/2026): renovação do painel com base na pesquisa de vídeos (Machine #3), validada no
- *       TradingView (BTCUSDT 1D, Binance, 30/09/2017 a 15/10/2026) e reavaliada com este mesmo motor:
- *       - ENTRA:  M3-01 EMA10 + SMA90 com stop 3 ATR e alvo 2,5R. É a candidata de menor correlação com o
- *                 painel (0,64) e menor drawdown (35%); reproduziu no TradingView 135 trades, PF 1,63, MaxDD 34,6%.
- *       - SAEM:   G-08 (Inflexão MACD 12/26/9; CAGR 17% e Sharpe 3 anos negativo) e G-04 (Cruzamento
- *                 SMA140 x EMA147; CAGR 6%). Sem retorno e sem peso útil no consenso. Os ALERTAS de inflexão de
- *                 MACD e de reconfiguração da BMSB continuam ativos em detectarEventos_ (independem da biblioteca).
- *       - NÃO ENTRAM: Donchian 20/10, Bollinger Squeeze 20/2, Cowen 20/150 e Stormer 21/60 (ver
- *                 RENOVACAO_PAINEL_v2.5.md). A função sinalDonchian2010 fica disponível, sem estar na lista.
- *       - runBacktest_ passou a aceitar alvo de lucro congelado na entrada (targetIfEnteredSeries).
- *       Painel: 21 -> 20 componentes. Nada mais foi alterado: motor, CONFIG, zonas, termômetro, consenso,
- *       alertas, e-mails e dashboard idênticos à v2.4.
+ * v2.5 (16/10/2026): padronização do painel nas 10 melhores estratégias para BTC/USD:
+ *       - SAEM da biblioteca G-08 (Inflexão MACD 12/26/9) e G-04 (Cruzamento SMA140 x EMA147). Ambos eram
+ *                 backtestados e votavam no consenso, mas sem retorno (CAGR de 17% e 6% contra 54% do painel;
+ *                 Sharpe 3 anos de -0,64 e 0,30). Os ALERTAS de inflexão de MACD e de reconfiguração da BMSB
+ *                 continuam ativos em detectarEventos_ (não dependem da biblioteca). O G-03 (preço x BMSB),
+ *                 que é o uso de mercado da faixa, permanece.
+ *       - NÃO ENTRA nenhuma estratégia nova: a melhor candidata da pesquisa de vídeos (EMA10 + SMA90 com stop
+ *                 3 ATR) não supera nenhuma das 10 estratégias das Machines nas janelas recentes.
+ *       - NOVO interruptor GATILHOS_NO_CONSENSO (padrão true = comportamento da v2.4). Com false, os gatilhos G-xx
+ *                 continuam listados e acompanhados na ESTRATEGIAS_1D, mas deixam de votar no consenso, que passa
+ *                 a ser apurado só pelas 10 estratégias das Machines.
+ *       Nada mais foi alterado: motor, CONFIG, zonas, termômetro, alertas, e-mails e dashboard idênticos à v2.4.
  *
  * v2.4 (06/10/2026): ajustes de painel e de linguagem, sem alterar nenhum cálculo:
  *       - "Termômetro Quantitativo de Risco" virou "Esticamento do Mercado (0 a 100)", com a faixa
@@ -202,10 +202,11 @@ const ESTRATEGIAS = [
   { id: 'G-09', grupo: 'Gatilho', key: 'gBb25', nome: 'Reversão Bollinger 2,5σ (compra abaixo, sai na média)', fn: gatilhoBb25_, ativa: true },
   { id: 'G-10', grupo: 'Gatilho', key: 'gZscore', nome: 'Capitulação Z-score ≤ -2σ (30d)', fn: gatilhoZscore_, ativa: true },
   { id: 'G-11', grupo: 'Gatilho', key: 'gFearGreed', nome: 'Fear & Greed contrário (≤20 compra / ≥80 sai)', fn: gatilhoFearGreed_, ativa: true },
-  // ---- Machine #3 (pesquisa de vídeos, validada no TradingView) ----
-  { id: 'M3-01', grupo: 'Machine #3', key: 'emaSma90Atr', nome: 'EMA10 Cross + SMA90 (stop 3 ATR, alvo 2.5R)', fn: sinalEmaSma90Atr, ativa: true },
   // Funding Rate e Open Interest: sem histórico público longo suficiente p/ backtest -> só monitoramento (aba 5 + alertas).
 ];
+
+/** true = os gatilhos G-xx votam no consenso (como na v2.4); false = ficam listados e acompanhados, mas sem voto. */
+const GATILHOS_NO_CONSENSO = true;
 
 /* ---- Machine #1: Confluência SMC/ICT/Trendline (cópia fiel) ---- */
 function sinalConfluencia(o) {
@@ -499,47 +500,16 @@ function sinalBollingerSqueeze(o) {
   return { entrySignal: en, exitSignal: ex, invalidationSeries: inv };
 }
 
-/* ---- v2.5: Machine #3 (pesquisa de vídeos, validada no TradingView) ---- */
-/** (disponível, fora da lista ESTRATEGIAS) Donchian 20/10: fecha acima da máxima das 20 barras anteriores; sai abaixo da mínima das 10 anteriores. */
-function sinalDonchian2010(o) {
-  const n = o.closes.length, C = o.closes, H = o.highs, L = o.lows, ENT = 20, SAI = 10;
-  const en = new Array(n).fill(false), ex = new Array(n).fill(false), inv = new Array(n).fill(NaN);
-  for (let i = Math.max(ENT, SAI); i < n; i++) {
-    let hh = -Infinity, ll = Infinity;
-    for (let k = i - ENT; k < i; k++) if (H[k] > hh) hh = H[k];
-    for (let k = i - SAI; k < i; k++) if (L[k] < ll) ll = L[k];
-    en[i] = C[i] > hh;
-    ex[i] = C[i] < ll;
-    inv[i] = ll;
-  }
-  return { entrySignal: en, exitSignal: ex, invalidationSeries: inv };
-}
-/** M3-01 EMA10 + SMA90: preço cruza a EMA10 para cima acima da SMA90; stop 3 ATR(14) e alvo 2,5R fixados na barra do sinal. */
-function sinalEmaSma90Atr(o) {
-  const n = o.closes.length, C = o.closes, E = ema(C, 10), M = sma(C, 90), A = atrWilder(o.highs, o.lows, C, 14), STOP_MULT = 3, RR = 2.5;
-  const en = new Array(n).fill(false), ex = new Array(n).fill(false), inv = new Array(n).fill(NaN), stp = new Array(n).fill(NaN), alvo = new Array(n).fill(NaN);
-  for (let i = 1; i < n; i++) {
-    if (isNaN(E[i]) || isNaN(E[i - 1])) continue;
-    const cruzaAlta = C[i] > E[i] && C[i - 1] <= E[i - 1];
-    const cruzaBaixa = C[i] < E[i] && C[i - 1] >= E[i - 1];
-    en[i] = cruzaAlta && !isNaN(M[i]) && C[i] > M[i];
-    ex[i] = cruzaBaixa;
-    inv[i] = E[i];
-    if (!isNaN(A[i])) { stp[i] = C[i] - STOP_MULT * A[i]; alvo[i] = C[i] + RR * STOP_MULT * A[i]; }
-  }
-  return { entrySignal: en, exitSignal: ex, invalidationSeries: inv, stopIfEnteredSeries: stp, targetIfEnteredSeries: alvo };
-}
 function nz_(v) { return v === null || v === undefined ? NaN : v; }
 
 /* =============================================================================
  * 3. MOTOR DE BACKTEST (idêntico ao v3.4: open D+1, custos 0,125%/lado, stop congelado)
  *    + estado operacional da última vela fechada.
- *    v2.5: alvo de lucro opcional (targetIfEnteredSeries), congelado na entrada como o stop.
- * ===========================================================================*/
+ * * ===========================================================================*/
 function runBacktest_(o, s) {
   const cost = (P2.FEE_PCT + P2.SLIPPAGE_PCT) / 100, n = o.closes.length, cap0 = P2.CAPITAL_BASE;
-  const stopS = s.stopIfEnteredSeries, tgtS = s.targetIfEnteredSeries;
-  let pos = 0, entryPrice = null, entryIdx = null, frozen = NaN, frozenT = NaN, capital = cap0;
+  const stopS = s.stopIfEnteredSeries;
+  let pos = 0, entryPrice = null, entryIdx = null, frozen = NaN, capital = cap0;
   const trades = [], eq = new Array(n).fill(cap0);
   for (let i = 1; i < n; i++) {
     eq[i - 1] = pos === 1 ? capital * (o.closes[i - 1] / entryPrice) : capital;
@@ -547,16 +517,14 @@ function runBacktest_(o, s) {
       if (s.entrySignal[i - 1]) {
         entryPrice = o.opens[i] * (1 + cost); pos = 1; entryIdx = i;
         frozen = (stopS && !isNaN(stopS[i - 1])) ? stopS[i - 1] : NaN;
-        frozenT = (tgtS && !isNaN(tgtS[i - 1])) ? tgtS[i - 1] : NaN;
       }
     } else {
       const stopHit = stopS && !isNaN(frozen) && o.lows[i - 1] <= frozen;
-      const tgtHit = tgtS && !isNaN(frozenT) && o.highs[i - 1] >= frozenT;
-      if (s.exitSignal[i - 1] || stopHit || tgtHit) {
+      if (s.exitSignal[i - 1] || stopHit) {
         const ret = (o.opens[i] * (1 - cost)) / entryPrice - 1;
         capital *= (1 + ret);
-        trades.push({ entryDate: o.dates[entryIdx], exitDate: o.dates[i], ret: ret * 100, motivo: (stopHit && !s.exitSignal[i - 1]) ? 'STOP' : ((tgtHit && !s.exitSignal[i - 1]) ? 'ALVO' : 'SINAL') });
-        pos = 0; entryPrice = null; frozen = NaN; frozenT = NaN;
+        trades.push({ entryDate: o.dates[entryIdx], exitDate: o.dates[i], ret: ret * 100, motivo: (stopHit && !s.exitSignal[i - 1]) ? 'STOP' : 'SINAL' });
+        pos = 0; entryPrice = null; frozen = NaN;
       }
     }
   }
@@ -577,8 +545,7 @@ function runBacktest_(o, s) {
     stopAtual = (stopS && !isNaN(stopS[L])) ? stopS[L] : inv;
   } else if (pos === 1) {
     const stopHit = stopS && !isNaN(frozen) && o.lows[L] <= frozen;
-    const tgtHit = tgtS && !isNaN(frozenT) && o.highs[L] >= frozenT;
-    if (s.exitSignal[L] || stopHit || tgtHit) { posAtual = 0; evento = (stopHit && !s.exitSignal[L]) ? 'STOP' : 'SAIDA'; }
+    if (s.exitSignal[L] || stopHit) { posAtual = 0; evento = stopHit && !s.exitSignal[L] ? 'STOP' : 'SAIDA'; }
     stopAtual = !isNaN(frozen) ? frozen : inv;
   }
   const aberto = pos === 1 && entryPrice ? (lastClose / entryPrice - 1) : 0;
@@ -962,7 +929,7 @@ function rodarEstrategias_(o) {
   return ESTRATEGIAS.map(function (e) {
     let r;
     try { r = runBacktest_(o, e.fn(o)); } catch (err) { r = { erro: err.message, posAtual: 0 }; }
-    r.id = e.id; r.key = e.key; r.nome = e.nome; r.ativa = e.ativa; r.grupo = e.grupo;
+    r.id = e.id; r.key = e.key; r.nome = e.nome; r.ativa = e.ativa && (e.grupo !== 'Gatilho' || GATILHOS_NO_CONSENSO); r.grupo = e.grupo;
     return r;
   });
 }
