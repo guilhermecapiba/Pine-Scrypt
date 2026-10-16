@@ -369,3 +369,51 @@ function gerarPoolMassivo_() {
   [1, 1.5, 2].forEach(function (k) { [10, 20, 50].forEach(function (m) { add('Z-VB' + k + '-' + m, 'rompimento', 'Rompimento de volatilidade ' + k + ' ATR, sai abaixo da SMA' + m, candRompeVol_(k, m)); }); });
   return L.concat(comitesMassivo_());
 }
+
+/* =============================================================================
+ * 2E. REVERSÃO EM TENDÊNCIA — compra recuos curtos dentro de tendência de alta (IBS, mínimas de N dias, quedas seguidas,
+ *     Williams %R, CCI, RSI curto) com saídas rápidas. IDs começam com Z-RV.
+ * ===========================================================================*/
+function candRevGen_(o, entrada, saida, f) {
+  const C = o.closes, m = smaC_(o, f);
+  return sigGen_(o, function (i) { return isFinite(m[i]) && C[i] > m[i] && entrada(i); }, function (i) { return saida(i); }, m);
+}
+function saidaRev_(o, tipo) {   // 0: fecha acima da SMA5; 1: fecha acima da SMA10; 2: fecha acima da máxima do dia anterior
+  const C = o.closes, H = o.highs, a = smaC_(o, 5), b = smaC_(o, 10);
+  return tipo === 0 ? function (i) { return isFinite(a[i]) && C[i] > a[i]; } : tipo === 1 ? function (i) { return isFinite(b[i]) && C[i] > b[i]; } : function (i) { return i > 0 && C[i] > H[i - 1]; };
+}
+function candIbs_(t, f, saida) {
+  return function (o) { const C = o.closes, H = o.highs, L = o.lows; return candRevGen_(o, function (i) { return H[i] > L[i] && (C[i] - L[i]) / (H[i] - L[i]) < t; }, saidaRev_(o, saida), f); };
+}
+function candMinimaN_(N, f, saida) {
+  return function (o) { const C = o.closes, L = o.lows; return candRevGen_(o, function (i) { if (i < N) return false; let m = Infinity; for (let j = i - N; j < i; j++) if (L[j] < m) m = L[j]; return C[i] < m; }, saidaRev_(o, saida), f); };
+}
+function candQuedas_(k, f, saida) {
+  return function (o) { const C = o.closes; return candRevGen_(o, function (i) { if (i < k) return false; for (let j = 0; j < k; j++) if (!(C[i - j] < C[i - j - 1])) return false; return true; }, saidaRev_(o, saida), f); };
+}
+function candWilliams_(p, lim, f, saida) {
+  return function (o) { const hl = cacheInd_(o, 'hl' + p, function () { return hhll_(o.highs, o.lows, p); }), C = o.closes;
+    return candRevGen_(o, function (i) { return isFinite(hl.hh[i]) && hl.hh[i] > hl.ll[i] && -100 * (hl.hh[i] - C[i]) / (hl.hh[i] - hl.ll[i]) < lim; }, saidaRev_(o, saida), f); };
+}
+function candRsiRev_(p, thr, f, saida) {
+  return function (o) { const r = cacheInd_(o, 'r' + p, function () { return rsi(o.closes, p); }); return candRevGen_(o, function (i) { return isFinite(r[i]) && r[i] < thr; }, saidaRev_(o, saida), f); };
+}
+function candCciRev_(p, lim, f, saida) {
+  return function (o) {
+    const C = o.closes, n = C.length, tp = C.map(function (c, i) { return (o.highs[i] + o.lows[i] + c) / 3; }), m = sma(tp, p), cci = cacheInd_(o, 'cciv' + p, function () {
+      const out = new Array(n).fill(NaN); for (let i = p - 1; i < n; i++) { if (!isFinite(m[i])) continue; let d = 0; for (let j = i - p + 1; j <= i; j++) d += Math.abs(tp[j] - m[i]); d /= p; out[i] = d > 0 ? (tp[i] - m[i]) / (0.015 * d) : 0; } return out; });
+    return candRevGen_(o, function (i) { return isFinite(cci[i]) && cci[i] < lim; }, saidaRev_(o, saida), f);
+  };
+}
+function gerarPoolReversao_() {
+  const L = [], add = function (id, nome, fn) { L.push({ id: id, fam: 'reversao', nome: nome, fn: fn, ampliado: true }); }, sn = ['SMA5', 'SMA10', 'máxima anterior'];
+  [50, 100, 150, 200].forEach(function (f) { [0, 1, 2].forEach(function (sd) {
+    [0.1, 0.2, 0.3].forEach(function (t) { add('Z-RVIBS' + t + '-' + f + '-' + sd, 'IBS < ' + t + ' acima da SMA' + f + ', sai > ' + sn[sd], candIbs_(t, f, sd)); });
+    [3, 5, 7, 10].forEach(function (N) { add('Z-RVMIN' + N + '-' + f + '-' + sd, 'Fecha abaixo da mínima de ' + N + 'd acima da SMA' + f + ', sai > ' + sn[sd], candMinimaN_(N, f, sd)); });
+    [2, 3, 4].forEach(function (k) { add('Z-RVQ' + k + '-' + f + '-' + sd, k + ' quedas seguidas acima da SMA' + f + ', sai > ' + sn[sd], candQuedas_(k, f, sd)); });
+    [[10, -90], [14, -90], [14, -80], [21, -80]].forEach(function (x) { add('Z-RVWR' + x[0] + '-' + (-x[1]) + '-' + f + '-' + sd, 'Williams %R(' + x[0] + ') < ' + x[1] + ' acima da SMA' + f + ', sai > ' + sn[sd], candWilliams_(x[0], x[1], f, sd)); });
+    [[2, 5], [2, 10], [2, 20], [3, 10], [3, 20], [4, 15], [4, 25], [5, 20], [5, 30]].forEach(function (x) { add('Z-RVRSI' + x[0] + '-' + x[1] + '-' + f + '-' + sd, 'RSI(' + x[0] + ') < ' + x[1] + ' acima da SMA' + f + ', sai > ' + sn[sd], candRsiRev_(x[0], x[1], f, sd)); });
+    [[14, -100], [20, -100], [20, -150]].forEach(function (x) { add('Z-RVCCI' + x[0] + '-' + (-x[1]) + '-' + f + '-' + sd, 'CCI(' + x[0] + ') < ' + x[1] + ' acima da SMA' + f + ', sai > ' + sn[sd], candCciRev_(x[0], x[1], f, sd)); });
+  }); });
+  return L;
+}

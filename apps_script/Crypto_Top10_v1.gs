@@ -87,6 +87,11 @@ const CFG_PADRAO = [
   ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que tentam melhorar o nível das estratégias (vaga aberta ou fora do nível PLENA)'],
   ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) do histórico para um candidato ser elegível'],
   ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as escolhidas'],
+  ['SELECAO_RELAXAR_SE_FALTAR', 'SIM', 'SIM = se faltarem estratégias PLENA, relaxa SÓ os filtros secundários (drawdown, trades, correlação, família) para completar as vagas; o Sharpe mínimo nunca é relaxado. A coluna Criterio_secundario mostra o que foi relaxado'],
+  ['SELECAO_DD_MAX_RELAX', 85, 'Drawdown máximo (%) do histórico na passada relaxada'],
+  ['SELECAO_MIN_TRADES_RELAX', 5, 'Trades mínimos na passada relaxada'],
+  ['SELECAO_CORR_MAX_RELAX', 0.97, 'Correlação máxima entre escolhidas na passada relaxada'],
+  ['SELECAO_MAX_POR_FAMILIA_RELAX', 5, 'Máximo por família na passada relaxada'],
   ['SELECAO_CORR_MAX', 0.92, 'Correlação máxima dos retornos diários (histórico) entre duas escolhidas'],
   ['SELECAO_REFRESH_DIAS', 90, 'Dias até refazer a seleção sozinha (ou use o menu S). Entre reseleções, a escolha fica congelada'],
   ['UNIVERSO_EXCLUIR_IDS', 'tether,usd-coin,usds,dai,ethena-usde,usd1-world-liberty-financial,paypal-usd,first-digital-usd,true-usd,usdd,figure-heloc,tether-gold,pax-gold,wrapped-bitcoin,staked-ether,wrapped-steth,weth,coinbase-wrapped-btc,wrapped-eeth,usdt0,blackrock-usd-institutional-digital-liquidity-fund',
@@ -688,6 +693,54 @@ function gerarPoolMassivo_() {
 }
 
 /* =============================================================================
+ * 2E. REVERSÃO EM TENDÊNCIA — compra recuos curtos dentro de tendência de alta (IBS, mínimas de N dias, quedas seguidas,
+ *     Williams %R, CCI, RSI curto) com saídas rápidas. IDs começam com Z-RV.
+ * ===========================================================================*/
+function candRevGen_(o, entrada, saida, f) {
+  const C = o.closes, m = smaC_(o, f);
+  return sigGen_(o, function (i) { return isFinite(m[i]) && C[i] > m[i] && entrada(i); }, function (i) { return saida(i); }, m);
+}
+function saidaRev_(o, tipo) {   // 0: fecha acima da SMA5; 1: fecha acima da SMA10; 2: fecha acima da máxima do dia anterior
+  const C = o.closes, H = o.highs, a = smaC_(o, 5), b = smaC_(o, 10);
+  return tipo === 0 ? function (i) { return isFinite(a[i]) && C[i] > a[i]; } : tipo === 1 ? function (i) { return isFinite(b[i]) && C[i] > b[i]; } : function (i) { return i > 0 && C[i] > H[i - 1]; };
+}
+function candIbs_(t, f, saida) {
+  return function (o) { const C = o.closes, H = o.highs, L = o.lows; return candRevGen_(o, function (i) { return H[i] > L[i] && (C[i] - L[i]) / (H[i] - L[i]) < t; }, saidaRev_(o, saida), f); };
+}
+function candMinimaN_(N, f, saida) {
+  return function (o) { const C = o.closes, L = o.lows; return candRevGen_(o, function (i) { if (i < N) return false; let m = Infinity; for (let j = i - N; j < i; j++) if (L[j] < m) m = L[j]; return C[i] < m; }, saidaRev_(o, saida), f); };
+}
+function candQuedas_(k, f, saida) {
+  return function (o) { const C = o.closes; return candRevGen_(o, function (i) { if (i < k) return false; for (let j = 0; j < k; j++) if (!(C[i - j] < C[i - j - 1])) return false; return true; }, saidaRev_(o, saida), f); };
+}
+function candWilliams_(p, lim, f, saida) {
+  return function (o) { const hl = cacheInd_(o, 'hl' + p, function () { return hhll_(o.highs, o.lows, p); }), C = o.closes;
+    return candRevGen_(o, function (i) { return isFinite(hl.hh[i]) && hl.hh[i] > hl.ll[i] && -100 * (hl.hh[i] - C[i]) / (hl.hh[i] - hl.ll[i]) < lim; }, saidaRev_(o, saida), f); };
+}
+function candRsiRev_(p, thr, f, saida) {
+  return function (o) { const r = cacheInd_(o, 'r' + p, function () { return rsi(o.closes, p); }); return candRevGen_(o, function (i) { return isFinite(r[i]) && r[i] < thr; }, saidaRev_(o, saida), f); };
+}
+function candCciRev_(p, lim, f, saida) {
+  return function (o) {
+    const C = o.closes, n = C.length, tp = C.map(function (c, i) { return (o.highs[i] + o.lows[i] + c) / 3; }), m = sma(tp, p), cci = cacheInd_(o, 'cciv' + p, function () {
+      const out = new Array(n).fill(NaN); for (let i = p - 1; i < n; i++) { if (!isFinite(m[i])) continue; let d = 0; for (let j = i - p + 1; j <= i; j++) d += Math.abs(tp[j] - m[i]); d /= p; out[i] = d > 0 ? (tp[i] - m[i]) / (0.015 * d) : 0; } return out; });
+    return candRevGen_(o, function (i) { return isFinite(cci[i]) && cci[i] < lim; }, saidaRev_(o, saida), f);
+  };
+}
+function gerarPoolReversao_() {
+  const L = [], add = function (id, nome, fn) { L.push({ id: id, fam: 'reversao', nome: nome, fn: fn, ampliado: true }); }, sn = ['SMA5', 'SMA10', 'máxima anterior'];
+  [50, 100, 150, 200].forEach(function (f) { [0, 1, 2].forEach(function (sd) {
+    [0.1, 0.2, 0.3].forEach(function (t) { add('Z-RVIBS' + t + '-' + f + '-' + sd, 'IBS < ' + t + ' acima da SMA' + f + ', sai > ' + sn[sd], candIbs_(t, f, sd)); });
+    [3, 5, 7, 10].forEach(function (N) { add('Z-RVMIN' + N + '-' + f + '-' + sd, 'Fecha abaixo da mínima de ' + N + 'd acima da SMA' + f + ', sai > ' + sn[sd], candMinimaN_(N, f, sd)); });
+    [2, 3, 4].forEach(function (k) { add('Z-RVQ' + k + '-' + f + '-' + sd, k + ' quedas seguidas acima da SMA' + f + ', sai > ' + sn[sd], candQuedas_(k, f, sd)); });
+    [[10, -90], [14, -90], [14, -80], [21, -80]].forEach(function (x) { add('Z-RVWR' + x[0] + '-' + (-x[1]) + '-' + f + '-' + sd, 'Williams %R(' + x[0] + ') < ' + x[1] + ' acima da SMA' + f + ', sai > ' + sn[sd], candWilliams_(x[0], x[1], f, sd)); });
+    [[2, 5], [2, 10], [2, 20], [3, 10], [3, 20], [4, 15], [4, 25], [5, 20], [5, 30]].forEach(function (x) { add('Z-RVRSI' + x[0] + '-' + x[1] + '-' + f + '-' + sd, 'RSI(' + x[0] + ') < ' + x[1] + ' acima da SMA' + f + ', sai > ' + sn[sd], candRsiRev_(x[0], x[1], f, sd)); });
+    [[14, -100], [20, -100], [20, -150]].forEach(function (x) { add('Z-RVCCI' + x[0] + '-' + (-x[1]) + '-' + f + '-' + sd, 'CCI(' + x[0] + ') < ' + x[1] + ' acima da SMA' + f + ', sai > ' + sn[sd], candCciRev_(x[0], x[1], f, sd)); });
+  }); });
+  return L;
+}
+
+/* =============================================================================
  * 2B. SELEÇÃO DAS 10 MELHORES ESTRATÉGIAS DE CADA MOEDA
  *
  * Princípio: escolher entre muitos candidatos contamina a medida (quem escolhe o melhor de 46 sempre vê um número
@@ -770,7 +823,7 @@ const ORDEM_NIVEL = { 'PLENA': 0, 'RECENTE FRACA': 1, 'PROVISORIA': 2 };
 function selecionar_(o, defs) {
   const n = o.closes.length, w0 = Math.min(210, n - 150), cut = w0 + Math.floor((n - w0) * cfgNum_('SELECAO_CORTE_IS'));
   const anos = (n - w0) / 365.25, minTr = Math.max(5, Math.min(cfgNum_('SELECAO_MIN_TRADES_IS'), Math.round(anos * 2)));
-  const ddMax = cfgNum_('SELECAO_DD_MAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = cfgNum_('SELECAO_N_ESTRATEGIAS');
+  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), famR = cfgNum_('SELECAO_MAX_POR_FAMILIA_RELAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = cfgNum_('SELECAO_N_ESTRATEGIAS');
   const idsBase = {}; POOL.forEach(function (e) { idsBase[e.id] = true; });
   const det = [];
   defs.forEach(function (e) {
@@ -782,8 +835,8 @@ function selecionar_(o, defs) {
     d.nTr = contarTrades_(r, w0, n); d.dd = m ? m.dd : null; d.calmar = m ? m.calmar : null;
     if (nv.nivel === 'FORA') d.situacao = 'Sharpe do histórico ' + (nv.full === null ? 'indisponível' : r_(nv.full, 2)) + ' < ' + cfgNum_('SELECAO_PISO_PROVISORIO');
     else if (cfgSim_('SELECAO_EXIGE_PLENA') && nv.nivel !== 'PLENA') d.situacao = 'nível ' + nv.nivel + ' (a regra exige PLENA)';
-    else if (!m || m.dd > ddMax) d.situacao = 'drawdown acima de ' + ddMax + '%';
-    else if (d.nTr < minTr) d.situacao = 'poucos trades (' + d.nTr + ' < ' + minTr + ')';
+    else if (!m || m.dd > ddMax) { d.situacao = 'drawdown acima de ' + ddMax + '%'; if (m && m.dd <= ddMaxR && nv.nivel === 'PLENA') { d.relaxavel = true; d.r = r; d.ret = retornos_(r.eqCurve, w0, n); } }
+    else if (d.nTr < minTr) { d.situacao = 'poucos trades (' + d.nTr + ' < ' + minTr + ')'; if (d.nTr >= minTrR && nv.nivel === 'PLENA') { d.relaxavel = true; d.r = r; d.ret = retornos_(r.eqCurve, w0, n); } }
     else { d.elegivel = true; d.r = r; d.ret = retornos_(r.eqCurve, w0, n); }
   });
   const eleg = det.filter(function (d) { return d.elegivel; }), pS = percentis_(eleg.map(function (d) { return d.sFull; })), pC = percentis_(eleg.map(function (d) { return d.calmar; }));
@@ -802,9 +855,25 @@ function selecionar_(o, defs) {
     for (let k = 0; k < escolhidas.length; k++) { if (correl_(d.ret, escolhidas[k].ret) > corrMax) return; }
     d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ', família extra)'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
   });
+  // terceira passada (critério relaxado): o Sharpe continua exigido no nível PLENA; relaxam só drawdown, trades, correlação e família
+  const relax = {};
+  if (escolhidas.length < alvo && cfgSim_('SELECAO_RELAXAR_SE_FALTAR')) {
+    const cand = det.filter(function (d) { return !d.slot && d.nivel === 'PLENA' && d.ret && (d.elegivel || d.relaxavel); });
+    const pS2 = percentis_(cand.map(function (d) { return d.sFull; })), pC2 = percentis_(cand.map(function (d) { return d.calmar; }));
+    cand.forEach(function (d, i) { d.nota2 = (pS2[i] + pC2[i]) / 2; });
+    cand.sort(function (a, b) { return b.nota2 - a.nota2; });
+    cand.forEach(function (d) {
+      if (escolhidas.length >= alvo || (porFam[d.fam] || 0) >= famR) return;
+      let cmax = 0, com = ''; for (let k = 0; k < escolhidas.length; k++) { const c = correl_(d.ret, escolhidas[k].ret); if (c > cmax) { cmax = c; com = escolhidas[k].id; } }
+      if (cmax > corrR) return;
+      const motivo = []; if (d.dd > ddMax) motivo.push('drawdown ' + r_(d.dd, 0) + '%'); if (d.nTr < minTr) motivo.push(d.nTr + ' trades'); if (cmax > corrMax) motivo.push('correlação ' + r_(cmax, 2) + ' com ' + com); if ((porFam[d.fam] || 0) >= maxFam + 1) motivo.push('família ' + d.fam + ' com ' + ((porFam[d.fam] || 0) + 1));
+      d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (PLENA, critério relaxado' + (motivo.length ? ': ' + motivo.join(', ') : '') + ')'; relax[d.id] = motivo.length ? motivo.join(', ') : 'critério relaxado';
+      porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+    });
+  }
   det.forEach(function (d) { if (!d.situacao) d.situacao = '—'; });
-  return { ids: escolhidas.map(function (d) { return d.id; }), detalhe: det, w0Data: dataStr_(o.dates[w0]), corteData: dataStr_(o.dates[cut]), parcial: escolhidas.length < alvo, vagas: alvo - escolhidas.length,
-    naoPlenas: escolhidas.filter(function (d) { return d.nivel !== 'PLENA'; }).length, nElegiveis: eleg.length, minTr: minTr, nTestados: defs.length, shMin: cfgNum_('SELECAO_SHARPE_MIN') };
+  return { rel: relax, ids: escolhidas.map(function (d) { return d.id; }), detalhe: det, w0Data: dataStr_(o.dates[w0]), corteData: dataStr_(o.dates[cut]), parcial: escolhidas.length < alvo, vagas: alvo - escolhidas.length,
+    naoPlenas: escolhidas.filter(function (d) { return d.nivel !== 'PLENA'; }).length, nRelax: Object.keys(relax).length, nElegiveis: eleg.length, minTr: minTr, nTestados: defs.length, shMin: cfgNum_('SELECAO_SHARPE_MIN') };
 }
 
 function lerSel_(sym) {
@@ -812,7 +881,7 @@ function lerSel_(sym) {
   try { return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }
 function guardarSel_(sym, sel, dataHoje) {
-  PropertiesService.getScriptProperties().setProperty('SEL_' + sym, JSON.stringify({ data: dataHoje, ids: sel.ids, w0: sel.w0Data, corte: sel.corteData, parcial: sel.parcial, vagas: sel.vagas, naoPlenas: sel.naoPlenas, nElig: sel.nElegiveis, nTest: sel.nTestados }));
+  PropertiesService.getScriptProperties().setProperty('SEL_' + sym, JSON.stringify({ data: dataHoje, ids: sel.ids, w0: sel.w0Data, corte: sel.corteData, parcial: sel.parcial, vagas: sel.vagas, naoPlenas: sel.naoPlenas, nElig: sel.nElegiveis, nTest: sel.nTestados, rel: sel.rel }));
 }
 function idadeDias_(str) { return str ? (Date.now() - new Date(str + 'T00:00:00Z').getTime()) / 86400000 : 1e9; }
 
@@ -1695,7 +1764,7 @@ function defsPorId_(ids) {
   const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
-  if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().concat(gerarPoolReversao_()).forEach(function (e) { mapa[e.id] = e; });
   return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
 }
 
@@ -1725,7 +1794,7 @@ function processarAtivo_(u, forcar) {
   } else {
     sel = lerSel_(u.sym);
     const fazer = function () {
-      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_()));
+      const s = selecionar_(o, POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_()));
       guardarSel_(u.sym, s, hoje); gravarSelecaoCandidatos_(u.sym, s, hoje);
       sel = lerSel_(u.sym);
       res = s.ids.map(function (id) { return s.detalhe.filter(function (d) { return d.id === id; })[0].r; });
@@ -1755,7 +1824,7 @@ function processarAtivo_(u, forcar) {
     return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
-      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
+      sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', rel: sel && sel.rel && sel.rel[r.id] ? sel.rel[r.id] : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
       oosSh: mo ? mo.sharpe : null, oosCa: mo ? mo.calmar : null, oosCagr: mo ? mo.cagr : null, oosDd: mo ? mo.dd : null, fwCagr: fw ? fw.cagr : null, fwDd: fw ? fw.dd : null };
   });
   const bhEq = C, eventos = detectarEventos_(o, I, res, null).map(function (e) { e.sym = u.sym; return e; });
@@ -2037,17 +2106,17 @@ function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
     'Nivel_Sharpe', 'Sharpe_historico (mín. 1,00)', 'Sharpe_24m (mín. 0,8965)', 'Sharpe_12m (mín. 0,3983)', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
-    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela'];
+    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela', 'Criterio_secundario'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; }, NC = cab.length;
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') return;
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, e.rel ? 'RELAXADO: ' + e.rel : 'padrão']);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; rows.push(l);
+      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; l[29] = ''; rows.push(l);
     }
   });
   sh.clear();

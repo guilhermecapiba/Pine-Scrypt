@@ -5,18 +5,19 @@ O script é montado por `tools/build_top10.py` (cópias fiéis do `MVP_Projeto02
 
 ## O que a planilha faz
 
-Uma planilha e um script cobrem o BTC (referência, 10 estratégias fixas do Projeto 02) e dez moedas: ETH, BNB, XRP, SOL, TRX, ZEC, HYPE, DOGE, LINK e AAVE. Cada moeda tem as próprias 5 estratégias (`SELECAO_N_ESTRATEGIAS`), escolhidas entre cerca de 1.350 candidatos. Motor de backtest, custos (0,125% por lado), consenso, esticamento e alertas são os do BTC.
+Uma planilha e um script cobrem o BTC (referência, 10 estratégias fixas do Projeto 02) e dez moedas: ETH, BNB, XRP, SOL, TRX, ZEC, HYPE, DOGE, LINK e AAVE. Cada moeda tem as próprias 5 estratégias (`SELECAO_N_ESTRATEGIAS`), escolhidas entre cerca de 1.650 candidatos. Motor de backtest, custos (0,125% por lado), consenso, esticamento e alertas são os do BTC.
 
 ## Como as estratégias são escolhidas
 
-1. Candidatos: 51 base (as 10 do Projeto 02, gatilhos e famílias clássicas), cerca de 280 variações de parâmetros, 171 de famílias adicionais (Ichimoku, KAMA, Hull, regressão linear, Parabolic SAR, ADX, CCI, TRIX, volume, trailing por ATR, reversão com filtro de tendência e filtro do regime do BTC) e 850 da busca massiva: as combinações "estratégia + SMA50/100/150/200" da planilha de vídeos, grades densas, VWAP, estocástico, DEMA/TEMA, pullback, força relativa contra o BTC e comitês de votação entre indicadores.
+1. Candidatos: 51 base (as 10 do Projeto 02, gatilhos e famílias clássicas), cerca de 280 variações de parâmetros, 171 de famílias adicionais (Ichimoku, KAMA, Hull, regressão linear, Parabolic SAR, ADX, CCI, TRIX, volume, trailing por ATR, reversão com filtro de tendência e filtro do regime do BTC) e 850 da busca massiva: as combinações "estratégia + SMA50/100/150/200" da planilha de vídeos, grades densas, VWAP, estocástico, DEMA/TEMA, pullback, força relativa contra o BTC e comitês de votação entre indicadores, mais 310 de reversão em tendência (IBS, mínimas de N dias, quedas seguidas, Williams %R, CCI e RSI curto com saídas rápidas).
 2. A medida é o Sharpe do histórico inteiro depois do aquecimento das médias. Níveis:
    - PLENA: Sharpe do histórico >= 1,00, 24 meses >= 0,8965 e 12 meses >= 0,3983.
    - RECENTE FRACA: histórico >= 1,00, mas 24 ou 12 meses abaixo do mínimo.
    - PROVISORIA: histórico entre `SELECAO_PISO_PROVISORIO` e 1,00. Desligado por padrão (mesma régua para todas as moedas).
 3. Preenchimento por nível (PLENA, depois RECENTE FRACA, depois PROVISORIA) e, dentro do nível, pela nota (percentil do Sharpe e do Calmar). Diversificação: no máximo 2 por família (3 se sobrar vaga) e correlação diária máxima de 0,92.
-4. Por padrão (`SELECAO_EXIGE_PLENA` = SIM) só entra estratégia no nível PLENA; vaga sem candidato fica ABERTA. Para aceitar também RECENTE FRACA e PROVISORIA, coloque `SELECAO_EXIGE_PLENA` = NAO e `SELECAO_PISO_PROVISORIO` = 0,8.
-5. O nível é recalculado todo dia. A seleção é refeita a cada 90 dias, ou a cada 30 dias enquanto houver vaga ou estratégia fora do nível PLENA, ou pelo menu S.
+4. Se faltarem vagas depois da passada padrão, uma passada relaxada (`SELECAO_RELAXAR_SE_FALTAR` = SIM) completa com candidatos PLENA que só falham em critérios secundários: drawdown até 85%, mínimo de 5 trades, correlação até 0,97 e até 5 por família. O Sharpe mínimo nunca é relaxado, e a coluna `Criterio_secundario` de `ESTRATEGIAS_TOP10` mostra o que foi relaxado em cada estratégia. Estratégias relaxadas podem ser quase clones (mesma entrada com saídas diferentes): trate-as como menos diversificadas.
+5. Por padrão (`SELECAO_EXIGE_PLENA` = SIM) só entra estratégia no nível PLENA; vaga sem candidato fica ABERTA. Para aceitar também RECENTE FRACA e PROVISORIA, coloque `SELECAO_EXIGE_PLENA` = NAO e `SELECAO_PISO_PROVISORIO` = 0,8.
+6. O nível é recalculado todo dia. A seleção é refeita a cada 90 dias, ou a cada 30 dias enquanto houver vaga ou estratégia fora do nível PLENA, ou pelo menu S.
 
 ## O que esperar (importante)
 
