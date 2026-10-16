@@ -9,7 +9,7 @@
  *     SELECAO_DD_MAX e trades mínimos no IS. Nenhuma vaga é preenchida com candidato abaixo disso (vaga fica ABERTA).
  *     Se faltarem estratégias, entra a BUSCA AMPLIADA (grade de ~300 parâmetros) e a escolha é refeita.
  *  3. Nota = média dos percentis de Sharpe IS e Calmar IS entre os elegíveis.
- *  4. Diversificação gulosa pela ordem da nota: no máximo SELECAO_MAX_POR_FAMILIA por família e correlação dos
+ *  4. Diversificação gulosa pela ordem da nota: no máximo SELECAO_MAX_MESMA_CLASSE_POR_5 (1) estratégia da mesma classe de indicador a cada 5 e correlação dos
  *     retornos diários no IS menor que SELECAO_CORR_MAX com as já escolhidas (evita 10 versões da mesma média móvel).
  *  5. A escolha fica congelada e só muda a cada SELECAO_REFRESH_DIAS ou pelo menu S. Entre reseleções, o desempenho
  *     "desde a seleção" é evidência genuinamente futura.
@@ -82,12 +82,12 @@ function selecionar_(o, defs, opc) {
   opc = opc || {};
   const n = o.closes.length, w0 = Math.min(210, n - 150), cut = w0 + Math.floor((n - w0) * cfgNum_('SELECAO_CORTE_IS'));
   const anos = (n - w0) / 365.25, minTr = Math.max(5, Math.min(cfgNum_('SELECAO_MIN_TRADES_IS'), Math.round(anos * 2)));
-  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), famR = cfgNum_('SELECAO_MAX_POR_FAMILIA_RELAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS');
+  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), capCl = Math.max(1, Math.round(((opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS')) / 5) * cfgNum_('SELECAO_MAX_MESMA_CLASSE_POR_5'))), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS');
   const idsBase = {}; POOL.forEach(function (e) { idsBase[e.id] = true; });
   const det = [], tIni = Date.now(), orc = cfgNum_('SELECAO_ORCAMENTO_SEG') * 1000; let interrompida = false;
   defs.forEach(function (e) {
     if (Date.now() - tIni > orc) { interrompida = true; return; }   // guarda: a busca nunca estoura o limite de 6 minutos do Apps Script
-    const r = rodarLista_(o, [e])[0], d = { id: e.id, fam: e.fam, nome: e.nome, situacao: '', slot: 0, base: !!idsBase[e.id] };
+    const r = rodarLista_(o, [e])[0], d = { id: e.id, fam: e.fam, ind: e.ind || classeInd_(e.nome), nome: e.nome, situacao: '', slot: 0, base: !!idsBase[e.id] };
     det.push(d);
     if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return; }
     const nv = nivelSharpe_(r.eqCurve, n), m = metricasFaixa_(r.eqCurve, w0, n);
@@ -104,21 +104,15 @@ function selecionar_(o, defs, opc) {
   eleg.sort(function (a, b) { return ORDEM_NIVEL[a.nivel] - ORDEM_NIVEL[b.nivel] || b.nota - a.nota; });
   const escolhidas = [], porFam = {};
   (opc.mantidas || []).forEach(function (r, k) {   // estratégias já aceitas (ex.: fixas do BTC que cumprem a régua) entram na conta de vagas, família e correlação
-    const d = { id: r.id, fam: r.fam || 'p02', ret: retornos_(r.eqCurve, w0, n), slot: k + 1, mantida: true, situacao: 'MANTIDA' }; escolhidas.push(d); porFam[d.fam] = (porFam[d.fam] || 0) + 1;
+    const d = { id: r.id, fam: r.fam || 'p02', ind: r.ind || classeInd_(r.nome), ret: retornos_(r.eqCurve, w0, n), slot: k + 1, mantida: true, situacao: 'MANTIDA' }; escolhidas.push(d); porFam[d.ind] = (porFam[d.ind] || 0) + 1;
   });
   eleg.forEach(function (d) {
     if (escolhidas.length >= alvo) { d.situacao = 'elegível (' + d.nivel + '), não escolhida'; return; }
-    if ((porFam[d.fam] || 0) >= maxFam) { d.situacao = 'família ' + d.fam + ' já tem ' + maxFam; return; }
+    if ((porFam[d.ind] || 0) >= capCl) { d.situacao = 'classe ' + d.ind + ' já tem ' + capCl + ' (regra: no máximo ' + capCl + ' da mesma classe)'; return; }
     for (let k = 0; k < escolhidas.length; k++) { const c = correl_(d.ret, escolhidas[k].ret); if (c > corrMax) { d.situacao = 'correlação ' + r_(c, 2) + ' com ' + escolhidas[k].id; return; } }
-    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ')'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ')'; porFam[d.ind] = (porFam[d.ind] || 0) + 1; escolhidas.push(d);
   });
-  // segunda passada: se sobraram vagas, aceita mais uma estratégia por família (a correlação continua valendo)
-  eleg.forEach(function (d) {
-    if (escolhidas.length >= alvo || d.slot || d.situacao.indexOf('família') !== 0 || (porFam[d.fam] || 0) >= maxFam + 1) return;
-    for (let k = 0; k < escolhidas.length; k++) { if (correl_(d.ret, escolhidas[k].ret) > corrMax) return; }
-    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ', família extra)'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
-  });
-  // terceira passada (critério relaxado): o Sharpe continua exigido no nível PLENA; relaxam só drawdown, trades, correlação e família
+  // terceira passada (critério relaxado): o Sharpe continua exigido no nível PLENA; relaxam só drawdown, trades e correlação; a regra de classe nunca é relaxada
   const relax = {};
   if (escolhidas.length < alvo && cfgSim_('SELECAO_RELAXAR_SE_FALTAR')) {
     const cand = det.filter(function (d) { return !d.slot && d.nivel === 'PLENA' && d.ret && (d.elegivel || d.relaxavel); });
@@ -126,12 +120,12 @@ function selecionar_(o, defs, opc) {
     cand.forEach(function (d, i) { d.nota2 = (pS2[i] + pC2[i]) / 2; });
     cand.sort(function (a, b) { return b.nota2 - a.nota2; });
     cand.forEach(function (d) {
-      if (escolhidas.length >= alvo || (porFam[d.fam] || 0) >= famR) return;
+      if (escolhidas.length >= alvo || (porFam[d.ind] || 0) >= capCl) return;
       let cmax = 0, com = ''; for (let k = 0; k < escolhidas.length; k++) { const c = correl_(d.ret, escolhidas[k].ret); if (c > cmax) { cmax = c; com = escolhidas[k].id; } }
       if (cmax > corrR) return;
-      const motivo = []; if (d.dd > ddMax) motivo.push('drawdown ' + r_(d.dd, 0) + '%'); if (d.nTr < minTr) motivo.push(d.nTr + ' trades'); if (cmax > corrMax) motivo.push('correlação ' + r_(cmax, 2) + ' com ' + com); if ((porFam[d.fam] || 0) >= maxFam + 1) motivo.push('família ' + d.fam + ' com ' + ((porFam[d.fam] || 0) + 1));
+      const motivo = []; if (d.dd > ddMax) motivo.push('drawdown ' + r_(d.dd, 0) + '%'); if (d.nTr < minTr) motivo.push(d.nTr + ' trades'); if (cmax > corrMax) motivo.push('correlação ' + r_(cmax, 2) + ' com ' + com);
       d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (PLENA, critério relaxado' + (motivo.length ? ': ' + motivo.join(', ') : '') + ')'; relax[d.id] = motivo.length ? motivo.join(', ') : 'critério relaxado';
-      porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+      porFam[d.ind] = (porFam[d.ind] || 0) + 1; escolhidas.push(d);
     });
   }
   det.forEach(function (d) { if (!d.situacao) d.situacao = '—'; });

@@ -5,16 +5,16 @@
  *                Para cada moeda, a seleção (seção 2B) escolhe as 10 melhores desse conjunto.
  * ===========================================================================*/
 const FIXAS_BTC = [
-  { id: 'M1-01', fam: 'momentum', grupo: 'Machine #1', key: 'rocMomentum', nome: 'ROC Momentum 30/15% + SMA200', fn: sinalRocMomentum },
-  { id: 'M1-02', fam: 'momentum', grupo: 'Machine #1', key: 'macd205012', nome: 'MACD 20/50/12', fn: sinalMacd205012 },
-  { id: 'M1-04', fam: 'rompimento', grupo: 'Machine #1', key: 'adxTrendBreakout', nome: 'ADX(7) Trend Breakout + SMA50', fn: sinalAdxTrendBreakout },
-  { id: 'M1-05', fam: 'cruzamento', grupo: 'Machine #1', key: 'sma200ema1030', nome: 'SMA200 + EMA10xEMA30', fn: sinalSma200Ema1030 },
-  { id: 'M1-06', fam: 'estrutura', grupo: 'Machine #1', key: 'confluenciaSmcIct', nome: 'Confluência SMC + ICT + Trendline', fn: sinalConfluencia },
-  { id: 'M1-11', fam: 'estrutura', grupo: 'Machine #1/#2', key: 'hibridoSthRp', nome: 'Híbrido STH-RP (SMA155) & Confluência', fn: sinalHibridoSthRp },
-  { id: 'M2-02', fam: 'cruzamento', grupo: 'Machine #2', key: 'emaCrossSma76', nome: 'EMA10 Cross + SMA76', fn: sinalEmaCrossSma76 },
-  { id: 'M2-03', fam: 'rompimento', grupo: 'Machine #2', key: 'bollingerSqueeze', nome: 'Bollinger Squeeze (20, 2.25) + SMA200', fn: sinalBollingerSqueeze },
-  { id: 'M2-04', fam: 'cruzamento', grupo: 'Machine #2', key: 'nuvemEma655Sma100', nome: 'Nuvem EMA 6/55 + SMA100', fn: sinalNuvemEma655 },
-  { id: 'M2-05', fam: 'momentum', grupo: 'Machine #2', key: 'larryWilliams9394', nome: 'Larry Williams 9.3/9.4 (EMA12 + SMA50)', fn: sinalLarryWilliams9394 },
+  { id: 'M1-01', ind: 'ROC', fam: 'momentum', grupo: 'Machine #1', key: 'rocMomentum', nome: 'ROC Momentum 30/15% + SMA200', fn: sinalRocMomentum },
+  { id: 'M1-02', ind: 'MACD', fam: 'momentum', grupo: 'Machine #1', key: 'macd205012', nome: 'MACD 20/50/12', fn: sinalMacd205012 },
+  { id: 'M1-04', ind: 'ADX', fam: 'rompimento', grupo: 'Machine #1', key: 'adxTrendBreakout', nome: 'ADX(7) Trend Breakout + SMA50', fn: sinalAdxTrendBreakout },
+  { id: 'M1-05', ind: 'Cruzamento de médias', fam: 'cruzamento', grupo: 'Machine #1', key: 'sma200ema1030', nome: 'SMA200 + EMA10xEMA30', fn: sinalSma200Ema1030 },
+  { id: 'M1-06', ind: 'SMC/ICT', fam: 'estrutura', grupo: 'Machine #1', key: 'confluenciaSmcIct', nome: 'Confluência SMC + ICT + Trendline', fn: sinalConfluencia },
+  { id: 'M1-11', ind: 'Híbrido STH-RP', fam: 'estrutura', grupo: 'Machine #1/#2', key: 'hibridoSthRp', nome: 'Híbrido STH-RP (SMA155) & Confluência', fn: sinalHibridoSthRp },
+  { id: 'M2-02', ind: 'Cruzamento de médias', fam: 'cruzamento', grupo: 'Machine #2', key: 'emaCrossSma76', nome: 'EMA10 Cross + SMA76', fn: sinalEmaCrossSma76 },
+  { id: 'M2-03', ind: 'Bollinger', fam: 'rompimento', grupo: 'Machine #2', key: 'bollingerSqueeze', nome: 'Bollinger Squeeze (20, 2.25) + SMA200', fn: sinalBollingerSqueeze },
+  { id: 'M2-04', ind: 'Cruzamento de médias', fam: 'cruzamento', grupo: 'Machine #2', key: 'nuvemEma655Sma100', nome: 'Nuvem EMA 6/55 + SMA100', fn: sinalNuvemEma655 },
+  { id: 'M2-05', ind: 'Larry Williams', fam: 'momentum', grupo: 'Machine #2', key: 'larryWilliams9394', nome: 'Larry Williams 9.3/9.4 (EMA12 + SMA50)', fn: sinalLarryWilliams9394 },
 ];
 
 /** Sinais simples: entra enquanto cond de entrada, sai enquanto cond de saída (sem look-ahead: o motor executa em D+1). */

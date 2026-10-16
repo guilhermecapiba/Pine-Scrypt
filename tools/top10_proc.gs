@@ -76,7 +76,7 @@ function rodarLista_(o, lista) {
   return lista.map(function (e) {
     let r;
     try { r = runBacktest_(o, e.fn(o)); } catch (err) { r = { erro: err.message, posAtual: 0 }; }
-    r.id = e.id; r.key = e.key || e.id; r.nome = e.nome; r.ativa = true; r.grupo = e.grupo || 'Seleção'; r.fam = e.fam;
+    r.id = e.id; r.key = e.key || e.id; r.nome = e.nome; r.ativa = true; r.grupo = e.grupo || 'Seleção'; r.fam = e.fam; r.ind = e.ind || classeInd_(e.nome);
     return r;
   });
 }
@@ -86,6 +86,8 @@ function defsPorId_(ids) {
   const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-P-') === 0; })) gerarPoolPadroes_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-K-') === 0; })) gerarPoolNovasClasses_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Z-N-') === 0; })) gerarPoolFino_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().concat(gerarPoolReversao_()).forEach(function (e) { mapa[e.id] = e; });
   return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
@@ -97,7 +99,7 @@ function minVelas_(sym) {
   return m[String(sym).toUpperCase()] || cfgNum_('MIN_VELAS_CONSENSO');
 }
 
-function todosDefs_() { return POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_(), gerarPoolFino_()); }
+function todosDefs_() { return POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_(), gerarPoolFino_(), gerarPoolNovasClasses_(), gerarPoolPadroes_()); }
 
 function processarAtivo_(u, forcar) {
   const prev = lerRes_(u.sym), ontemStr = Utilities.formatDate(new Date(ontemUtcMs_()), 'UTC', 'yyyy-MM-dd');
@@ -148,8 +150,8 @@ function processarAtivo_(u, forcar) {
     else res = rodarLista_(o, defsPorId_(sel.ids));
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
   }
-  if (!res.length) {
-    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
+  if (res.length < Math.min(cfgNum_('SELECAO_MIN_PARA_MEDIR'), fixas ? FIXAS_BTC.length : cfgNum_('SELECAO_N_ESTRATEGIAS'))) {   // moeda com menos estratégias aceitas que o mínimo: não é analisada
+    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', achadas: res.length, vagas: sel ? sel.vagas : 10, ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
     guardarRes_(u.sym, res1); return { resumo: res1, eventos: [] };
   }
   res.forEach(function (r) {
@@ -164,7 +166,7 @@ function processarAtivo_(u, forcar) {
   const estr = res.map(function (r, k) {
     const m = r.eqCurve ? metricasJanela_(r.eqCurve, ini) : null, mi = r.eqCurve ? metricasFaixa_(r.eqCurve, w0, cut) : null, mo = r.eqCurve ? metricasFaixa_(r.eqCurve, cut, n) : null;
     const fw = r.eqCurve && iSel > 0 ? metricasFaixa_(r.eqCurve, iSel, n) : null;
-    return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
+    return { id: r.id, fam: r.fam || '', ind: r.ind || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
       sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', rel: sel && sel.rel && sel.rel[r.id] ? sel.rel[r.id] : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,

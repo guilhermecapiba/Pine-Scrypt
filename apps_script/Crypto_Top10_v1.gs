@@ -88,13 +88,13 @@ const CFG_PADRAO = [
   ['SELECAO_HISTERESE', 0, 'Folga na saída do BTC: estratégia fixa só sai do consenso abaixo de (mínimo - folga). 0 = régua estrita; 0,1 evita sair por diferença de milésimos'],
   ['SELECAO_REVISAO_DIAS', 30, 'Intervalo mínimo entre revisões que tentam melhorar o nível das estratégias (vaga aberta ou fora do nível PLENA)'],
   ['SELECAO_DD_MAX', 70, 'Drawdown máximo (%) do histórico para um candidato ser elegível'],
-  ['SELECAO_MAX_POR_FAMILIA', 2, 'Máximo de estratégias da mesma família entre as escolhidas'],
+  ['SELECAO_MAX_MESMA_CLASSE_POR_5', 1, 'Máximo de estratégias da mesma classe de indicador (a ideia, ex.: MACD com parâmetros vizinhos) a cada 5 escolhidas: 1 em 5, 2 em 10. Regra rígida, nunca relaxada'],
+  ['SELECAO_MIN_PARA_MEDIR', 5, 'Mínimo de estratégias aceitas para a moeda ser analisada (índice, consenso, desempenho). Abaixo disso a moeda fica como SEM_ESTRATEGIA_ELEGIVEL com as vagas abertas'],
   ['SELECAO_ORCAMENTO_SEG', 150, 'Tempo máximo (segundos) da busca de candidatos de uma moeda; passado disso a busca é interrompida e a resposta indica'],
-  ['SELECAO_RELAXAR_SE_FALTAR', 'SIM', 'SIM = se faltarem estratégias PLENA, relaxa SÓ os filtros secundários (drawdown, trades, correlação, família) para completar as vagas; o Sharpe mínimo nunca é relaxado. A coluna Criterio_secundario mostra o que foi relaxado'],
+  ['SELECAO_RELAXAR_SE_FALTAR', 'SIM', 'SIM = se faltarem estratégias PLENA, relaxa SÓ os filtros secundários (drawdown, trades e correlação) para completar as vagas; o Sharpe mínimo nunca é relaxado. A coluna Criterio_secundario mostra o que foi relaxado'],
   ['SELECAO_DD_MAX_RELAX', 85, 'Drawdown máximo (%) do histórico na passada relaxada'],
   ['SELECAO_MIN_TRADES_RELAX', 5, 'Trades mínimos na passada relaxada'],
   ['SELECAO_CORR_MAX_RELAX', 0.97, 'Correlação máxima entre escolhidas na passada relaxada'],
-  ['SELECAO_MAX_POR_FAMILIA_RELAX', 5, 'Máximo por família na passada relaxada'],
   ['SELECAO_CORR_MAX', 0.92, 'Correlação máxima dos retornos diários (histórico) entre duas escolhidas'],
   ['SELECAO_REFRESH_DIAS', 90, 'Dias até refazer a seleção sozinha (ou use o menu S). Entre reseleções, a escolha fica congelada'],
   ['UNIVERSO_EXCLUIR_IDS', 'tether,usd-coin,usds,dai,ethena-usde,usd1-world-liberty-financial,paypal-usd,first-digital-usd,true-usd,usdd,figure-heloc,tether-gold,pax-gold,wrapped-bitcoin,staked-ether,wrapped-steth,weth,coinbase-wrapped-btc,wrapped-eeth,usdt0,blackrock-usd-institutional-digital-liquidity-fund',
@@ -143,16 +143,16 @@ function ss_() {
  *                Para cada moeda, a seleção (seção 2B) escolhe as 10 melhores desse conjunto.
  * ===========================================================================*/
 const FIXAS_BTC = [
-  { id: 'M1-01', fam: 'momentum', grupo: 'Machine #1', key: 'rocMomentum', nome: 'ROC Momentum 30/15% + SMA200', fn: sinalRocMomentum },
-  { id: 'M1-02', fam: 'momentum', grupo: 'Machine #1', key: 'macd205012', nome: 'MACD 20/50/12', fn: sinalMacd205012 },
-  { id: 'M1-04', fam: 'rompimento', grupo: 'Machine #1', key: 'adxTrendBreakout', nome: 'ADX(7) Trend Breakout + SMA50', fn: sinalAdxTrendBreakout },
-  { id: 'M1-05', fam: 'cruzamento', grupo: 'Machine #1', key: 'sma200ema1030', nome: 'SMA200 + EMA10xEMA30', fn: sinalSma200Ema1030 },
-  { id: 'M1-06', fam: 'estrutura', grupo: 'Machine #1', key: 'confluenciaSmcIct', nome: 'Confluência SMC + ICT + Trendline', fn: sinalConfluencia },
-  { id: 'M1-11', fam: 'estrutura', grupo: 'Machine #1/#2', key: 'hibridoSthRp', nome: 'Híbrido STH-RP (SMA155) & Confluência', fn: sinalHibridoSthRp },
-  { id: 'M2-02', fam: 'cruzamento', grupo: 'Machine #2', key: 'emaCrossSma76', nome: 'EMA10 Cross + SMA76', fn: sinalEmaCrossSma76 },
-  { id: 'M2-03', fam: 'rompimento', grupo: 'Machine #2', key: 'bollingerSqueeze', nome: 'Bollinger Squeeze (20, 2.25) + SMA200', fn: sinalBollingerSqueeze },
-  { id: 'M2-04', fam: 'cruzamento', grupo: 'Machine #2', key: 'nuvemEma655Sma100', nome: 'Nuvem EMA 6/55 + SMA100', fn: sinalNuvemEma655 },
-  { id: 'M2-05', fam: 'momentum', grupo: 'Machine #2', key: 'larryWilliams9394', nome: 'Larry Williams 9.3/9.4 (EMA12 + SMA50)', fn: sinalLarryWilliams9394 },
+  { id: 'M1-01', ind: 'ROC', fam: 'momentum', grupo: 'Machine #1', key: 'rocMomentum', nome: 'ROC Momentum 30/15% + SMA200', fn: sinalRocMomentum },
+  { id: 'M1-02', ind: 'MACD', fam: 'momentum', grupo: 'Machine #1', key: 'macd205012', nome: 'MACD 20/50/12', fn: sinalMacd205012 },
+  { id: 'M1-04', ind: 'ADX', fam: 'rompimento', grupo: 'Machine #1', key: 'adxTrendBreakout', nome: 'ADX(7) Trend Breakout + SMA50', fn: sinalAdxTrendBreakout },
+  { id: 'M1-05', ind: 'Cruzamento de médias', fam: 'cruzamento', grupo: 'Machine #1', key: 'sma200ema1030', nome: 'SMA200 + EMA10xEMA30', fn: sinalSma200Ema1030 },
+  { id: 'M1-06', ind: 'SMC/ICT', fam: 'estrutura', grupo: 'Machine #1', key: 'confluenciaSmcIct', nome: 'Confluência SMC + ICT + Trendline', fn: sinalConfluencia },
+  { id: 'M1-11', ind: 'Híbrido STH-RP', fam: 'estrutura', grupo: 'Machine #1/#2', key: 'hibridoSthRp', nome: 'Híbrido STH-RP (SMA155) & Confluência', fn: sinalHibridoSthRp },
+  { id: 'M2-02', ind: 'Cruzamento de médias', fam: 'cruzamento', grupo: 'Machine #2', key: 'emaCrossSma76', nome: 'EMA10 Cross + SMA76', fn: sinalEmaCrossSma76 },
+  { id: 'M2-03', ind: 'Bollinger', fam: 'rompimento', grupo: 'Machine #2', key: 'bollingerSqueeze', nome: 'Bollinger Squeeze (20, 2.25) + SMA200', fn: sinalBollingerSqueeze },
+  { id: 'M2-04', ind: 'Cruzamento de médias', fam: 'cruzamento', grupo: 'Machine #2', key: 'nuvemEma655Sma100', nome: 'Nuvem EMA 6/55 + SMA100', fn: sinalNuvemEma655 },
+  { id: 'M2-05', ind: 'Larry Williams', fam: 'momentum', grupo: 'Machine #2', key: 'larryWilliams9394', nome: 'Larry Williams 9.3/9.4 (EMA12 + SMA50)', fn: sinalLarryWilliams9394 },
 ];
 
 /** Sinais simples: entra enquanto cond de entrada, sai enquanto cond de saída (sem look-ahead: o motor executa em D+1). */
@@ -328,6 +328,25 @@ function gerarPoolAmpliado_() {
  *     reversão com filtro de tendência, volume). Só roda quando o conjunto base e a grade da seção 2 não completam as vagas.
  *     Todas são causais: o sinal da vela D usa só dados até o fechamento de D; a execução é na abertura de D+1.
  * ===========================================================================*/
+/**
+ * Classe do indicador de uma estratégia (a "ideia"): variações de parâmetros, filtros de tendência, de regime do BTC e stops pertencem à
+ * classe do indicador principal. A regra de diversificação usa a classe: no máximo 1 da mesma classe em 5 estratégias (2 em 10).
+ */
+function classeInd_(nome) {
+  const s = String(nome), t = [
+    [/Comitê/, 'Comitê de votação'], [/Engolfo/, 'Engolfo de alta'], [/Martelo/, 'Martelo'], [/Inside bar/, 'Inside bar'], [/soldados/, 'Três soldados'], [/Marubozu/, 'Marubozu'], [/CPR/, 'CPR (pivôs)'], [/Didi/, 'Agulhada do Didi'], [/Barras de tendência/, 'Barras de tendência'], [/Awesome/, 'Awesome Oscillator'], [/Vortex/, 'Vortex'], [/TSI/, 'TSI'], [/MFI/, 'MFI'], [/Índice de Força/, 'Índice de Força'], [/Elder/, 'Elder Ray'], [/KST/, 'KST'], [/Coppock/, 'Coppock'],
+    [/Fisher/, 'Fisher Transform'], [/StochRSI/, 'StochRSI'], [/Connors/, 'Connors RSI'], [/Squeeze de volatilidade/, 'Squeeze'], [/Heikin/, 'Heikin-Ashi'], [/Gann/, 'Gann HiLo'], [/ZLEMA/, 'ZLEMA'], [/Z-score de preço/, 'Z-score de preço'],
+    [/Pico de volume/, 'Pico de volume'], [/Alligator/, 'Alligator'], [/Choppiness/, 'Choppiness'], [/Tendência semanal/, 'Tendência semanal'], [/Regime de volatilidade/, 'Regime de volatilidade'], [/altas seguidas/, 'Altas seguidas'], [/Proximidade da máxima/, 'Proximidade da máxima'], [/MACD/, 'MACD'], [/Bollinger/, 'Bollinger'], [/Keltner/, 'Keltner'], [/Donchian/, 'Donchian'], [/trailing de|Chandelier/, 'Chandelier'],
+    [/Rompimento de volatilidade/, 'Rompimento por ATR'], [/Supertrend/, 'Supertrend'], [/Parabolic/, 'Parabolic SAR'], [/Ichimoku/, 'Ichimoku'], [/KAMA/, 'KAMA'], [/Hull/, 'Hull MA'],
+    [/DEMA|TEMA/, 'DEMA/TEMA'], [/Regressão linear/, 'Regressão linear'], [/ADX/, 'ADX'], [/CCI/, 'CCI'], [/TRIX/, 'TRIX'], [/Aroon/, 'Aroon'], [/OBV/, 'OBV'], [/Chaikin/, 'Fluxo de Chaikin'],
+    [/VWAP/, 'VWAP'], [/Estocástico/, 'Estocástico'], [/Williams %R/, 'Williams %R'], [/IBS/, 'IBS'], [/mínima de/, 'Mínima de N dias'], [/quedas seguidas/, 'Quedas seguidas'],
+    [/RSI\(\d+\) regime/, 'RSI regime'], [/RSI/, 'RSI reversão'], [/Retorno de|ROC/, 'ROC'], [/Pullback/, 'Pullback à média'], [/Força relativa/, 'Força relativa'],
+    [/Cruzamento|Alinhamento|(EMA|SMA)\d+ x (EMA|SMA)\d+/, 'Cruzamento de médias'], [/Preço x/, 'Preço x média'], [/Z-score|Capitulação/, 'Z-score'],
+  ];
+  for (let i = 0; i < t.length; i++) if (t[i][0].test(s)) return t[i][1];
+  return 'Outra: ' + s.split(' ')[0];
+}
+
 function wma_(v, len) {
   const n = v.length, out = new Array(n).fill(NaN), den = len * (len + 1) / 2;
   for (let i = len - 1; i < n; i++) { let s = 0, ok = true; for (let j = 0; j < len; j++) { const x = v[i - len + 1 + j]; if (isNaN(x)) { ok = false; break; } s += x * (j + 1); } if (ok) out[i] = s / den; }
@@ -758,6 +777,213 @@ function gerarPoolFino_() {
 }
 
 /* =============================================================================
+ * 2G. NOVAS CLASSES DE INDICADOR — cada uma é uma "ideia" própria para a regra de diversificação (1 por classe a cada 5).
+ *     IDs começam com Z-K-. Todas causais.
+ * ===========================================================================*/
+function filtroSmaOk_(o, f) { const m = f ? smaC_(o, f) : null, C = o.closes; return function (i) { return !m || (isFinite(m[i]) && C[i] > m[i]); }; }
+function candAwesome_(a, b, f) {
+  return function (o) { const md = o.highs.map(function (h, i) { return (h + o.lows[i]) / 2; }), x = sma(md, a), y = sma(md, b), ok = filtroSmaOk_(o, f);
+    return sigGen_(o, function (i) { return isFinite(x[i]) && isFinite(y[i]) && x[i] - y[i] > 0 && ok(i); }, function (i) { return isFinite(x[i]) && isFinite(y[i]) && x[i] - y[i] < 0; }); };
+}
+function candVortex_(len) {
+  return function (o) {
+    const H = o.highs, L = o.lows, C = o.closes, n = C.length, pm = new Array(n).fill(0), mm = new Array(n).fill(0), tr = new Array(n).fill(0);
+    for (let i = 1; i < n; i++) { pm[i] = Math.abs(H[i] - L[i - 1]); mm[i] = Math.abs(L[i] - H[i - 1]); tr[i] = Math.max(H[i] - L[i], Math.abs(H[i] - C[i - 1]), Math.abs(L[i] - C[i - 1])); }
+    const a = sma(pm, len), b = sma(mm, len), t = sma(tr, len);
+    return sigGen_(o, function (i) { return t[i] > 0 && a[i] > b[i]; }, function (i) { return t[i] > 0 && a[i] < b[i]; });
+  };
+}
+function candTsi_(r, s, sig) {
+  return function (o) {
+    const C = o.closes, n = C.length, m = new Array(n).fill(NaN), am = new Array(n).fill(NaN);
+    for (let i = 1; i < n; i++) { m[i] = C[i] - C[i - 1]; am[i] = Math.abs(m[i]); }
+    const num = ema(ema(m, r), s), den = ema(ema(am, r), s), tsi = num.map(function (x, i) { return den[i] > 0 ? 100 * x / den[i] : NaN; }), sg = sig ? ema(tsi, sig) : null;
+    return sigGen_(o, function (i) { return isFinite(tsi[i]) && (sg ? isFinite(sg[i]) && tsi[i] > sg[i] : tsi[i] > 0); }, function (i) { return isFinite(tsi[i]) && (sg ? isFinite(sg[i]) && tsi[i] < sg[i] : tsi[i] < 0); });
+  };
+}
+function mfi_(o, len) {
+  const n = o.closes.length, tp = o.highs.map(function (h, i) { return (h + o.lows[i] + o.closes[i]) / 3; }), pos = new Array(n).fill(0), neg = new Array(n).fill(0), out = new Array(n).fill(NaN);
+  for (let i = 1; i < n; i++) { const f = tp[i] * o.volumes[i]; if (tp[i] > tp[i - 1]) pos[i] = f; else if (tp[i] < tp[i - 1]) neg[i] = f; }
+  const a = sma(pos, len), b = sma(neg, len); for (let i = 0; i < n; i++) if (isFinite(a[i]) && isFinite(b[i])) out[i] = b[i] === 0 ? 100 : 100 - 100 / (1 + a[i] / b[i]);
+  return out;
+}
+function candMfiRegime_(len, alto, baixo) { return function (o) { const m = cacheInd_(o, 'mfi' + len, function () { return mfi_(o, len); }); return sigGen_(o, function (i) { return isFinite(m[i]) && m[i] > alto; }, function (i) { return isFinite(m[i]) && m[i] < baixo; }); }; }
+function candMfiRev_(len, lim, f) { return function (o) { const m = cacheInd_(o, 'mfi' + len, function () { return mfi_(o, len); }), ok = filtroSmaOk_(o, f); return sigGen_(o, function (i) { return isFinite(m[i]) && m[i] < lim && ok(i); }, function (i) { return isFinite(m[i]) && m[i] > 50; }); }; }
+function candForceIndex_(len) {
+  return function (o) { const C = o.closes, n = C.length, fi = new Array(n).fill(NaN); for (let i = 1; i < n; i++) fi[i] = (C[i] - C[i - 1]) * o.volumes[i]; const e = ema(fi, len);
+    return sigGen_(o, function (i) { return isFinite(e[i]) && e[i] > 0; }, function (i) { return isFinite(e[i]) && e[i] < 0; }); };
+}
+function candElder_(len) {
+  return function (o) { const e = emaC_(o, len), H = o.highs;
+    return sigGen_(o, function (i) { return i > 0 && isFinite(e[i]) && isFinite(e[i - 1]) && e[i] > e[i - 1] && H[i] > e[i]; }, function (i) { return i > 0 && isFinite(e[i]) && isFinite(e[i - 1]) && e[i] < e[i - 1]; }, e); };
+}
+function candKst_(escala, sig) {
+  return function (o) {
+    const C = o.closes, n = C.length, roc = function (k) { const r = new Array(n).fill(NaN); for (let i = k; i < n; i++) r[i] = 100 * (C[i] / C[i - k] - 1); return r; };
+    const w = [[10, 10], [15, 10], [20, 10], [30, 15]].map(function (x) { return sma(roc(Math.round(x[0] * escala)), Math.round(x[1] * escala)); }), kst = new Array(n).fill(NaN);
+    for (let i = 0; i < n; i++) { let s = 0, ok = true; for (let k = 0; k < 4; k++) { if (!isFinite(w[k][i])) { ok = false; break; } s += w[k][i] * (k + 1); } if (ok) kst[i] = s; }
+    const sg = sma(kst, sig); return sigGen_(o, function (i) { return isFinite(kst[i]) && isFinite(sg[i]) && kst[i] > sg[i]; }, function (i) { return isFinite(kst[i]) && isFinite(sg[i]) && kst[i] < sg[i]; });
+  };
+}
+function candCoppock_(a, b, w) {
+  return function (o) { const C = o.closes, n = C.length, r = new Array(n).fill(NaN); for (let i = Math.max(a, b); i < n; i++) r[i] = 100 * ((C[i] / C[i - a] - 1) + (C[i] / C[i - b] - 1)); const c = wma_(r, w);
+    return sigGen_(o, function (i) { return i > 0 && isFinite(c[i]) && isFinite(c[i - 1]) && c[i] > 0 && c[i] > c[i - 1]; }, function (i) { return isFinite(c[i]) && c[i] < 0; }); };
+}
+function candFisher_(len) {
+  return function (o) { const hl = hhll_(o.highs, o.lows, len), n = o.closes.length, f = new Array(n).fill(NaN), md = o.highs.map(function (h, i) { return (h + o.lows[i]) / 2; }); let v = 0, prev = 0;
+    for (let i = 0; i < n; i++) { if (!isFinite(hl.hh[i]) || hl.hh[i] === hl.ll[i]) continue; v = 0.66 * ((md[i] - hl.ll[i]) / (hl.hh[i] - hl.ll[i]) - 0.5) + 0.67 * v; v = Math.max(-0.999, Math.min(0.999, v)); const x = 0.5 * Math.log((1 + v) / (1 - v)) + 0.5 * prev; f[i] = x; prev = x; }
+    return sigGen_(o, function (i) { return i > 0 && isFinite(f[i]) && isFinite(f[i - 1]) && f[i] > f[i - 1]; }, function (i) { return i > 0 && isFinite(f[i]) && isFinite(f[i - 1]) && f[i] < f[i - 1]; }); };
+}
+function candStochRsi_(rp, sp) {
+  return function (o) { const r = cacheInd_(o, 'r' + rp, function () { return rsi(o.closes, rp); }), n = r.length, k = new Array(n).fill(NaN);
+    for (let i = sp - 1 + rp; i < n; i++) { let a = Infinity, b = -Infinity, ok = true; for (let j = i - sp + 1; j <= i; j++) { if (!isFinite(r[j])) { ok = false; break; } if (r[j] < a) a = r[j]; if (r[j] > b) b = r[j]; } if (ok && b > a) k[i] = 100 * (r[i] - a) / (b - a); }
+    const d = sma(k, 3); return sigGen_(o, function (i) { return isFinite(d[i]) && d[i] > 60; }, function (i) { return isFinite(d[i]) && d[i] < 40; }); };
+}
+function candConnors_(lim, f, saida) {
+  return function (o) {
+    const C = o.closes, n = C.length, r3 = cacheInd_(o, 'r3', function () { return rsi(C, 3); }), st = new Array(n).fill(0), roc = new Array(n).fill(NaN), pr = new Array(n).fill(NaN);
+    for (let i = 1; i < n; i++) { st[i] = C[i] > C[i - 1] ? Math.max(st[i - 1], 0) + 1 : C[i] < C[i - 1] ? Math.min(st[i - 1], 0) - 1 : 0; roc[i] = C[i] / C[i - 1] - 1; }
+    const rs = rsi(st.map(function (x, i) { return i ? x : NaN; }), 2);
+    for (let i = 101; i < n; i++) { let c = 0; for (let j = i - 100; j < i; j++) if (roc[j] < roc[i]) c++; pr[i] = c; }
+    const crsi = C.map(function (x, i) { return (r3[i] + rs[i] + pr[i]) / 3; }), ok = filtroSmaOk_(o, f), sm = smaC_(o, 5);
+    return sigGen_(o, function (i) { return isFinite(crsi[i]) && crsi[i] < lim && ok(i); }, function (i) { return saida === 0 ? (isFinite(crsi[i]) && crsi[i] > 60) : (isFinite(sm[i]) && C[i] > sm[i]); });
+  };
+}
+function candSqueeze_(p, kb, kk) {
+  return function (o) {
+    const C = o.closes, n = C.length, m = smaC_(o, p), sd = cacheInd_(o, 'sd' + p, function () { return stdevPop_(C, p); }), atr = atrC_(o, p), lr = cacheInd_(o, 'lrm' + p, function () { return linreg_(C.map(function (c, i) { return isFinite(m[i]) ? c - m[i] : NaN; }), p); });
+    const on = new Array(n).fill(false); for (let i = 0; i < n; i++) on[i] = isFinite(m[i]) && isFinite(atr[i]) && m[i] + kb * sd[i] < m[i] + kk * atr[i] && m[i] - kb * sd[i] > m[i] - kk * atr[i];
+    return sigGen_(o, function (i) { return i > 0 && on[i - 1] && !on[i] && isFinite(lr.val[i]) && lr.val[i] > 0; }, function (i) { return isFinite(lr.val[i]) && lr.val[i] < 0; });
+  };
+}
+function candHeikin_(k, f) {
+  return function (o) {
+    const n = o.closes.length, hc = new Array(n), ho = new Array(n); for (let i = 0; i < n; i++) { hc[i] = (o.opens[i] + o.highs[i] + o.lows[i] + o.closes[i]) / 4; ho[i] = i ? (ho[i - 1] + hc[i - 1]) / 2 : (o.opens[i] + o.closes[i]) / 2; }
+    const ok = filtroSmaOk_(o, f); return sigGen_(o, function (i) { if (i < k) return false; for (let j = 0; j < k; j++) if (!(hc[i - j] > ho[i - j])) return false; return ok(i); }, function (i) { return hc[i] < ho[i]; });
+  };
+}
+function candGann_(len) {
+  return function (o) { const hi = sma(o.highs, len), lo = sma(o.lows, len), C = o.closes, n = C.length, st = new Array(n).fill(0); let s = 0;
+    for (let i = 1; i < n; i++) { if (isFinite(hi[i - 1]) && C[i] > hi[i - 1]) s = 1; else if (isFinite(lo[i - 1]) && C[i] < lo[i - 1]) s = -1; st[i] = s; }
+    return sigGen_(o, function (i) { return st[i] === 1; }, function (i) { return st[i] === -1; }, lo); };
+}
+function candZlema_(len) {
+  return function (o) { const C = o.closes, lag = Math.round((len - 1) / 2), d = C.map(function (c, i) { return i >= lag ? 2 * c - C[i - lag] : NaN; }), z = ema(d, len);
+    return sigGen_(o, function (i) { return i > 0 && isFinite(z[i]) && isFinite(z[i - 1]) && C[i] > z[i] && z[i] > z[i - 1]; }, function (i) { return isFinite(z[i]) && C[i] < z[i]; }, z); };
+}
+function candZscorePreco_(n, k, trend) {
+  return function (o) { const C = o.closes, m = smaC_(o, n), sd = cacheInd_(o, 'sd' + n, function () { return stdevPop_(C, n); }), t = smaC_(o, trend);
+    return sigGen_(o, function (i) { return isFinite(m[i]) && sd[i] > 0 && isFinite(t[i]) && (C[i] - m[i]) / sd[i] < -k && C[i] > t[i]; }, function (i) { return isFinite(m[i]) && C[i] > m[i]; }, t); };
+}
+function candPicoVolume_(mult, saidaEma) {
+  return function (o) { const C = o.closes, V = o.volumes, av = sma(V, 20), e = emaC_(o, saidaEma);
+    return sigGen_(o, function (i) { return i > 0 && isFinite(av[i - 1]) && av[i - 1] > 0 && V[i] > mult * av[i - 1] && C[i] > C[i - 1] && isFinite(e[i]) && C[i] > e[i]; }, function (i) { return isFinite(e[i]) && C[i] < e[i]; }, e); };
+}
+function candAlligator_(esc) {
+  return function (o) { const md = o.highs.map(function (h, i) { return (h + o.lows[i]) / 2; }), smma = function (v, len) { const out = new Array(v.length).fill(NaN); let p = null; for (let i = 0; i < v.length; i++) { if (p === null) { if (i >= len - 1) { let s = 0; for (let j = i - len + 1; j <= i; j++) s += v[j]; p = s / len; out[i] = p; } } else { p = (p * (len - 1) + v[i]) / len; out[i] = p; } } return out; };
+    const jw = smma(md, 13 * esc), te = smma(md, 8 * esc), li = smma(md, 5 * esc), sh = function (a, k) { return function (i) { return i - k >= 0 ? a[i - k] : NaN; }; }, J = sh(jw, 8 * esc), T = sh(te, 5 * esc), Li = sh(li, 3 * esc);
+    return sigGen_(o, function (i) { return isFinite(J(i)) && isFinite(T(i)) && isFinite(Li(i)) && Li(i) > T(i) && T(i) > J(i); }, function (i) { return isFinite(T(i)) && isFinite(Li(i)) && Li(i) < T(i); }); };
+}
+function candChoppiness_(len, f) {
+  return function (o) { const H = o.highs, L = o.lows, C = o.closes, n = C.length, tr = new Array(n).fill(0); for (let i = 1; i < n; i++) tr[i] = Math.max(H[i] - L[i], Math.abs(H[i] - C[i - 1]), Math.abs(L[i] - C[i - 1]));
+    const s = sma(tr, len).map(function (x) { return x * len; }), hl = hhll_(H, L, len), ci = s.map(function (x, i) { return isFinite(x) && hl.hh[i] > hl.ll[i] ? 100 * Math.log10(x / (hl.hh[i] - hl.ll[i])) / Math.log10(len) : NaN; }), m = smaC_(o, f);
+    return sigGen_(o, function (i) { return isFinite(ci[i]) && ci[i] < 45 && isFinite(m[i]) && C[i] > m[i]; }, function (i) { return (isFinite(ci[i]) && ci[i] > 61.8) || (isFinite(m[i]) && C[i] < m[i]); }, m); };
+}
+function candTendenciaSemanal_(sem) {
+  return function (o) {
+    const n = o.closes.length, k = 2 / (sem + 1), out = new Array(n).fill(NaN); let e = null, cont = 0, soma = 0;
+    for (let i = 0; i < n; i++) { if (o.dates[i].getUTCDay() === 0) { const c = o.closes[i]; if (e === null) { soma += c; cont++; if (cont === sem) e = soma / sem; } else e = c * k + e * (1 - k); } out[i] = e === null ? NaN : e; }
+    const C = o.closes; return sigGen_(o, function (i) { return isFinite(out[i]) && C[i] > out[i]; }, function (i) { return isFinite(out[i]) && C[i] < out[i]; }, out);
+  };
+}
+function candRegimeVol_(p, f) {
+  return function (o) { const C = o.closes, a = atrC_(o, 14), n = C.length, pct = new Array(n).fill(NaN), m = smaC_(o, f);
+    for (let i = 100; i < n; i++) { if (!isFinite(a[i])) continue; let c = 0, t = 0; for (let j = i - 100; j < i; j++) if (isFinite(a[j])) { t++; if (a[j] / C[j] < a[i] / C[i]) c++; } pct[i] = t ? 100 * c / t : NaN; }
+    return sigGen_(o, function (i) { return isFinite(pct[i]) && pct[i] < p && isFinite(m[i]) && C[i] > m[i]; }, function (i) { return (isFinite(pct[i]) && pct[i] > 85) || (isFinite(m[i]) && C[i] < m[i]); }, m); };
+}
+function candAltasSeguidas_(k, f) {
+  return function (o) { const C = o.closes, ok = filtroSmaOk_(o, f);
+    return sigGen_(o, function (i) { if (i < k) return false; for (let j = 0; j < k; j++) if (!(C[i - j] > C[i - j - 1])) return false; return ok(i); }, function (i) { return i > 0 && C[i] < C[i - 1]; }); };
+}
+function candMax52_(janela, ent, sai) {
+  return function (o) { const C = o.closes, H = o.highs, n = C.length, mx = new Array(n).fill(NaN); for (let i = janela - 1; i < n; i++) { let m = -Infinity; for (let j = i - janela + 1; j <= i; j++) if (H[j] > m) m = H[j]; mx[i] = m; }
+    return sigGen_(o, function (i) { return isFinite(mx[i]) && C[i] >= ent * mx[i]; }, function (i) { return isFinite(mx[i]) && C[i] < sai * mx[i]; }); };
+}
+function gerarPoolNovasClasses_() {
+  const L = [], add = function (id, nome, fn) { L.push({ id: 'Z-K-' + id, fam: 'novas', nome: nome, fn: fn, ampliado: true }); };
+  [[3, 21], [5, 34], [8, 50], [10, 60], [5, 20], [4, 28]].forEach(function (x) { [0, 100, 200].forEach(function (f) { add('AO' + x.join('-') + '-' + f, 'Awesome Oscillator ' + x.join('/') + (f ? ' acima da SMA' + f : ''), candAwesome_(x[0], x[1], f)); }); });
+  [7, 10, 14, 21, 28, 40, 55].forEach(function (n) { add('VI' + n, 'Vortex (' + n + ')', candVortex_(n)); });
+  [[25, 13], [15, 8], [40, 20], [10, 5], [30, 15]].forEach(function (x) { [0, 7].forEach(function (sg) { add('TSI' + x.join('-') + '-' + sg, 'TSI ' + x.join('/') + (sg ? ' x sinal' + sg : ' > 0'), candTsi_(x[0], x[1], sg)); }); });
+  [10, 14, 21, 30].forEach(function (n) { [[55, 45], [60, 40], [50, 50], [65, 40]].forEach(function (x) { add('MFIR' + n + '-' + x[0] + '-' + x[1], 'MFI(' + n + ') regime ' + x[0] + '/' + x[1], candMfiRegime_(n, x[0], x[1])); }); [10, 20, 30].forEach(function (lm) { [100, 200].forEach(function (f) { add('MFIV' + n + '-' + lm + '-' + f, 'MFI(' + n + ') < ' + lm + ' acima da SMA' + f + ', sai > 50', candMfiRev_(n, lm, f)); }); }); });
+  [2, 5, 13, 21, 34, 50].forEach(function (n) { add('FI' + n, 'Índice de Força (' + n + ')', candForceIndex_(n)); });
+  [13, 21, 34, 55, 89].forEach(function (n) { add('EL' + n, 'Elder Ray bull power (EMA' + n + ')', candElder_(n)); });
+  [0.6, 0.8, 1, 1.25, 1.5, 2].forEach(function (e) { [5, 9, 14].forEach(function (sg) { add('KST' + e + '-' + sg, 'KST (escala ' + e + ', sinal ' + sg + ')', candKst_(e, sg)); }); });
+  [[14, 11, 10], [25, 18, 14], [10, 7, 6], [20, 14, 10], [30, 20, 14]].forEach(function (x) { add('CO' + x.join('-'), 'Coppock ' + x.join('/'), candCoppock_(x[0], x[1], x[2])); });
+  [5, 9, 10, 14, 20, 30, 40].forEach(function (n) { add('FIS' + n, 'Fisher Transform (' + n + ')', candFisher_(n)); });
+  [[14, 14], [10, 10], [21, 21], [7, 7], [14, 21], [21, 14]].forEach(function (x) { add('SRSI' + x.join('-'), 'StochRSI ' + x.join('/') + ' regime 60/40', candStochRsi_(x[0], x[1])); });
+  [5, 10, 15, 20, 25, 30].forEach(function (lm) { [50, 100, 150, 200].forEach(function (f) { [0, 1].forEach(function (sd) { add('CRSI' + lm + '-' + f + '-' + sd, 'Connors RSI < ' + lm + ' acima da SMA' + f + (sd ? ', sai > SMA5' : ', sai > 60'), candConnors_(lm, f, sd)); }); }); });
+  [[20, 2, 1.5], [20, 2, 1], [14, 2, 1.5], [20, 1.5, 1.5], [30, 2, 1.5], [10, 2, 1.5]].forEach(function (x) { add('SQ' + x.join('-'), 'Squeeze de volatilidade (BB dentro do canal ATR) ' + x.join('/'), candSqueeze_(x[0], x[1], x[2])); });
+  [1, 2, 3, 4].forEach(function (k) { [0, 100, 200].forEach(function (f) { add('HA' + k + '-' + f, 'Heikin-Ashi ' + k + ' barras altistas' + (f ? ' acima da SMA' + f : ''), candHeikin_(k, f)); }); });
+  [3, 5, 8, 10, 13, 21, 34].forEach(function (n) { add('GANN' + n, 'Gann HiLo Activator (' + n + ')', candGann_(n)); });
+  [10, 20, 34, 50, 89, 144].forEach(function (n) { add('ZL' + n, 'ZLEMA (' + n + ') inclinação', candZlema_(n)); });
+  [10, 20, 50].forEach(function (n) { [1, 1.5, 2].forEach(function (k) { [100, 200].forEach(function (t) { add('ZS' + n + '-' + k + '-' + t, 'Z-score de preço (' + n + ') < -' + k + ' acima da SMA' + t, candZscorePreco_(n, k, t)); }); }); });
+  [1.5, 2, 3].forEach(function (m) { [10, 20, 50].forEach(function (e) { add('PV' + m + '-' + e, 'Pico de volume ' + m + 'x com preço acima da EMA' + e, candPicoVolume_(m, e)); }); });
+  [1, 2].forEach(function (e) { add('AL' + e, 'Alligator de Williams (escala ' + e + ')', candAlligator_(e)); });
+  [14, 21].forEach(function (n) { [20, 50, 100].forEach(function (f) { add('CHOP' + n + '-' + f, 'Choppiness (' + n + ') baixo acima da SMA' + f, candChoppiness_(n, f)); }); });
+  [8, 10, 13, 21, 30, 40].forEach(function (s) { add('SEM' + s, 'Tendência semanal: preço x EMA de ' + s + ' semanas', candTendenciaSemanal_(s)); });
+  [20, 35, 50, 65].forEach(function (p) { [100, 200].forEach(function (f) { add('RV' + p + '-' + f, 'Regime de volatilidade baixo (<' + p + '%) acima da SMA' + f, candRegimeVol_(p, f)); }); });
+  [2, 3, 4, 5].forEach(function (k) { [0, 50, 100, 200].forEach(function (f) { add('UP' + k + '-' + f, k + ' altas seguidas' + (f ? ' acima da SMA' + f : ''), candAltasSeguidas_(k, f)); }); });
+  [252, 180, 120, 60].forEach(function (j) { [[0.9, 0.8], [0.95, 0.85], [0.85, 0.75], [0.97, 0.9]].forEach(function (x) { add('MX' + j + '-' + x[0] + '-' + x[1], 'Proximidade da máxima de ' + j + ' dias (entra a ' + Math.round(x[0] * 100) + '%, sai abaixo de ' + Math.round(x[1] * 100) + '%)', candMax52_(j, x[0], x[1])); }); });
+  return L;
+}
+
+/* =============================================================================
+ * 2H. PADRÕES DE CANDLES, CPR, AGULHADA DO DIDI e BARRAS DE TENDÊNCIA (famílias da planilha de vídeos). IDs começam com Z-P-.
+ * ===========================================================================*/
+/** Entrada por padrão + saída por tempo (N barras) ou perda da média; estado interno para contar as barras desde a entrada. */
+function candPadrao_(padrao, f, N, mSaida) {
+  return function (o) {
+    const n = o.closes.length, C = o.closes, ok = filtroSmaOk_(o, f), m = mSaida ? smaC_(o, mSaida) : null, en = new Array(n).fill(false), ex = new Array(n).fill(false); let pos = false, ent = 0;
+    for (let i = 3; i < n; i++) {
+      if (!pos) { if (padrao(o, i) && ok(i)) { pos = true; ent = i; en[i] = true; } }
+      else if ((N && i - ent >= N) || (m && isFinite(m[i]) && C[i] < m[i])) { pos = false; ex[i] = true; }
+    }
+    return { entrySignal: en, exitSignal: ex };
+  };
+}
+const PADROES_ = {
+  engolfo: function (o, i) { const O = o.opens, C = o.closes; return C[i] > O[i] && C[i - 1] < O[i - 1] && C[i] >= O[i - 1] && O[i] <= C[i - 1]; },
+  martelo: function (o, i) { const O = o.opens, C = o.closes, H = o.highs, L = o.lows, b = Math.abs(C[i] - O[i]), r = H[i] - L[i]; return r > 0 && b > 0 && Math.min(O[i], C[i]) - L[i] >= 2 * b && H[i] - Math.max(O[i], C[i]) <= 0.5 * b && C[i] > L[i] + 0.6 * r; },
+  inside: function (o, i) { const H = o.highs, L = o.lows, C = o.closes; return H[i - 1] < H[i - 2] && L[i - 1] > L[i - 2] && C[i] > H[i - 2]; },
+  soldados: function (o, i) { const O = o.opens, C = o.closes, H = o.highs, L = o.lows; for (let k = 0; k < 3; k++) { const j = i - k, r = H[j] - L[j]; if (!(C[j] > O[j] && r > 0 && C[j] > L[j] + 0.7 * r && C[j] > C[j - 1])) return false; } return true; },
+  marubozu: function (o, i) { const O = o.opens, C = o.closes, H = o.highs, L = o.lows, a = atrC_(o, 14), r = H[i] - L[i]; return C[i] > O[i] && r > 0 && (C[i] - O[i]) >= 0.8 * r && isFinite(a[i - 1]) && r >= 1.2 * a[i - 1]; },
+};
+function candCpr_(f) {
+  return function (o) { const H = o.highs, L = o.lows, C = o.closes, ok = filtroSmaOk_(o, f), n = C.length, tc = new Array(n).fill(NaN), bc = new Array(n).fill(NaN);
+    for (let i = 1; i < n; i++) { const p = (H[i - 1] + L[i - 1] + C[i - 1]) / 3, b = (H[i - 1] + L[i - 1]) / 2, t = 2 * p - b; tc[i] = Math.max(t, b); bc[i] = Math.min(t, b); }
+    return sigGen_(o, function (i) { return isFinite(tc[i]) && C[i] > tc[i] && ok(i); }, function (i) { return isFinite(bc[i]) && C[i] < bc[i]; }); };
+}
+function candDidi_(x, f) {
+  return function (o) { const a = smaC_(o, 3), b = smaC_(o, 8), c = smaC_(o, 20), C = o.closes, ok = filtroSmaOk_(o, f);
+    return sigGen_(o, function (i) { if (i < 1 || !isFinite(c[i - 1])) return false; const mx = Math.max(a[i - 1], b[i - 1], c[i - 1]), mn = Math.min(a[i - 1], b[i - 1], c[i - 1]); return (mx - mn) / C[i - 1] <= x && a[i] > b[i] && b[i] > c[i] && ok(i); }, function (i) { return isFinite(b[i]) && a[i] < b[i]; }); };
+}
+function candBarrasTendencia_(k, m, ema) {
+  return function (o) { const O = o.opens, C = o.closes, H = o.highs, L = o.lows, e = emaC_(o, ema), n = C.length, t = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) { const r = H[i] - L[i]; t[i] = r > 0 && C[i] > O[i] && (C[i] - O[i]) >= 0.5 * r && C[i] >= L[i] + 0.66 * r ? 1 : 0; }
+    const cnt = function (i) { let s = 0; for (let j = 0; j < k; j++) s += i - j >= 0 ? t[i - j] : 0; return s; };
+    return sigGen_(o, function (i) { return i >= k && isFinite(e[i]) && cnt(i) >= m && C[i] > e[i]; }, function (i) { return (isFinite(e[i]) && C[i] < e[i]) || (i >= k && cnt(i) <= 1); }, e); };
+}
+function gerarPoolPadroes_() {
+  const L = [], add = function (id, nome, fn) { L.push({ id: 'Z-P-' + id, fam: 'padroes', nome: nome, fn: fn, ampliado: true }); };
+  const nomes = { engolfo: 'Engolfo de alta', martelo: 'Martelo', inside: 'Inside bar rompendo a máxima', soldados: 'Três soldados brancos', marubozu: 'Marubozu de alta' };
+  Object.keys(PADROES_).forEach(function (k) { [50, 100, 200].forEach(function (f) { [2, 3, 5, 10].forEach(function (N) { add(k + f + '-' + N, nomes[k] + ' acima da SMA' + f + ', sai após ' + N + ' barras', candPadrao_(PADROES_[k], f, N, 0)); }); [10, 20].forEach(function (m) { add(k + f + '-m' + m, nomes[k] + ' acima da SMA' + f + ', sai abaixo da SMA' + m, candPadrao_(PADROES_[k], f, 0, m)); }); }); });
+  [0, 50, 100, 200].forEach(function (f) { add('CPR' + f, 'CPR (pivôs): fecha acima do canal central' + (f ? ' acima da SMA' + f : ''), candCpr_(f)); });
+  [0.01, 0.02, 0.04, 0.06].forEach(function (x) { [0, 100, 200].forEach(function (f) { add('DIDI' + x + '-' + f, 'Agulhada do Didi (médias 3, 8 e 20 juntas dentro de ' + Math.round(x * 100) + '%)' + (f ? ' acima da SMA' + f : ''), candDidi_(x, f)); }); });
+  [[5, 3], [5, 4], [8, 5], [10, 6], [8, 4], [12, 7]].forEach(function (x) { [20, 50].forEach(function (e) { add('BT' + x.join('-') + '-' + e, 'Barras de tendência de alta (Al Brooks) ' + x[1] + ' em ' + x[0] + ' com preço acima da EMA' + e, candBarrasTendencia_(x[0], x[1], e)); }); });
+  return L;
+}
+
+/* =============================================================================
  * 2B. SELEÇÃO DAS 10 MELHORES ESTRATÉGIAS DE CADA MOEDA
  *
  * Princípio: escolher entre muitos candidatos contamina a medida (quem escolhe o melhor de 46 sempre vê um número
@@ -768,7 +994,7 @@ function gerarPoolFino_() {
  *     SELECAO_DD_MAX e trades mínimos no IS. Nenhuma vaga é preenchida com candidato abaixo disso (vaga fica ABERTA).
  *     Se faltarem estratégias, entra a BUSCA AMPLIADA (grade de ~300 parâmetros) e a escolha é refeita.
  *  3. Nota = média dos percentis de Sharpe IS e Calmar IS entre os elegíveis.
- *  4. Diversificação gulosa pela ordem da nota: no máximo SELECAO_MAX_POR_FAMILIA por família e correlação dos
+ *  4. Diversificação gulosa pela ordem da nota: no máximo SELECAO_MAX_MESMA_CLASSE_POR_5 (1) estratégia da mesma classe de indicador a cada 5 e correlação dos
  *     retornos diários no IS menor que SELECAO_CORR_MAX com as já escolhidas (evita 10 versões da mesma média móvel).
  *  5. A escolha fica congelada e só muda a cada SELECAO_REFRESH_DIAS ou pelo menu S. Entre reseleções, o desempenho
  *     "desde a seleção" é evidência genuinamente futura.
@@ -841,12 +1067,12 @@ function selecionar_(o, defs, opc) {
   opc = opc || {};
   const n = o.closes.length, w0 = Math.min(210, n - 150), cut = w0 + Math.floor((n - w0) * cfgNum_('SELECAO_CORTE_IS'));
   const anos = (n - w0) / 365.25, minTr = Math.max(5, Math.min(cfgNum_('SELECAO_MIN_TRADES_IS'), Math.round(anos * 2)));
-  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), famR = cfgNum_('SELECAO_MAX_POR_FAMILIA_RELAX'), maxFam = cfgNum_('SELECAO_MAX_POR_FAMILIA'), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS');
+  const ddMax = cfgNum_('SELECAO_DD_MAX'), ddMaxR = cfgNum_('SELECAO_DD_MAX_RELAX'), minTrR = cfgNum_('SELECAO_MIN_TRADES_RELAX'), corrR = cfgNum_('SELECAO_CORR_MAX_RELAX'), capCl = Math.max(1, Math.round(((opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS')) / 5) * cfgNum_('SELECAO_MAX_MESMA_CLASSE_POR_5'))), corrMax = cfgNum_('SELECAO_CORR_MAX'), alvo = opc.alvo || cfgNum_('SELECAO_N_ESTRATEGIAS');
   const idsBase = {}; POOL.forEach(function (e) { idsBase[e.id] = true; });
   const det = [], tIni = Date.now(), orc = cfgNum_('SELECAO_ORCAMENTO_SEG') * 1000; let interrompida = false;
   defs.forEach(function (e) {
     if (Date.now() - tIni > orc) { interrompida = true; return; }   // guarda: a busca nunca estoura o limite de 6 minutos do Apps Script
-    const r = rodarLista_(o, [e])[0], d = { id: e.id, fam: e.fam, nome: e.nome, situacao: '', slot: 0, base: !!idsBase[e.id] };
+    const r = rodarLista_(o, [e])[0], d = { id: e.id, fam: e.fam, ind: e.ind || classeInd_(e.nome), nome: e.nome, situacao: '', slot: 0, base: !!idsBase[e.id] };
     det.push(d);
     if (r.erro || !r.eqCurve) { d.situacao = 'ERRO no cálculo'; return; }
     const nv = nivelSharpe_(r.eqCurve, n), m = metricasFaixa_(r.eqCurve, w0, n);
@@ -863,21 +1089,15 @@ function selecionar_(o, defs, opc) {
   eleg.sort(function (a, b) { return ORDEM_NIVEL[a.nivel] - ORDEM_NIVEL[b.nivel] || b.nota - a.nota; });
   const escolhidas = [], porFam = {};
   (opc.mantidas || []).forEach(function (r, k) {   // estratégias já aceitas (ex.: fixas do BTC que cumprem a régua) entram na conta de vagas, família e correlação
-    const d = { id: r.id, fam: r.fam || 'p02', ret: retornos_(r.eqCurve, w0, n), slot: k + 1, mantida: true, situacao: 'MANTIDA' }; escolhidas.push(d); porFam[d.fam] = (porFam[d.fam] || 0) + 1;
+    const d = { id: r.id, fam: r.fam || 'p02', ind: r.ind || classeInd_(r.nome), ret: retornos_(r.eqCurve, w0, n), slot: k + 1, mantida: true, situacao: 'MANTIDA' }; escolhidas.push(d); porFam[d.ind] = (porFam[d.ind] || 0) + 1;
   });
   eleg.forEach(function (d) {
     if (escolhidas.length >= alvo) { d.situacao = 'elegível (' + d.nivel + '), não escolhida'; return; }
-    if ((porFam[d.fam] || 0) >= maxFam) { d.situacao = 'família ' + d.fam + ' já tem ' + maxFam; return; }
+    if ((porFam[d.ind] || 0) >= capCl) { d.situacao = 'classe ' + d.ind + ' já tem ' + capCl + ' (regra: no máximo ' + capCl + ' da mesma classe)'; return; }
     for (let k = 0; k < escolhidas.length; k++) { const c = correl_(d.ret, escolhidas[k].ret); if (c > corrMax) { d.situacao = 'correlação ' + r_(c, 2) + ' com ' + escolhidas[k].id; return; } }
-    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ')'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ')'; porFam[d.ind] = (porFam[d.ind] || 0) + 1; escolhidas.push(d);
   });
-  // segunda passada: se sobraram vagas, aceita mais uma estratégia por família (a correlação continua valendo)
-  eleg.forEach(function (d) {
-    if (escolhidas.length >= alvo || d.slot || d.situacao.indexOf('família') !== 0 || (porFam[d.fam] || 0) >= maxFam + 1) return;
-    for (let k = 0; k < escolhidas.length; k++) { if (correl_(d.ret, escolhidas[k].ret) > corrMax) return; }
-    d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (' + d.nivel + ', família extra)'; porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
-  });
-  // terceira passada (critério relaxado): o Sharpe continua exigido no nível PLENA; relaxam só drawdown, trades, correlação e família
+  // terceira passada (critério relaxado): o Sharpe continua exigido no nível PLENA; relaxam só drawdown, trades e correlação; a regra de classe nunca é relaxada
   const relax = {};
   if (escolhidas.length < alvo && cfgSim_('SELECAO_RELAXAR_SE_FALTAR')) {
     const cand = det.filter(function (d) { return !d.slot && d.nivel === 'PLENA' && d.ret && (d.elegivel || d.relaxavel); });
@@ -885,12 +1105,12 @@ function selecionar_(o, defs, opc) {
     cand.forEach(function (d, i) { d.nota2 = (pS2[i] + pC2[i]) / 2; });
     cand.sort(function (a, b) { return b.nota2 - a.nota2; });
     cand.forEach(function (d) {
-      if (escolhidas.length >= alvo || (porFam[d.fam] || 0) >= famR) return;
+      if (escolhidas.length >= alvo || (porFam[d.ind] || 0) >= capCl) return;
       let cmax = 0, com = ''; for (let k = 0; k < escolhidas.length; k++) { const c = correl_(d.ret, escolhidas[k].ret); if (c > cmax) { cmax = c; com = escolhidas[k].id; } }
       if (cmax > corrR) return;
-      const motivo = []; if (d.dd > ddMax) motivo.push('drawdown ' + r_(d.dd, 0) + '%'); if (d.nTr < minTr) motivo.push(d.nTr + ' trades'); if (cmax > corrMax) motivo.push('correlação ' + r_(cmax, 2) + ' com ' + com); if ((porFam[d.fam] || 0) >= maxFam + 1) motivo.push('família ' + d.fam + ' com ' + ((porFam[d.fam] || 0) + 1));
+      const motivo = []; if (d.dd > ddMax) motivo.push('drawdown ' + r_(d.dd, 0) + '%'); if (d.nTr < minTr) motivo.push(d.nTr + ' trades'); if (cmax > corrMax) motivo.push('correlação ' + r_(cmax, 2) + ' com ' + com);
       d.slot = escolhidas.length + 1; d.situacao = 'ESCOLHIDA #' + d.slot + ' (PLENA, critério relaxado' + (motivo.length ? ': ' + motivo.join(', ') : '') + ')'; relax[d.id] = motivo.length ? motivo.join(', ') : 'critério relaxado';
-      porFam[d.fam] = (porFam[d.fam] || 0) + 1; escolhidas.push(d);
+      porFam[d.ind] = (porFam[d.ind] || 0) + 1; escolhidas.push(d);
     });
   }
   det.forEach(function (d) { if (!d.situacao) d.situacao = '—'; });
@@ -1788,7 +2008,7 @@ function rodarLista_(o, lista) {
   return lista.map(function (e) {
     let r;
     try { r = runBacktest_(o, e.fn(o)); } catch (err) { r = { erro: err.message, posAtual: 0 }; }
-    r.id = e.id; r.key = e.key || e.id; r.nome = e.nome; r.ativa = true; r.grupo = e.grupo || 'Seleção'; r.fam = e.fam;
+    r.id = e.id; r.key = e.key || e.id; r.nome = e.nome; r.ativa = true; r.grupo = e.grupo || 'Seleção'; r.fam = e.fam; r.ind = e.ind || classeInd_(e.nome);
     return r;
   });
 }
@@ -1798,6 +2018,8 @@ function defsPorId_(ids) {
   const mapa = {}; POOL.forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('X-') === 0; })) gerarPoolAmpliado_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Y-') === 0; })) gerarPoolEstendido_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-P-') === 0; })) gerarPoolPadroes_().forEach(function (e) { mapa[e.id] = e; });
+  if (ids.some(function (id) { return id.indexOf('Z-K-') === 0; })) gerarPoolNovasClasses_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Z-N-') === 0; })) gerarPoolFino_().forEach(function (e) { mapa[e.id] = e; });
   if (ids.some(function (id) { return id.indexOf('Z-') === 0; })) gerarPoolMassivo_().concat(gerarPoolReversao_()).forEach(function (e) { mapa[e.id] = e; });
   return ids.map(function (id) { return mapa[id]; }).filter(Boolean);
@@ -1809,7 +2031,7 @@ function minVelas_(sym) {
   return m[String(sym).toUpperCase()] || cfgNum_('MIN_VELAS_CONSENSO');
 }
 
-function todosDefs_() { return POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_(), gerarPoolFino_()); }
+function todosDefs_() { return POOL.concat(gerarPoolAmpliado_(), gerarPoolEstendido_(), gerarPoolMassivo_(), gerarPoolReversao_(), gerarPoolFino_(), gerarPoolNovasClasses_(), gerarPoolPadroes_()); }
 
 function processarAtivo_(u, forcar) {
   const prev = lerRes_(u.sym), ontemStr = Utilities.formatDate(new Date(ontemUtcMs_()), 'UTC', 'yyyy-MM-dd');
@@ -1860,8 +2082,8 @@ function processarAtivo_(u, forcar) {
     else res = rodarLista_(o, defsPorId_(sel.ids));
     cutStr = sel.corte; w0Str = sel.w0; dataSel = sel.data;
   }
-  if (!res.length) {
-    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', vagas: sel ? sel.vagas : 10, ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
+  if (res.length < Math.min(cfgNum_('SELECAO_MIN_PARA_MEDIR'), fixas ? FIXAS_BTC.length : cfgNum_('SELECAO_N_ESTRATEGIAS'))) {   // moeda com menos estratégias aceitas que o mínimo: não é analisada
+    const res1 = Object.assign(base, { estado: 'SEM_ESTRATEGIA_ELEGIVEL', achadas: res.length, vagas: sel ? sel.vagas : 10, ultimaVela: Utilities.formatDate(o.dates[n - 1], 'UTC', 'yyyy-MM-dd'), preco: o.closes[n - 1] });
     guardarRes_(u.sym, res1); return { resumo: res1, eventos: [] };
   }
   res.forEach(function (r) {
@@ -1876,7 +2098,7 @@ function processarAtivo_(u, forcar) {
   const estr = res.map(function (r, k) {
     const m = r.eqCurve ? metricasJanela_(r.eqCurve, ini) : null, mi = r.eqCurve ? metricasFaixa_(r.eqCurve, w0, cut) : null, mo = r.eqCurve ? metricasFaixa_(r.eqCurve, cut, n) : null;
     const fw = r.eqCurve && iSel > 0 ? metricasFaixa_(r.eqCurve, iSel, n) : null;
-    return { id: r.id, fam: r.fam || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
+    return { id: r.id, fam: r.fam || '', ind: r.ind || '', nome: r.nome, slot: k + 1, pos: r.posAtual, evento: r.evento || (r.erro ? 'ERRO' : ''), pe: r.precoEntrada ? r_(r.precoEntrada, 6) : null, stop: r.stopAtual ? r_(r.stopAtual, 6) : null,
       la: r_(r.lucroAbertoPct || 0), lacum: r_(r.lucroAcumPct || 0), nt: r.nTrades || 0, win: r.winRate === null || r.winRate === undefined ? null : r_(r.winRate, 1),
       sh3: r_(r.sharpe || 0, 2), peso: somaPeso > 0 ? r_((r.peso || 0) / somaPeso * 100, 1) : 0, cagr: m ? m.cagr : null, dd: m ? m.dd : null, calmar: m ? m.calmar : null,
       sh12: r.perm && r.perm.s12 !== null ? r_(r.perm.s12, 2) : null, sh24: r.perm && r.perm.s24 !== null ? r_(r.perm.s24, 2) : null, shH: r.eqCurve ? r_(nivelSharpe_(r.eqCurve, n).full, 2) : null, fora: r.ativa === false, nivel: r.eqCurve ? nivelSharpe_(r.eqCurve, n).nivel : '', rel: sel && sel.rel && sel.rel[r.id] ? sel.rel[r.id] : '', isSh: mi ? mi.sharpe : null, isCa: mi ? mi.calmar : null, isTr: r.eqCurve ? contarTrades_(r, w0, cut) : null,
@@ -2167,23 +2389,23 @@ function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
     'Nivel_Sharpe', 'Sharpe_historico (mín. ' + fmtMin_('SELECAO_SHARPE_MIN') + ')', 'Sharpe_24m (mín. ' + fmtMin_('SELECAO_SHARPE_MIN_24M') + ')', 'Sharpe_12m (mín. ' + fmtMin_('SELECAO_SHARPE_MIN_12M') + ')', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
-    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela', 'Criterio_secundario'];
+    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela', 'Criterio_secundario', 'Classe_indicador'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; }, NC = cab.length;
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') {   // moeda sem estratégia aceita (ou sem histórico): aparece com as vagas abertas para o painel e esta aba baterem
       if (x.u.status === 'REFERENCIA') return;
       for (let k = 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-        const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA (' + (x.r ? x.r.estado : 'AGUARDANDO CARGA') + '): nenhum candidato atende aos mínimos de Sharpe'; l[6] = 'VAGA'; rows.push(l);
+        const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA (' + (x.r ? x.r.estado : 'AGUARDANDO CARGA') + (x.r && x.r.achadas !== undefined ? ': ' + x.r.achadas + ' de ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' estratégias atenderam aos mínimos e à regra de diversificação; a moeda só é analisada com ' + cfgNum_('SELECAO_MIN_PARA_MEDIR') : '') + ')'; l[6] = 'VAGA'; rows.push(l);
       }
       return;
     }
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, (e.rel ? 'RELAXADO: ' + e.rel : 'padrão') + (e.nt < 15 ? ' · amostra curta (' + e.nt + ' trades)' : '')]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, (e.rel ? 'RELAXADO: ' + e.rel : 'padrão') + (e.nt < 15 ? ' · amostra curta (' + e.nt + ' trades)' : ''), e.ind || '']);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; l[29] = ''; rows.push(l);
+      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; l[29] = ''; l[30] = ''; rows.push(l);
     }
   });
   sh.clear();
@@ -2610,6 +2832,16 @@ function auditoria() {
     }
   });
   add('Recálculo', 'Total de valores de estratégias recalculados', totCmp, okCmp + ' conferem', okCmp === totCmp);
+
+  // 3B. Regra de diversificação: no máximo 1 da mesma classe de indicador a cada 5 (2 em 10)
+  ativos.forEach(function (u) {
+    const re = (estrPorAtivo[u.sym] || []).filter(function (r) { return r[2] !== '—' && r[6] !== 'VAGA' && r[6] !== 'FORA DA REGRA (Sharpe)'; });
+    if (!re.length) return;
+    const cap = Math.max(1, Math.round(re.length / 5 * cfgNum_('SELECAO_MAX_MESMA_CLASSE_POR_5'))), cont = {};
+    re.forEach(function (r) { const c = classeInd_(r[4]); cont[c] = (cont[c] || 0) + 1; });
+    const exc = Object.keys(cont).filter(function (c) { return cont[c] > cap; }).map(function (c) { return c + ' x' + cont[c]; });
+    add('Diversificação', u.sym + ' classes de indicador', 'no máximo ' + cap + ' da mesma classe em ' + re.length, exc.length ? 'excede: ' + exc.join(', ') : 'respeitada (' + Object.keys(cont).length + ' classes)', !exc.length);
+  });
 
   // 4. Mínimos de Sharpe e estratégias abaixo da régua
   const abaixo = []; Object.keys(estrPorAtivo).forEach(function (s) { estrPorAtivo[s].forEach(function (r) {

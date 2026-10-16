@@ -91,6 +91,16 @@ function auditoria() {
   });
   add('Recálculo', 'Total de valores de estratégias recalculados', totCmp, okCmp + ' conferem', okCmp === totCmp);
 
+  // 3B. Regra de diversificação: no máximo 1 da mesma classe de indicador a cada 5 (2 em 10)
+  ativos.forEach(function (u) {
+    const re = (estrPorAtivo[u.sym] || []).filter(function (r) { return r[2] !== '—' && r[6] !== 'VAGA' && r[6] !== 'FORA DA REGRA (Sharpe)'; });
+    if (!re.length) return;
+    const cap = Math.max(1, Math.round(re.length / 5 * cfgNum_('SELECAO_MAX_MESMA_CLASSE_POR_5'))), cont = {};
+    re.forEach(function (r) { const c = classeInd_(r[4]); cont[c] = (cont[c] || 0) + 1; });
+    const exc = Object.keys(cont).filter(function (c) { return cont[c] > cap; }).map(function (c) { return c + ' x' + cont[c]; });
+    add('Diversificação', u.sym + ' classes de indicador', 'no máximo ' + cap + ' da mesma classe em ' + re.length, exc.length ? 'excede: ' + exc.join(', ') : 'respeitada (' + Object.keys(cont).length + ' classes)', !exc.length);
+  });
+
   // 4. Mínimos de Sharpe e estratégias abaixo da régua
   const abaixo = []; Object.keys(estrPorAtivo).forEach(function (s) { estrPorAtivo[s].forEach(function (r) {
     if (r[2] === '—' || r[6] === 'VAGA' || r[6] === 'FORA DA REGRA (Sharpe)') return;

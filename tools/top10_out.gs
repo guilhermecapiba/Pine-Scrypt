@@ -49,23 +49,23 @@ function gravarEstrategiasTop10_() {
   const sh = ss_().getSheetByName(P2.ABAS.estr), lista = resultadosOrdenados_();
   const cab = ['Ativo', 'Slot', 'ID', 'Familia', 'Estrategia', 'Posicao_Atual (1/0)', 'Status', 'Evento_Ultima_Vela', 'Preco_Entrada', 'Stop_Loss_Atual', 'Lucro_Trade_Aberto_pct', 'Lucro_Acumulado_pct', 'N_Trades', 'Win_Rate_pct',
     'Nivel_Sharpe', 'Sharpe_historico (mín. ' + fmtMin_('SELECAO_SHARPE_MIN') + ')', 'Sharpe_24m (mín. ' + fmtMin_('SELECAO_SHARPE_MIN_24M') + ')', 'Sharpe_12m (mín. ' + fmtMin_('SELECAO_SHARPE_MIN_12M') + ')', 'Sharpe_3a (peso do consenso)', 'Peso_Consenso_pct',
-    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela', 'Criterio_secundario'];
+    'Sharpe_70pct_iniciais', 'Calmar_70pct_iniciais', 'Sharpe_30pct_finais', 'Calmar_30pct_finais', 'CAGR_30pct_finais', 'MaxDD_30pct_finais', 'CAGR_desde_selecao_pct', 'Selecionada_em', 'Data_Ultima_Vela', 'Criterio_secundario', 'Classe_indicador'];
   const rows = [], v = function (x) { return x === null || x === undefined ? '' : x; }, NC = cab.length;
   lista.forEach(function (x) {
     if (!x.r || x.r.estado !== 'OK') {   // moeda sem estratégia aceita (ou sem histórico): aparece com as vagas abertas para o painel e esta aba baterem
       if (x.u.status === 'REFERENCIA') return;
       for (let k = 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-        const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA (' + (x.r ? x.r.estado : 'AGUARDANDO CARGA') + '): nenhum candidato atende aos mínimos de Sharpe'; l[6] = 'VAGA'; rows.push(l);
+        const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA (' + (x.r ? x.r.estado : 'AGUARDANDO CARGA') + (x.r && x.r.achadas !== undefined ? ': ' + x.r.achadas + ' de ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' estratégias atenderam aos mínimos e à regra de diversificação; a moeda só é analisada com ' + cfgNum_('SELECAO_MIN_PARA_MEDIR') : '') + ')'; l[6] = 'VAGA'; rows.push(l);
       }
       return;
     }
     x.r.estr.forEach(function (e) {
       rows.push([x.u.sym, e.slot, e.id, e.fam, e.nome, e.pos, e.fora ? 'FORA DA REGRA (Sharpe)' : (e.pos === 1 ? 'COMPRADO' : 'CAIXA'), e.evento || '—', e.pe === null ? '—' : e.pe, e.stop === null ? '—' : e.stop, e.la, e.lacum, e.nt,
-        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, (e.rel ? 'RELAXADO: ' + e.rel : 'padrão') + (e.nt < 15 ? ' · amostra curta (' + e.nt + ' trades)' : '')]);
+        e.win === null ? 'N/D (N=' + e.nt + ')' : e.win, e.nivel || '', v(e.shH), v(e.sh24), v(e.sh12), e.sh3, e.peso, v(e.isSh), v(e.isCa), v(e.oosSh), v(e.oosCa), v(e.oosCagr), v(e.oosDd), v(e.fwCagr), x.r.selData, x.r.ultimaVela, (e.rel ? 'RELAXADO: ' + e.rel : 'padrão') + (e.nt < 15 ? ' · amostra curta (' + e.nt + ' trades)' : ''), e.ind || '']);
     });
     // vagas abertas aparecem como linhas explícitas: cada moeda sempre mostra todas as posições
     if (!x.r.fixas) for (let k = x.r.estr.length + 1; k <= cfgNum_('SELECAO_N_ESTRATEGIAS'); k++) {
-      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; l[29] = ''; rows.push(l);
+      const l = new Array(NC).fill(''); l[0] = x.u.sym; l[1] = k; l[2] = '—'; l[3] = '—'; l[4] = 'VAGA ABERTA: nenhum candidato com Sharpe do histórico >= ' + cfgNum_('SELECAO_PISO_PROVISORIO') + ' nos filtros'; l[6] = 'VAGA'; l[27] = x.r.selData; l[28] = x.r.ultimaVela; l[29] = ''; l[30] = ''; rows.push(l);
     }
   });
   sh.clear();
