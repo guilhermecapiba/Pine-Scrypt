@@ -16,10 +16,11 @@ class Sheet {
   getRange(r, c, nr, nc) { return new Range(this, r, c, nr, nc); }
   clear() { this.cells = {}; return this; }
   appendRow(a) { const r = this.getLastRow() + 1; a.forEach((v, j) => this.cells[r + ',' + (j + 1)] = v); }
-  setName(n) { this.name = n; } setFrozenRows() {} setFrozenColumns() {} setColumnWidth() {}
+  setName(n) { this.name = n; } getName() { return this.name; } setFrozenRows() {} setFrozenColumns() {} setColumnWidth() {}
 }
 const sheets = [];
 const SS = { getId: () => '1WubiUb2K9s8J_a9AGfqphKYFFYi6ezAWCVBqn21A0jk',
+  getSheets: () => sheets,
   getSheetByName: n => sheets.find(s => s.name === n) || null,
   insertSheet: n => { const s = new Sheet(n); sheets.push(s); return s; },
   setActiveSheet() {}, moveActiveSheet() {}, setSpreadsheetTimeZone() {}, toast: m => {}, };
