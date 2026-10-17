@@ -323,6 +323,11 @@ function setupPlanilha() {
   const existentes = {}; if (cfgSh.getLastRow() > 1) cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 1).getValues().forEach(function (r) { existentes[r[0]] = true; });
   const novos = CFG_PADRAO.filter(function (r) { return !existentes[r[0]]; });
   if (novos.length) cfgSh.getRange(cfgSh.getLastRow() + 1, 1, novos.length, 3).setValues(novos);
+  if (cfgSh.getLastRow() > 1) {   // remove parâmetros que o código não usa mais (não têm efeito) e sincroniza as descrições
+    const codigoCfg = {}; CFG_PADRAO.forEach(function (r) { codigoCfg[r[0]] = true; });
+    const todas = cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 3).getValues(), mantidas = todas.filter(function (r) { return !r[0] || codigoCfg[r[0]]; });
+    if (mantidas.length < todas.length) { cfgSh.getRange(2, 1, todas.length, 3).clearContent(); if (mantidas.length) cfgSh.getRange(2, 1, mantidas.length, 3).setValues(mantidas); }
+  }
   if (cfgSh.getLastRow() > 1) {   // sincroniza as descrições com o código e marca parâmetros que não são mais usados
     const desc = {}; CFG_PADRAO.forEach(function (r) { desc[r[0]] = r[2]; });
     cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 3).getValues().forEach(function (r, i) {

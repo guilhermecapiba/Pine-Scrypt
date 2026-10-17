@@ -2663,6 +2663,11 @@ function setupPlanilha() {
   const existentes = {}; if (cfgSh.getLastRow() > 1) cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 1).getValues().forEach(function (r) { existentes[r[0]] = true; });
   const novos = CFG_PADRAO.filter(function (r) { return !existentes[r[0]]; });
   if (novos.length) cfgSh.getRange(cfgSh.getLastRow() + 1, 1, novos.length, 3).setValues(novos);
+  if (cfgSh.getLastRow() > 1) {   // remove parâmetros que o código não usa mais (não têm efeito) e sincroniza as descrições
+    const codigoCfg = {}; CFG_PADRAO.forEach(function (r) { codigoCfg[r[0]] = true; });
+    const todas = cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 3).getValues(), mantidas = todas.filter(function (r) { return !r[0] || codigoCfg[r[0]]; });
+    if (mantidas.length < todas.length) { cfgSh.getRange(2, 1, todas.length, 3).clearContent(); if (mantidas.length) cfgSh.getRange(2, 1, mantidas.length, 3).setValues(mantidas); }
+  }
   if (cfgSh.getLastRow() > 1) {   // sincroniza as descrições com o código e marca parâmetros que não são mais usados
     const desc = {}; CFG_PADRAO.forEach(function (r) { desc[r[0]] = r[2]; });
     cfgSh.getRange(2, 1, cfgSh.getLastRow() - 1, 3).getValues().forEach(function (r, i) {
@@ -2780,7 +2785,7 @@ function auditoria() {
     add('Dados', u.sym + ' continuidade', '0 lacunas e 0 datas repetidas', lac + ' lacunas, ' + dup + ' repetidas', !lac && !dup);
     add('Dados', u.sym + ' consistência OHLC', '0 velas com máxima/mínima incoerentes', inc + ' velas', !inc);
     add('Dados', u.sym + ' saltos de preço > 20x em um dia', '0 depois do corte automático do começo', salto + (bruto.closes.length !== n ? ' (começo aparado: ' + (bruto.closes.length - n) + ' velas descartadas)' : ''), !salto);
-    add('Dados', u.sym + ' velas planas (máxima = mínima) e quedas/altas > 40% em um dia', 'informativo', plano + ' planas; ' + extremos + ' variações > 40%', plano < n * 0.01, 'ATENCAO');
+    add('Dados', u.sym + ' velas planas (máxima = mínima) e quedas/altas > 40% em um dia', 'informativo', plano + ' planas; ' + extremos + ' variações > 40%', plano < n * 0.05, 'ATENCAO');
     const ultima = dataStr_(o.dates[n - 1]);
     add('Dados', u.sym + ' atualização', 'última vela = ' + ontem + ' (ontem UTC)', ultima, ultima >= ontem);
     const rp = linhaPainel[u.sym];
@@ -2851,7 +2856,7 @@ function auditoria() {
   add('Régua de Sharpe', 'estratégias ativas fora do nível PLENA', '0 (histórico >= ' + cfgNum_('SELECAO_SHARPE_MIN') + ', 24m >= ' + cfgNum_('SELECAO_SHARPE_MIN_24M') + ', 12m >= ' + cfgNum_('SELECAO_SHARPE_MIN_12M') + ')', abaixo.length ? abaixo.join('; ') : 'nenhuma', !abaixo.length, 'ATENCAO');
   ativos.forEach(function (u) {
     const re = (estrPorAtivo[u.sym] || []), vagas = re.filter(function (r) { return r[6] === 'VAGA'; }).length;
-    if (vagas) add('Régua de Sharpe', u.sym + ' vagas abertas', 0, vagas, false, 'ATENCAO');
+    if (vagas) { const rp = linhaPainel[u.sym]; add('Régua de Sharpe', u.sym + ' vagas abertas (moeda não analisada por regra: só é medida com todas as ' + cfgNum_('SELECAO_N_ESTRATEGIAS') + ' estratégias aceitas)', 0, vagas + ' vagas' + (rp ? ' · estado ' + rp[15] : ''), false, 'INFO'); }
   });
 
   // 5. Operação: gatilhos, configuração, log
@@ -2862,15 +2867,17 @@ function auditoria() {
   const obsoletas = Object.keys(chaves).filter(function (k) { return k && !codigo[k]; });
   add('Operação', 'CONFIG_SISTEMA x código', 'sem parâmetros faltando nem obsoletos', (semChave.length ? 'faltam (usam o padrão do código): ' + semChave.join(', ') : '') + (obsoletas.length ? ' obsoletos: ' + obsoletas.join(', ') : '') || 'em dia', !semChave.length && !obsoletas.length, 'ATENCAO');
   const log = lerAba(P2.ABAS.log), recentes = log.slice(1).filter(function (r) { const t = r[0] instanceof Date ? r[0].getTime() : Date.parse(r[0]); return t >= Date.now() - 48 * 3600000 && /^FALHA|^TEMPO_ALTO/.test(String(r[1]) + String(r[5])); });
-  add('Operação', 'falhas registradas no LOG_DISPAROS nas últimas 48 horas', 0, recentes.length, !recentes.length, 'ATENCAO');
-  L.push(['Resumo', 'Auditoria executada em ' + Utilities.formatDate(new Date(), P2.TZ_BRT, 'dd/MM/yyyy HH:mm') + ' BRT (' + Math.round((Date.now() - t0) / 1000) + 's)', '', L.filter(function (l) { return l[4] === 'OK'; }).length + ' OK, ' + L.filter(function (l) { return l[4] === 'ATENCAO'; }).length + ' atenção, ' + L.filter(function (l) { return l[4] === 'ERRO'; }).length + ' erro', L.some(function (l) { return l[4] === 'ERRO'; }) ? 'ERRO' : (L.some(function (l) { return l[4] === 'ATENCAO'; }) ? 'ATENCAO' : 'OK')]);
+  const ult = recentes.length ? recentes[recentes.length - 1] : null;
+  add('Operação', 'falhas registradas no LOG_DISPAROS nas últimas 48 horas', 0, recentes.length + (ult ? ' (última: ' + (ult[0] instanceof Date ? Utilities.formatDate(ult[0], P2.TZ_BRT, 'dd/MM HH:mm') : ult[0]) + ' ' + ult[1] + ')' : ''), !recentes.length, 'ATENCAO');
+  L.push(['Resumo', 'Auditoria executada em ' + Utilities.formatDate(new Date(), P2.TZ_BRT, 'dd/MM/yyyy HH:mm') + ' BRT (' + Math.round((Date.now() - t0) / 1000) + 's)', '', L.filter(function (l) { return l[4] === 'OK'; }).length + ' OK, ' + L.filter(function (l) { return l[4] === 'INFO'; }).length + ' informativos, ' + L.filter(function (l) { return l[4] === 'ATENCAO'; }).length + ' atenção, ' + L.filter(function (l) { return l[4] === 'ERRO'; }).length + ' erro', L.some(function (l) { return l[4] === 'ERRO'; }) ? 'ERRO' : (L.some(function (l) { return l[4] === 'ATENCAO'; }) ? 'ATENCAO' : 'OK')]);
 
   let sh = ss.getSheetByName(P2.ABAS.audit); if (!sh) sh = ss.insertSheet(P2.ABAS.audit);
   sh.clear();
   sh.getRange(1, 1, 1, 5).setValues([['Grupo', 'Escopo', 'Esperado', 'Encontrado', 'Status']]).setFontWeight('bold').setBackground('#0b1f3a').setFontColor('#ffffff');
   const ordem = L.slice(-1).concat(L.slice(0, -1));
+  sh.getRange(2, 3, ordem.length, 2).setNumberFormat('@');   // evita que a planilha reinterprete textos como números/moeda
   sh.getRange(2, 1, ordem.length, 5).setValues(ordem);
-  ordem.forEach(function (l, i) { sh.getRange(i + 2, 5).setBackground(l[4] === 'OK' ? '#d9ead3' : l[4] === 'ATENCAO' ? '#fff2cc' : '#f4cccc').setFontWeight('bold'); });
+  ordem.forEach(function (l, i) { sh.getRange(i + 2, 5).setBackground(l[4] === 'OK' ? '#d9ead3' : l[4] === 'ATENCAO' ? '#fff2cc' : l[4] === 'INFO' ? '#eeeeee' : '#f4cccc').setFontWeight('bold'); });
   sh.setFrozenRows(1); sh.setColumnWidth(1, 110); sh.setColumnWidth(2, 360); sh.setColumnWidth(3, 330); sh.setColumnWidth(4, 520);
   safeToast_('Auditoria concluída: ' + ordem[0][3] + '. Veja a aba AUDITORIA.');
   return ordem;
