@@ -1,38 +1,77 @@
 "RESULTADOS DO BACKTEST INICIAL (offline, 17/10/2026) · MVP Projeto Alts/BTC (PROJETO 02)"
-"Séries ALT/BTC (ALT/USD dividido por BTC/USD, mesma data), dados das corretoras até 15/10/2026, custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte. Régua por estratégia: Sharpe do histórico >= 1,00, 24 meses >= 0,80, 12 meses >= 0,40; no máximo 1 estratégia da mesma classe de indicador em 5. Mesmo código de seleção do script Alts_BTC_v1.gs. Esta aba é um retrato do teste: depois do menu 0 a planilha mantém esta aba como RESULTADOS_BACKTEST_INICIAL."
+"Séries ALT/BTC (ALT/USD dividido por BTC/USD, mesma data), dados das corretoras até 15/10/2026, custo de 0,125% por lado, sinal no fechamento e execução na abertura seguinte. Régua por estratégia: Sharpe do histórico >= 0,60, 24 meses >= 0,30, 12 meses >= 0,00; no máximo 1 estratégia da mesma classe de indicador em 5; moeda só é medida com 5. Mesmo código de seleção do script Alts_BTC_v1.gs. Esta aba é o retrato do teste: depois do menu 0 ela fica como RESULTADOS_BACKTEST_INICIAL."
 
 1. SITUAÇÃO POR MOEDA
-Moeda,Início da série ALT/BTC,Velas,Candidatos testados,Nível PLENA (régua cheia),"Nível RECENTE FRACA (histórico >= 1, 24m ou 12m abaixo)",Estratégias escolhidas,Estado na planilha,Maior Sharpe do histórico entre os candidatos,"Candidatos com Sharpe histórico >= 1,00",">= 0,80",">= 0,50",Sharpe de segurar a ALT em vez de BTC
-ETH/BTC,2016-05-18,3803,3081,2,101,1 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,23",103,989,2276,"0,47"
-BNB/BTC,2019-06-19,2676,3081,7,8,2 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,09",15,187,2143,"0,65"
-XRP/BTC,2018-12-04,2873,3081,0,0,0 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,0",0,3,656,"0,24"
-SOL/BTC,2020-06-25,2304,3081,0,1807,0 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,67",1807,2323,2611,"0,95"
-TRX/BTC,2018-09-24,2944,3081,0,0,0 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"0,71",0,0,100,"0,3"
-ZEC/BTC,2019-07-03,2662,3081,43,0,5 de 5,MEDIDA,"1,17",43,825,2293,"0,58"
-HYPE/BTC,2024-12-23,662,3081,1744,1,5 de 5,MEDIDA,"2,16",1745,2145,2520,"1,38"
-DOGE/BTC,2017-10-23,3280,3081,0,0,0 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"0,79",0,0,1609,"0,49"
-LINK/BTC,2017-11-10,3262,3081,0,0,0 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"0,98",0,186,1572,"0,61"
-AAVE/BTC,2020-10-07,2200,3081,1,0,1 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,01",1,17,134,"0,03"
+Moeda,Início da série ALT/BTC,Velas,Candidatos testados,"Candidatos PLENA (régua 0,60/0,30/0,00)",Candidatos RECENTE FRACA,Estratégias escolhidas,Estado na planilha,Maior Sharpe do histórico entre os candidatos,"Candidatos com Sharpe histórico >= 1,00",Sharpe de segurar a ALT em vez de BTC
+ETH/BTC,2016-05-18,3803,3081,218,1834,5 de 5,MEDIDA,"1,23",103,"0,47"
+BNB/BTC,2019-06-19,2676,3081,190,1397,5 de 5,MEDIDA,"1,09",15,"0,65"
+XRP/BTC,2018-12-04,2873,3081,11,177,4 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,0",0,"0,24"
+SOL/BTC,2020-06-25,2304,3081,20,2515,4 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"1,67",1807,"0,95"
+TRX/BTC,2018-09-24,2944,3081,6,3,3 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"0,71",0,"0,3"
+ZEC/BTC,2019-07-03,2662,3081,2005,5,5 de 5,MEDIDA,"1,17",43,"0,58"
+HYPE/BTC,2024-12-23,662,3081,2403,0,5 de 5,MEDIDA,"2,16",1745,"1,38"
+DOGE/BTC,2017-10-23,3280,3081,17,869,4 de 5,SEM_ESTRATEGIA_ELEGIVEL (vagas abertas),"0,79",0,"0,49"
+LINK/BTC,2017-11-10,3262,3081,66,1023,5 de 5,MEDIDA,"0,98",0,"0,61"
+AAVE/BTC,2020-10-07,2200,3081,68,12,5 de 5,MEDIDA,"1,01",1,"0,03"
 
-2. ESTRATÉGIAS ESCOLHIDAS (todas as que atenderam à régua; só moedas com 5 de 5 são medidas)
-Moeda,Slot,ID,Estratégia,Classe do indicador,Nível,Trades,Sharpe histórico,Sharpe 24m,Sharpe 12m,Calmar histórico,MaxDD histórico %,Sharpe 70% iniciais,Sharpe 30% finais,Situação
-ETH/BTC,1,Z-S40,Preço x SMA40,Preço x média,PLENA,103,"1,07","1,15","0,44","0,8","61,1","1,25","0,4","achada, mas a moeda só é medida com 5"
-BNB/BTC,1,Y-BTC100-emax10-30,EMA10 x EMA30 com BTC acima da SMA100,Cruzamento de médias,PLENA,48,"1,09","1,29","0,61","1,58","31,8","1,16","1,21","achada, mas a moeda só é medida com 5"
-BNB/BTC,2,Z-CMema-0.5-0.5-B100,"Comitê ema (entra com 50% dos votos, sai abaixo de 50%) com BTC acima da SMA100",Comitê de votação,PLENA,74,"1,06","1,08","0,47","1,51","31,6","1,12","1,13","achada, mas a moeda só é medida com 5"
-ZEC/BTC,1,Z-F150-SMA20,Preço x SMA20 + SMA150 (filtro de entrada),Preço x média,PLENA,55,"1,06","1,95","2,28","1,25","52,7","0,32","1,94",MEDIDA
-ZEC/BTC,2,Y-LR100,Regressão linear 100,Regressão linear,PLENA,26,"1,17","2,14","2,43","1,09","64,2","0,37","2,12",MEDIDA
-ZEC/BTC,3,Z-F150-BB20-2,"Bollinger rompimento (20, 2) + SMA150 (filtro de entrada)",Bollinger,PLENA,24,"1,05","1,87","1,97","1,13","53,4","0,41","1,86",MEDIDA
-ZEC/BTC,4,Z-N-CCI42,CCI(42) > 100 (grade fina),CCI,PLENA,22,"1,02","1,82","2,04","1,11","55,5","0,44","1,81",MEDIDA
-ZEC/BTC,5,Z-FS100-VWAP20,Preço x VWAP 20 + SMA100 (filtro e saída),VWAP,PLENA,64,"1,05","2,05","2,56",1,"62,7","0,25","2,04",MEDIDA
-HYPE/BTC,1,Z-K-ZL20,ZLEMA (20) inclinação,ZLEMA,PLENA,30,"2,07","2,07","2,16",8,"22,4","2,81","-0,09",MEDIDA
-HYPE/BTC,2,Z-K-KST1-5,"KST (escala 1, sinal 5)",KST,PLENA,11,"2,16","2,16","2,21","6,98",31,"2,71","0,39",MEDIDA
-HYPE/BTC,3,Z-N-ST14-1.5,Supertrend ATR14 x 1.5 (grade fina),Supertrend,PLENA,8,"2,0","2,0","2,37","6,39","26,7","2,71","-0,16",MEDIDA
-HYPE/BTC,4,Z-RSI14-55-45,RSI(14) regime 55/45,RSI regime,PLENA,5,"1,88","1,88","2,12","7,02","25,5","2,37","0,61",MEDIDA
-HYPE/BTC,5,Z-RVCCI20-150-150-2,"CCI(20) < -150 acima da SMA150, sai > máxima anterior",CCI,PLENA,7,"1,88","1,88","1,59","8,91",5,"1,86","2,05",MEDIDA
-AAVE/BTC,1,Z-RVCCI20-150-150-2,"CCI(20) < -150 acima da SMA150, sai > máxima anterior",CCI,PLENA,12,"1,01","1,39","0,98","1,01","11,4","0,93","1,26","achada, mas a moeda só é medida com 5"
+2. ESTRATÉGIAS ESCOLHIDAS
+Moeda,Slot,ID,Estratégia,Classe do indicador,Nível,Trades,Sharpe histórico,Sharpe 24m,Sharpe 12m,MaxDD histórico %,Sharpe 70% iniciais,Sharpe 30% finais,Situação
+ETH/BTC,1,Z-E40,Preço x EMA40,Preço x média,PLENA,127,"1,08","0,99","0,2","51,1","1,29","0,34",MEDIDA
+ETH/BTC,2,Z-N-CCI36,CCI(36) > 100 (grade fina),CCI,PLENA,50,"1,02","0,77","0,17","47,6","1,24","0,2",MEDIDA
+ETH/BTC,3,Z-K-FI21,Índice de Força (21),Índice de Força,PLENA,135,"1,06","0,97","0,13","63,7","1,27","0,24",MEDIDA
+ETH/BTC,4,Y-ADX10-30,ADX(10) > 30 com +DI > -DI,ADX,PLENA,33,"0,98","1,3","0,88","42,3","1,12","0,53",MEDIDA
+ETH/BTC,5,Z-N-BB50-2,"Bollinger rompimento (50, 2, grade fina)",Bollinger,PLENA,21,"0,91","0,83","0,36","41,2","1,02","0,55",MEDIDA
+BNB/BTC,1,Y-BTC100-emax10-30,EMA10 x EMA30 com BTC acima da SMA100,Cruzamento de médias,PLENA,48,"1,09","1,29","0,61","31,8","1,16","1,21",MEDIDA
+BNB/BTC,2,Y-CMF20-0.1,Fluxo de Chaikin(20) > 0.1,Fluxo de Chaikin,PLENA,48,"1,02","1,06","0,22","42,6","1,07","1,05",MEDIDA
+BNB/BTC,3,Z-N-ST14-1,Supertrend ATR14 x 1 (grade fina),Supertrend,PLENA,88,"0,93","0,81","0,65","46,9","1,01","0,76",MEDIDA
+BNB/BTC,4,Z-K-SQ30-2-1.5,Squeeze de volatilidade (BB dentro do canal ATR) 30/2/1.5,Squeeze,PLENA,19,"0,86","0,88","0,01",37,"0,9","0,88",MEDIDA
+BNB/BTC,5,Z-RVCCI20-100-50-0,"CCI(20) < -100 acima da SMA50, sai > SMA5",CCI,PLENA,21,"0,81","0,86","0,58","4,4","0,8","0,85",MEDIDA
+XRP/BTC,1,Y-BTC100-macd12,MACD 12/26/9 com BTC acima da SMA100,MACD,PLENA,67,"1,0","1,68","0,15","58,2","0,84","1,61","achada, mas a moeda só é medida com 5"
+XRP/BTC,2,Z-RVCCI20-150-200-0,"CCI(20) < -150 acima da SMA200, sai > SMA5",CCI,PLENA,22,"0,64","0,69",0,"10,6","0,51","0,93","achada, mas a moeda só é medida com 5"
+XRP/BTC,3,Z-N-KC12-1,Keltner EMA12 + 1 ATR10 (grade fina),Keltner,PLENA,35,"0,61","1,39","0,06","46,4","0,4","1,27","achada, mas a moeda só é medida com 5"
+XRP/BTC,4,Z-P-marubozu100-10,"Marubozu de alta acima da SMA100, sai após 10 barras",Marubozu,PLENA,8,"0,79","1,62",0,"28,1","0,53","1,55","achada, mas a moeda só é medida com 5"
+SOL/BTC,1,Z-N-MACD8-46-7,"MACD 8/46/7 (histograma, grade fina)",MACD,PLENA,76,"1,3","0,31","0,24","54,6","1,56","0,32","achada, mas a moeda só é medida com 5"
+SOL/BTC,2,Y-LR30,Regressão linear 30,Regressão linear,PLENA,72,"1,26","0,66","0,78","44,8","1,43","0,73","achada, mas a moeda só é medida com 5"
+SOL/BTC,3,Z-P-soldados50-10,"Três soldados brancos acima da SMA50, sai após 10 barras",Três soldados,PLENA,16,"0,87","0,42","0,77","31,3","0,99","0,48","achada, mas a moeda só é medida com 5"
+SOL/BTC,4,Z-FS100-BB20-2,"Bollinger rompimento (20, 2) + SMA100 (filtro e saída)",Bollinger,PLENA,35,"0,83","0,34","0,72","72,5","0,95","0,47","achada, mas a moeda só é medida com 5"
+TRX/BTC,1,Z-RVWR10-90-100-1,"Williams %R(10) < -90 acima da SMA100, sai > SMA10",Williams %R,PLENA,27,"0,71","1,71","2,97","13,6","0,29","1,25","achada, mas a moeda só é medida com 5"
+TRX/BTC,2,Z-RVRSI5-30-50-2,"RSI(5) < 30 acima da SMA50, sai > máxima anterior",RSI reversão,PLENA,25,"0,63","0,45","1,64","24,5","0,7","0,38","achada, mas a moeda só é medida com 5"
+TRX/BTC,3,Z-K-KST1.5-9,"KST (escala 1.5, sinal 9)",KST,PLENA,57,"0,62","0,46","0,03","49,8","0,75","0,42","achada, mas a moeda só é medida com 5"
+ZEC/BTC,1,Z-F150-SMA20,Preço x SMA20 + SMA150 (filtro de entrada),Preço x média,PLENA,55,"1,06","1,95","2,28","52,7","0,32","1,94",MEDIDA
+ZEC/BTC,2,Y-LR100,Regressão linear 100,Regressão linear,PLENA,26,"1,17","2,14","2,43","64,2","0,37","2,12",MEDIDA
+ZEC/BTC,3,Z-F150-BB20-2,"Bollinger rompimento (20, 2) + SMA150 (filtro de entrada)",Bollinger,PLENA,24,"1,05","1,87","1,97","53,4","0,41","1,86",MEDIDA
+ZEC/BTC,4,Z-N-CCI42,CCI(42) > 100 (grade fina),CCI,PLENA,22,"1,02","1,82","2,04","55,5","0,44","1,81",MEDIDA
+ZEC/BTC,5,Z-FS150-KC20-2,Keltner EMA20 + 2 ATR + SMA150 (filtro e saída),Keltner,PLENA,15,"0,98","1,75","1,89","48,3","0,39","1,74",MEDIDA
+HYPE/BTC,1,Z-K-ZL20,ZLEMA (20) inclinação,ZLEMA,PLENA,30,"2,07","2,07","2,16","22,4","2,81","-0,09",MEDIDA
+HYPE/BTC,2,Z-K-KST1-5,"KST (escala 1, sinal 5)",KST,PLENA,11,"2,16","2,16","2,21",31,"2,71","0,39",MEDIDA
+HYPE/BTC,3,Z-N-ST14-1.5,Supertrend ATR14 x 1.5 (grade fina),Supertrend,PLENA,8,"2,0","2,0","2,37","26,7","2,71","-0,16",MEDIDA
+HYPE/BTC,4,Z-RSI14-55-45,RSI(14) regime 55/45,RSI regime,PLENA,5,"1,88","1,88","2,12","25,5","2,37","0,61",MEDIDA
+HYPE/BTC,5,Z-RVCCI20-150-150-2,"CCI(20) < -150 acima da SMA150, sai > máxima anterior",CCI,PLENA,7,"1,88","1,88","1,59",5,"1,86","2,05",MEDIDA
+DOGE/BTC,1,Z-P-engolfo200-m20,"Engolfo de alta acima da SMA200, sai abaixo da SMA20",Engolfo de alta,PLENA,39,"0,7","0,9",0,"56,5","0,75","0,73","achada, mas a moeda só é medida com 5"
+DOGE/BTC,2,Z-P-inside200-3,"Inside bar rompendo a máxima acima da SMA200, sai após 3 barras",Inside bar,PLENA,16,"0,62","0,66",0,"36,4","0,71","0,75","achada, mas a moeda só é medida com 5"
+DOGE/BTC,3,Z-FS100-KC20-2,Keltner EMA20 + 2 ATR + SMA100 (filtro e saída),Keltner,PLENA,19,"0,63","0,75",0,"63,4","0,68","0,67","achada, mas a moeda só é medida com 5"
+DOGE/BTC,4,Z-F200-BB20-2,"Bollinger rompimento (20, 2) + SMA200 (filtro de entrada)",Bollinger,PLENA,28,"0,62","0,75",0,"64,3","0,69","0,52","achada, mas a moeda só é medida com 5"
+LINK/BTC,1,Z-P-engolfo50-m10,"Engolfo de alta acima da SMA50, sai abaixo da SMA10",Engolfo de alta,PLENA,63,"0,9","0,4","0,19","29,2","1,07","0,36",MEDIDA
+LINK/BTC,2,Z-P-soldados50-10,"Três soldados brancos acima da SMA50, sai após 10 barras",Três soldados,PLENA,13,"0,98","0,97","1,2","21,3","1,03","0,86",MEDIDA
+LINK/BTC,3,Z-K-PV2-10,Pico de volume 2x com preço acima da EMA10,Pico de volume,PLENA,70,"0,74","0,41","0,83","52,9","0,83","0,48",MEDIDA
+LINK/BTC,4,X-SMAX8-50,Cruzamento SMA8 x SMA50,Cruzamento de médias,PLENA,39,"0,73","0,51","0,08","52,4","0,86","0,29",MEDIDA
+LINK/BTC,5,Z-ROC30-200,Retorno de 30d > 0 acima da SMA200,ROC,PLENA,67,"0,72","0,48","0,48","65,9","0,82","0,43",MEDIDA
+AAVE/BTC,1,Z-RVQ3-50-1,"3 quedas seguidas acima da SMA50, sai > SMA10",Quedas seguidas,PLENA,43,"0,89","0,84","0,14","22,2","1,1","0,17",MEDIDA
+AAVE/BTC,2,Z-RVMIN10-150-2,"Fecha abaixo da mínima de 10d acima da SMA150, sai > máxima anterior",Mínima de N dias,PLENA,15,"0,88","1,34","0,79","11,4","0,84","0,96",MEDIDA
+AAVE/BTC,3,Z-RVRSI2-10-150-2,"RSI(2) < 10 acima da SMA150, sai > máxima anterior",RSI reversão,PLENA,31,"0,92","0,91","1,13","26,1","0,98","0,82",MEDIDA
+AAVE/BTC,4,Z-RVCCI20-150-150-2,"CCI(20) < -150 acima da SMA150, sai > máxima anterior",CCI,PLENA,12,"1,01","1,39","0,98","11,4","0,93","1,26",MEDIDA
+AAVE/BTC,5,Z-RVWR14-80-150-2,"Williams %R(14) < -80 acima da SMA150, sai > máxima anterior",Williams %R,PLENA,26,"0,86","0,91","1,13","18,5","0,83","1,01",MEDIDA
 
-3. LEITURA
-"Só ZEC e HYPE fecham as 5 estratégias na régua cheia. ETH tem 2 candidatas PLENA e escolhe 1 (a outra é da mesma classe, Preço x média, e a regra permite 1 por classe em 5); BNB tem 7 PLENA e escolhe 2 (as demais têm correlação de 0,93 a 0,98 com as escolhidas); AAVE tem 1; XRP, TRX, DOGE e LINK não têm nenhuma estratégia com Sharpe de histórico >= 1,00."
-"SOL tem 1.807 candidatas com Sharpe de histórico >= 1,00, mas nenhuma cumpre 24m >= 0,80 e 12m >= 0,40: a razão SOL/BTC caiu 27% em 12 meses e 44% em 24 meses."
-"HYPE tem 662 velas ALT/BTC (começo aparado em 23/12/2024) e 1.744 candidatas PLENA: com amostra tão curta e 3.081 candidatos testados, o Sharpe alto é em boa parte acaso. Leia como teto."
-"Sharpe do histórico acima de 1,00 em razão ALT/BTC é raro: em 8 das 10 moedas o maior Sharpe entre 3.081 candidatos fica entre 0,71 e 1,23, e segurar a ALT em vez de BTC rende Sharpe de 0,03 a 0,95 (HYPE 1,38)."
+"3. TESTE DA RÉGUA (walk-forward em 9 moedas ALT/BTC, reseleção a cada 90 dias, 90 dias seguintes medidos)"
+Régua (histórico / 24m / 12m),Sharpe futuro médio,Estratégias por rodada,Rodadas com 5 de 5
+"1,0 / 0,8 / 0,4","0,04","1,7",24%
+"0,8 / 0,5 / 0,2","0,18","2,9",44%
+"0,6 / 0,3 / 0,0 (ADOTADA)","0,25","3,9",66%
+"0,4 / 0,0 / 0,0","0,27","4,4",80%
+sem régua,"0,37","5,0",100%
+segurar a ALT,"0,36",,
+
+4. LEITURA
+"ETH, BNB, ZEC, HYPE, LINK e AAVE fecham 5 de 5 e são medidas. XRP, SOL e DOGE fecham 4 e TRX fecha 3: ficam como SEM_ESTRATEGIA_ELEGIVEL até a próxima revisão (a cada 30 dias, com vaga aberta)."
+"Estes números são de dentro da amostra. Exemplo: ETH/BTC tem Sharpe 1,27 nos 70% iniciais e 0,39 nos 30% finais. HYPE tem 662 velas: leia como teto."
+"No walk-forward nenhuma régua superou o Sharpe de segurar a ALT (0,36); a régua 0,6/0,3/0,0 foi escolhida por ser a mais exigente sem piorar o resultado frente à 0,4/0,0/0,0. Drawdown não foi medido neste teste."

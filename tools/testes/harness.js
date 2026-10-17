@@ -34,7 +34,7 @@ const ctx = vm.createContext({
   CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
   MailApp: { sendEmail: m => mails.push(m) },
-  ScriptApp: { getProjectTriggers: () => [], newTrigger: () => { const t = { timeBased() { return t; }, everyDays() { return t; }, atHour() { return t; }, nearMinute() { return t; }, inTimezone() { return t; }, onWeekDay() { return t; }, everyHours() { return t; }, create() {} }; return t; }, WeekDay: {} },
+  ScriptApp: { getProjectTriggers: () => [], newTrigger: () => { const t = { timeBased() { return t; }, everyDays() { return t; }, atHour() { return t; }, nearMinute() { return t; }, inTimezone() { return t; }, onWeekDay() { return t; }, everyHours() { return t; }, after() { return t; }, create() {} }; return t; }, WeekDay: {} },
   Utilities: {
     formatDate: (d, tz, f) => { const p = x => String(x).padStart(2, '0'); const Y = d.getUTCFullYear(), M = p(d.getUTCMonth() + 1), D = p(d.getUTCDate()); return f === 'yyyy-MM-dd' ? Y + '-' + M + '-' + D : f.replace('yyyy', Y).replace('MM', M).replace('dd', D).replace('HH', p(d.getUTCHours())).replace('mm', p(d.getUTCMinutes())).replace('ss', p(d.getUTCSeconds())); },
     computeDigest: (a, s) => Array.from(require('crypto').createHash('md5').update(s).digest()).map(b => b > 127 ? b - 256 : b), DigestAlgorithm: { MD5: 1 }, Charset: { UTF_8: 1 }, sleep() {},

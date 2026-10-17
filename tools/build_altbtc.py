@@ -36,7 +36,8 @@ HEAD = '''/**
  * UNIVERSO: as mesmas 10 moedas da planilha Top 10, sem o BTC: ETH, BNB, XRP, SOL, TRX, ZEC, HYPE, DOGE, LINK, AAVE. O BTC fica na aba
  * UNIVERSO com status BASE: é atualizado e usado só para montar as razões e como filtro de regime de algumas estratégias (tendência do BTC em dólar).
  *
- * RÉGUA (sarrafo) DAS ESTRATÉGIAS, por estratégia: Sharpe do histórico >= 1,00, dos últimos 24 meses >= 0,80 e dos últimos 12 meses >= 0,40.
+ * RÉGUA (sarrafo) DAS ESTRATÉGIAS, por estratégia: Sharpe do histórico >= 0,60, dos últimos 24 meses >= 0,30 e dos últimos 12 meses >= 0,00.
+ * Escolhida por walk-forward em 9 moedas ALT/BTC (reseleção a cada 90 dias): quanto mais alta a régua, menos estratégias fecham e pior o Sharpe seguinte.
  * Cada moeda só é analisada com 5 estratégias que atendam à régua (nível PLENA) e à regra de classe de indicador (1 em 5). Moeda com menos de 5
  * aparece como SEM_ESTRATEGIA_ELEGIVEL, com as vagas abertas, e é reavaliada a cada SELECAO_REVISAO_DIAS dias.
  *
@@ -54,7 +55,8 @@ HEAD = '''/**
  *  2. Menu "Alts/BTC — Quant" (recarregue a planilha): 0) Criar/formatar abas (grava também as estratégias já testadas).
  *  3. 1) Diagnóstico das fontes de dados.
  *  4. 2) Carga inicial / ciclo completo (repita até todos os ativos estarem com Estado OK).
- *  5. A) Auditoria; depois G) Instalar gatilhos automáticos (a cada hora + segunda 08:00 BRT + backup 02:00 BRT + ranking domingo 09:00 BRT).
+ *  5. A) Auditoria; depois G) Instalar gatilhos automáticos: atualização diária principal ~22:00 BRT e redundância ~01:00 BRT (a vela diária fecha às 21:00 BRT),
+ *     relatório segunda 08:00, backup ~02:00 e ranking domingo 09:00 BRT. Se alguma moeda ficar sem a vela do dia depois da redundância, vai e-mail de falha.
  *
  * REGRAS INVIOLÁVEIS (herdadas do Projeto 02)
  *  - Sem look-ahead: sinais no FECHAMENTO da vela D, execução simulada na ABERTURA de D+1; a vela do dia corrente é descartada.
@@ -82,13 +84,21 @@ rep("'CRYPTO BACKTEST MACHINE — TOP 10 · TERMINAL QUANTITATIVO'", "'MVP PROJE
 rep('S) Refazer a seleção das 10 estratégias de cada moeda', 'S) Refazer a seleção das 5 estratégias de cada moeda')
 
 # ---------- 3. configuração ----------
+S = S.replace("SELECAO_SHARPE_MIN (1,00) E Sharpe de 24 meses >= SELECAO_SHARPE_MIN_24M (0,90) E Sharpe de 12 meses >= SELECAO_SHARPE_MIN_12M (0,40)", "SELECAO_SHARPE_MIN (0,60) E Sharpe de 24 meses >= SELECAO_SHARPE_MIN_24M (0,30) E Sharpe de 12 meses >= SELECAO_SHARPE_MIN_12M (0,00)")
+S = S.replace("Sharpe do histórico todo >= SELECAO_SHARPE_MIN (1,00), 24 meses", "Sharpe do histórico todo >= SELECAO_SHARPE_MIN (0,60), 24 meses")
+S = S.replace("histórico todo >= 1,00, mas 24 ou 12 meses abaixo do mínimo", "histórico todo >= 0,60, mas 24 ou 12 meses abaixo do mínimo")
+S = S.replace("histórico todo entre SELECAO_PISO_PROVISORIO (0,80) e 1,00", "histórico todo entre SELECAO_PISO_PROVISORIO e SELECAO_SHARPE_MIN")
+S = S.replace("Nível: PLENA = Sharpe do histórico >= 1,00 e 24m/12m nos mínimos; RECENTE FRACA = histórico >= 1,00 mas", "Nível: PLENA = Sharpe do histórico, 24m e 12m nos mínimos da régua (CONFIG_SISTEMA); RECENTE FRACA = histórico no mínimo mas")
 rep("['MIN_VELAS_POR_ATIVO', 'HYPE:345', 'Mínimo de velas por ativo quando diferente do padrão (formato SIMBOLO:VELAS, separados por vírgula). Moedas recentes: use com cautela, a amostra é curta'],",
     "['MIN_VELAS_POR_ATIVO', 'AUTO', 'AUTO = moeda com menos de MIN_VELAS_CONSENSO velas usa as velas atuais menos 1. Ou informe SIMBOLO:VELAS separados por vírgula para fixar o mínimo de uma moeda. Moedas recentes: a amostra é curta, leia com cautela'],")
 rep("['SELECAO_SHARPE_MIN_24M', 1.0, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],",
-    "['SELECAO_SHARPE_MIN_24M', 0.8, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA'],")
+    "['SELECAO_SHARPE_MIN_24M', 0.3, 'Sharpe mínimo dos últimos 24 meses para o nível PLENA'],")
 rep("['SELECAO_SHARPE_MIN_12M', 0.5, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA (no BTC, estratégia abaixo sai do consenso)'],",
-    "['SELECAO_SHARPE_MIN_12M', 0.4, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA'],")
-rep("histórico >= 1,00, 24m >= 0,8965, 12m >= 0,3983", "histórico >= 1,00, 24m >= 0,80, 12m >= 0,40")
+    "['SELECAO_SHARPE_MIN_12M', 0.0, 'Sharpe mínimo dos últimos 12 meses para o nível PLENA'],")
+rep("['SELECAO_SHARPE_MIN', 1.0, 'Sharpe mínimo do histórico todo (régua cheia: níveis PLENA e RECENTE FRACA)'],", "['SELECAO_SHARPE_MIN', 0.6, 'Sharpe mínimo do histórico todo (régua cheia: níveis PLENA e RECENTE FRACA). Régua Alts/BTC: 0,60 / 0,30 / 0,00, escolhida por walk-forward em 9 moedas (réguas mais altas escolheram pior)'],")
+rep("['SELECAO_PISO_PROVISORIO', 1.0,", "['SELECAO_PISO_PROVISORIO', 0.6,")
+rep("Padrão 1 = desligado (mesma régua para todas as moedas). Use 0,8 para permitir estratégias provisórias", "Padrão = igual ao mínimo do histórico (desligado). Use um valor menor para permitir estratégias provisórias")
+rep("histórico >= 1,00, 24m >= 0,8965, 12m >= 0,3983", "histórico >= 0,60, 24m >= 0,30, 12m >= 0,00")
 rep("['SELECAO_BTC_SUBSTITUI', 'SIM', 'SIM = a estratégia fixa do BTC que ficar abaixo dos mínimos de Sharpe sai e é substituída pela melhor candidata que cumpre a régua. NAO = só sai do consenso'],\n", "")
 rep("['SELECAO_HISTERESE', 0, 'Folga na saída do BTC: estratégia fixa só sai do consenso abaixo de (mínimo - folga). 0 = régua estrita; 0,1 evita sair por diferença de milésimos'],\n", "")
 rep("['UNIVERSO_MANUAIS', 'chainlink,aave', 'IDs CoinGecko escolhidos manualmente: ficam no universo mesmo fora da janela do ranking'],", "['UNIVERSO_MANUAIS', 'chainlink,aave', 'IDs CoinGecko escolhidos manualmente: ficam no universo mesmo fora da janela do ranking (o BTC é a base das razões e não entra no universo)'],")
@@ -202,6 +212,60 @@ rep("  ativosUniverso_().sort(function (a, b) { return a.ordem - b.ordem; }).for
 rep("  const velha = ss.getSheetByName('Página1');\n  if (velha && !ss.getSheetByName(P2.ABAS.painel)) velha.setName(P2.ABAS.painel);",
     "  const primeira = ss.getSheets()[0];   // a aba inicial (resultados do teste offline, se a planilha veio pronta) é preservada\n  if (primeira && abas.indexOf(primeira.getName()) < 0 && primeira.getName().indexOf('BASE_') !== 0) {\n    if (primeira.getLastRow() > 1) primeira.setName('RESULTADOS_BACKTEST_INICIAL'); else primeira.setName(P2.ABAS.painel);\n  }")
 rep("  ativosUniverso_().forEach(function (u) { abaBase_(u.sym, true); });\n  ss.setSpreadsheetTimeZone", "  abaBase_('BTC', true); ativosUniverso_().forEach(function (u) { abaBase_(u.sym, true); });\n  aplicarSementes_();\n  ss.setSpreadsheetTimeZone")
+
+# ---------- 8B. gatilhos: atualização diária (~22:00 BRT) e redundância (~01:00 BRT) ----------
+OLDG = S[S.index("function instalarGatilhosAutomaticos() {"):S.index("function removerGatilhos()")]
+NEWG = '''/**
+ * Gatilhos: a vela diária (UTC) fecha às 21:00 de Brasília. Principal ~22:00 e redundância ~01:00 BRT: ambos rodam o mesmo ciclo, que só trabalha nas moedas
+ * sem a vela do dia (moeda já atualizada é pulada). A redundância, depois do ciclo, confere todas as moedas e avisa por e-mail se alguma continua desatualizada.
+ * O Apps Script dispara dentro da hora pedida (22h-23h e 01h-02h).
+ */
+function instalarGatilhosAutomaticos() {
+  const alvo = ['motorHorario', 'motorDiarioPrincipal', 'motorDiarioRedundancia', 'motorContinuacao', 'motorSemanal', 'backupDiario', 'atualizarRanking'];
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (alvo.indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('motorDiarioPrincipal').timeBased().everyDays(1).atHour(22).nearMinute(0).inTimezone(P2.TZ_BRT).create();
+  ScriptApp.newTrigger('motorDiarioRedundancia').timeBased().everyDays(1).atHour(1).nearMinute(0).inTimezone(P2.TZ_BRT).create();
+  ScriptApp.newTrigger('backupDiario').timeBased().everyDays(1).atHour(3).nearMinute(0).inTimezone(P2.TZ_BRT).create();
+  ScriptApp.newTrigger('motorSemanal').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).nearMinute(0).inTimezone(P2.TZ_BRT).create();
+  ScriptApp.newTrigger('atualizarRanking').timeBased().onWeekDay(ScriptApp.WeekDay.SUNDAY).atHour(9).nearMinute(0).inTimezone(P2.TZ_BRT).create();
+  safeToast_('Gatilhos instalados: atualização diária ~22:00 BRT, redundância ~01:00 BRT, backup ~03:00 BRT, relatório semanal (seg 08:00 BRT) e ranking (dom 09:00 BRT).');
+  return conferirGatilhos();
+}
+/** Ciclo do dia. Se o tempo acabar antes de percorrer todas as moedas, agenda a continuação para 5 minutos depois (uma de cada vez). */
+function cicloDiario_() {
+  const r = motorTop10(false);
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'motorContinuacao') ScriptApp.deleteTrigger(t); });
+  if (r && r.restantes > 0) ScriptApp.newTrigger('motorContinuacao').timeBased().after(5 * 60 * 1000).create();
+  return r;
+}
+function motorDiarioPrincipal() { cicloDiario_(); }
+function motorContinuacao() { cicloDiario_(); }
+function motorDiarioRedundancia() { cicloDiario_(); verificarAtualizacao_(); }\n/** Menu V: confere agora se todas as moedas têm a vela do dia (e avisa por e-mail se não). */\nfunction verificarAtualizacao() { const a = verificarAtualizacao_(); safeToast_(a.length ? 'Desatualizados: ' + a.join(' | ') : 'Todas as moedas estão com a vela do dia.'); }
+/** Confere a BASE_BTC e todas as moedas: a última vela precisa ser a de ontem (UTC). Avisa por e-mail (uma vez por dia) e registra no LOG_DISPAROS. */
+function verificarAtualizacao_() {
+  const ontem = dataStr_(new Date(ontemUtcMs_())), atrasadas = [];
+  const b = baseBtc_(); if (b) { const o = lerBase_('BTC'), n = o.dates.length; if (!n || dataStr_(o.dates[n - 1]) < ontem) atrasadas.push('BTC (base): última vela ' + (n ? dataStr_(o.dates[n - 1]) : 'nenhuma')); }
+  ativosUniverso_().forEach(function (u) {
+    const r = lerRes_(u.sym);
+    if (!r) { atrasadas.push(u.sym + ': sem resultado'); return; }
+    if (String(r.estado).indexOf('ERRO') === 0) { atrasadas.push(u.sym + ': ' + r.estado); return; }
+    if (!r.ultimaVela || r.ultimaVela < ontem) atrasadas.push(u.sym + ': última vela ' + (r.ultimaVela || 'nenhuma'));
+  });
+  if (!atrasadas.length) { logDisparo_('ATUALIZACAO_DIARIA', 'Todas as moedas com a vela de ' + ontem, '—', '—', 'OK', ''); return []; }
+  const hash = md5_(Utilities.formatDate(new Date(), P2.TZ_BRT, 'yyyy-MM-dd') + '|FALHA_ATUALIZACAO');
+  if (hashesRecentes_()[hash]) return atrasadas;
+  const corpo = '<p style="font-size:14px">Depois da atualização de redundância (~01:00 BRT), <b>' + atrasadas.length + ' item(ns)</b> continua(m) sem a vela de <b>' + ontem + '</b> (UTC):</p><ul style="font-size:13px">' + atrasadas.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul><p style="font-size:12px">Abra a planilha, rode o menu 2) Carga inicial / ciclo completo e confira a aba DIAGNOSTICO_FONTES e o LOG_DISPAROS.</p>';
+  let status = 'ALERTA_DESLIGADO';
+  if (cfgSim_('ALERTA_FALHA_ATUALIZACAO')) { const env = enviar_('[FALHA] Atualização diária Alts/BTC incompleta — ' + atrasadas.length + ' item(ns)', moldura_('Atualização diária incompleta', '#b00020', 'FALHA', corpo)); status = env.ok === env.total ? 'ENVIADO' : (env.ok ? 'ENVIADO_PARCIAL' : 'FALHA: ' + env.falhas.join('; ')); }
+  logDisparo_('FALHA_ATUALIZACAO', atrasadas.join(' | ').substring(0, 450), emails_().join(', '), hash, status, '');
+  return atrasadas;
+}
+'''
+S = S.replace(OLDG, NEWG)
+rep("['ALERTAS_ATIVOS', 'SIM',", "['ALERTA_FALHA_ATUALIZACAO', 'SIM', 'SIM/NAO: e-mail quando, depois da redundância das ~01:00 BRT, alguma moeda (ou a BASE_BTC) continua sem a vela do dia'],\n  ['ALERTAS_ATIVOS', 'SIM',")
+rep("['motorHorario', 'motorSemanal', 'backupDiario', 'atualizarRanking'].forEach(function (h) { add(", "['motorDiarioPrincipal', 'motorDiarioRedundancia', 'motorSemanal', 'backupDiario', 'atualizarRanking'].forEach(function (h) { add(")
+rep(".addItem('3) Rodar o ciclo normal agora (só o que mudou)', 'motorHorario')", ".addItem('3) Rodar o ciclo normal agora (só o que mudou)', 'motorHorario')\n    .addItem('V) Verificar se todas as moedas têm a vela do dia', 'verificarAtualizacao')")
+rep("Gatilhos instalados: ciclo horário, relatório semanal", "Gatilhos instalados: ciclo horário, relatório semanal") if False else None
 
 # ---------- 9. sementes (estratégias já testadas) ----------
 SEED_CODE = '''

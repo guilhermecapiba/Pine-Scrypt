@@ -26,3 +26,12 @@ console.log('--- DESEMPENHO'); dump('DESEMPENHO_ALTS_BTC', 16, 22);
 if (process.env.AUD) { run('auditoria()'); console.log('--- AUDITORIA'); dump('AUDITORIA', 400, 5); }
 console.log('BASE_BTC linhas', sh('BASE_BTC').getLastRow(), '| BASE_ETH linhas', sh('BASE_ETH').getLastRow(), '| 1ª linha ETH', [1,2,3,4,5].map(c => sh('BASE_ETH').cells['2,' + c]).join(','));
 console.log('emails', mails.length);
+// ---- gatilhos e redundância ----
+console.log('--- redundância');
+run('motorDiarioRedundancia()');
+console.log('LOG_DISPAROS:', [2,3,4].map(r => { const s = sh('LOG_DISPAROS'); return [1,2,3,6].map(c => String(s.cells[r + ',' + c] === undefined ? '' : s.cells[r + ',' + c]).slice(0, 60)).join('/'); }).join(' || '), '| e-mails', mails.length);
+ctx.__x = JSON.stringify(Object.assign(JSON.parse(props['RES_ETH']), { ultimaVela: '2026-10-13' })); run("PropertiesService.getScriptProperties().setProperty('RES_ETH', __x)");
+const atr = run('verificarAtualizacao_()'); console.log('desatualizadas (esperado ETH):', JSON.stringify(atr), '| e-mails', mails.length, '| assunto', mails.length ? mails[mails.length - 1].subject : '');
+run('verificarAtualizacao_()'); console.log('segunda chamada no mesmo dia não reenvia: e-mails', mails.length);
+const trig = []; ctx.__t = trig;
+run('instalarGatilhosAutomaticos()'); console.log('gatilhos instalados sem erro');
