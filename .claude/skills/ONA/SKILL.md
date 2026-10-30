@@ -1,47 +1,75 @@
 ---
 name: ONA
-description: Referencial de acreditação ONA (Nível Fundamento 2026 e Manual OPSS 2026/2029) aplicado ao Hospital Geral Antônio Targino (ISAS) e Hospital Antônio Targino LTDA (HAT). Use em TODA análise diária de gestão hospitalar para classificar achados de e-mails, Drive e WhatsApp contra os requisitos ONA, apontar lacunas de conformidade e priorizar ações de qualidade e segurança do paciente.
+description: Referencial de acreditação ONA (Manual OPSS 2026-2029) aplicado ao Hospital Geral Antônio Targino (ISAS, CNES 2362848) e ao Hospital Antônio Targino LTDA (HAT). Use em TODA análise diária de gestão hospitalar para classificar achados de e-mails, Drive e WhatsApp contra requisitos ONA (especialmente os CORE e a hemodiálise), apontar lacunas e priorizar ações de menor custo.
 ---
 
-# Skill ONA: lente de conformidade nas análises diárias
+# Skill ONA – Manual OPSS 2026-2029
+
+Fonte primária: "Manual para Organizações Prestadoras de Serviços de Saúde (OPSS), Versão 2026 a 2029", ONA (456 páginas, lido no portal ONA em 30/10/2026). Resumo completo no Drive: "ONA - Manual OPSS 2026-2029 - Resumo e Skill.md" (ID 1r6zHt9a4wFP87sN_PonmSQVrUXkK5zwo, pasta "Projeto melhoria continua"). Material licenciado: parafrasear, não copiar.
+
+## Cobertura e honestidade (leia antes de citar)
+- Lido em detalhe: páginas 1-29, tabela da Seção 1 (p. 38) e Subseção 2.13 (hemodiálise) inteira. Estrutura dos 779 requisitos (148 CORE) mapeada; orientações dos outros ~631 requisitos NÃO lidas (~15% do texto em detalhe).
+- Tabelas de obrigatoriedade das Seções 2, 3 e 4 NÃO confirmadas: não afirmar que uma subseção é "obrigatória" para HAT/ISAS sem conferir.
+- Perguntas de auditoria e "setor provável" são sugestão de trabalho, não texto do manual. Rotule assim.
+- O manual NÃO contém: escala numérica de conformidade, "triangulação de evidências", "tracers", RDC 11/2014, lista nominal das 6 metas de segurança, sigla CCIH (usa "Serviço de Prevenção, Controle de Infecção e Biossegurança"). Esses termos vêm da Base de Consulta interna do Drive e da legislação; citar como fonte secundária, nunca como "o manual diz".
 
 ## Como usar na rotina diária
-1. Ao classificar cada achado (e-mail, planilha, conversa), marque o eixo ONA relacionado (1 a 6, abaixo) e a seção OPSS (1 a 4).
-2. Na seção F/G do relatório, cite o requisito afetado. Ex.: "RDC 11, Eixo 4 – laudo de água".
-3. Avalie cada tema com a escala ONA: Supera (1,2), Conforme (1,0), Parcialmente Conforme (0,5). Só atribua nota se houver evidência lida; caso contrário escreva "sem evidência".
-4. Triangule: evidência documental + observacional + rastreadores (tracers). E-mail sozinho é só documental; diga isso.
-5. Diferencie sempre: "não existe" de "não localizei". Não invente conformidade.
-6. Inclua no relatório um bloco curto "Lente ONA" com: 1) prazo regulatório vencendo, 2) lacuna nova, 3) ação de menor custo.
+1. Para cada achado (e-mail, planilha, WhatsApp), ligue-o a um requisito pelo número (ex.: 2.13.11) ou, se não houver número lido, à seção (1 a 4).
+2. Dê prioridade a requisitos CORE (segurança do paciente, nota de corte diferenciada).
+3. Diga o tipo de evidência vista: documental (protocolo, laudo, ata), observacional (visita) ou de indicador. E-mail sozinho é só documental. Sem evidência = "sem evidência", não "conforme".
+4. Diferencie "não existe" de "não localizei".
+5. Feche o relatório com o bloco "Lente ONA": (a) prazo regulatório vencendo, (b) lacuna nova, (c) ação de menor custo.
 
-## Os 6 eixos do Nível Fundamento (checklist de busca)
-- **Eixo 1 – Regulação e conformidade legal:** Licença de Funcionamento e Alvará Sanitário (prédios HAT nº 442, ISAS matriz nº 349, filial hospitalar nº 369, CNES 2362848); AVCB/CBMPB e SPDA; GEVISA/AGEVISA; PGRSS (RDC 222/2018); Responsáveis Técnicos nos conselhos (CRM, COREN, CRF, CRN, CRTR); comissões com portaria e ata mensal (NSP/NQSP, CCIH/SCIH, CFT, Revisão de Prontuários, Revisão de Óbitos, Ética, CIPA); as 5 certidões fiscais do ISAS renovadas com no mínimo 15 dias de antecedência.
-- **Eixo 2 – Liderança e estratégia:** PDCA e 5W2H; plano alinhado à capacidade real (59 leitos ativos no CNES 2362848); proibida operação de unidade crítica sem cobertura médica; capacitação contínua.
-- **Eixo 3 – Fluxo do paciente:** POPs de agendamento, triagem, acolhimento, admissão, transferência e alta; indicadores de tempo de espera, giro de leito (eliminar "leitos fantasmas" no SoulMV) e absenteísmo ambulatorial; registro em prontuário em tempo real; educação do paciente e família.
-- **Eixo 4 – Diagnóstico e terapêutica (SADT e hemodiálise):** RDC 11/2014 (hemodiálise) e RDC 611/2022 (radiologia); comunicação imediata de resultado crítico; laudos rastreáveis. Limite de água para hemodiálise: 100 UFC/mL; dialisato: 200 UFC/mL (conforme e-mail da CCIH de 29/10/2026).
-- **Eixo 5 – Apoio, logística e segurança do colaborador:** manutenção preventiva e corretiva de usina de oxigênio, gerador, autoclaves da CME, osmose reversa, tomógrafo e climatização; estoque mínimo de insumos críticos; 5S e fluxo unidirecional limpo/sujo; **regra de ouro da CCIH**: nenhum saneante ou produto químico é comprado sem parecer prévio da CCIH (Portaria MS 2.616/1998); NR-32, PCMSO, PGR, CIPA, EPI, perfurocortantes.
-- **Eixo 6 – Segurança do paciente:** NSP e Plano de Segurança (RDC 36/2013). Metas: 1 identificação (pulseira, 2 identificadores); 2 comunicação (SBAR); 3 medicamentos (alta vigilância, dupla checagem, conciliação, Portaria 344/1998); 4 cirurgia segura (checklist OMS, fichas completas); 5 IRAS (higiene das mãos, bundles PAVM, IPCS-CVC, ITU-AC, ISC); 6 lesão por pressão e quedas.
+## Estrutura do manual
+- Níveis: Nível 1 (segurança; certificado 2 anos), Nível 2 (+ planejamento e gestão integrada; 2 anos), Nível 3 (+ melhoria contínua e maturidade; 3 anos).
+- Ciclo: Diagnóstico Organizacional (facultativo), Autoavaliação (obrigatória antes de Acreditação, Recertificação e Upgrade), Acreditação (mín. 2 avaliadores), Manutenção, Recertificação, Upgrade.
+- Seção 1 Gestão Organizacional (1.1 Liderança e Governança, 1.2 Impacto Social, 1.3 Impacto Ambiental, 1.4 Gestão de Pessoas). Seção 2 Atenção ao Paciente (2.1 Jornada a 2.27 Nível 3; 2.13 Nefrologia e Diálise; 2.25 Transversais). Seção 3 Diagnóstico e Terapêutica (3.1 Análises Clínicas a 3.11). Seção 4 Gestão do Apoio (4.1 Equipamentos a 4.13).
+- Normas de avaliação aplicáveis: Serviços Hospitalares e Nefrologia/TRS; Hemoterapia, Análises Clínicas e Anatomia Patológica só se houver serviço próprio.
 
-## Manual OPSS 2026/2029 (4 seções)
-1. Gestão organizacional: governança, sustentabilidade econômico-financeira, ESG.
-2. Atenção ao paciente: 6 fases da jornada (conscientização, busca, acolhimento, atendimento/diagnóstico, tratamento, continuidade) e segurança transversal.
-3. Diagnóstico e terapêutica: imagem, laboratório, hemoterapia, hemodiálise.
-4. Gestão do apoio: suprimentos, farmácia, nutrição, lavanderia, CME, manutenção, TI e LGPD.
-Requisitos **CORE** são obrigatórios para certificação.
+## Hemodiálise – Subseção 2.13 (lida integralmente)
+| Nº | Tema | CORE | Evidência (manual) |
+|---|---|---|---|
+| 2.13.1 | Protocolos de assistência dialítica | não | protocolos, fluxogramas, auditorias, checklists |
+| 2.13.2 | Demanda x capacidade instalada | SIM | fluxo de encaminhamento, indicadores por turno, sessões extras |
+| 2.13.3 | Riscos do paciente dialítico | não | matriz de riscos, indicadores, intervenções em incidentes |
+| 2.13.4 | Plano interdisciplinar (peso seco, Kt/V, nutrição, hematócrito) | SIM | plano de cuidado no prontuário com metas |
+| 2.13.5 | TCLE e decisões compartilhadas | não | TCLE assinado, registro da modalidade |
+| 2.13.6 | Segurança de materiais (dialisadores, linhas, ácido peracético) | não | procedimento, treinamento, rastreabilidade de lotes |
+| 2.13.7 | Prontuário atualizado (evolução mensal por profissional) | não | anamnese, exames mensais, evoluções |
+| 2.13.8 | Orientação de alta ao paciente/cuidador | não | registro de orientações |
+| 2.13.9 | Armazenamento/transporte de soluções dialíticas | não | temperatura/umidade, contingência, pH e bacteriológico diários |
+| 2.13.10 | Reprocessamento de dialisadores e descarte | não | limite de reúso, testes de integridade, rastreabilidade |
+| 2.13.11 | Qualidade da água em todas as etapas da TRS | SIM | laudos microbiológicos e físico-químicos, pontos de coleta, periodicidade, plano para não conformidade |
+| 2.13.12 | Fila de transplante (situação em até 90 dias) | não | comprovante de inscrição |
+| 2.13.13 | Diálise peritoneal domiciliar | não | adesão e capacitação |
+| 2.13.14 | Desfechos dos protocolos | não | indicadores clínicos/laboratoriais |
+| 2.13.15 | Uso racional da terapia | não | indicadores e ações |
+Frequentes em auditoria mesmo sem CORE: 2.13.5 (TCLE) e 2.13.10 (reprocessamento).
+Referência regulatória externa (fora do manual): RDC 11/2014; limites de água/dialisato citados pela CCIH em 29/10/2026 (água 100 UFC/mL, dialisato 200 UFC/mL). Confirmar na norma antes de usar como fundamento.
 
-## Onde a ONA ajuda nas finanças (conectar a seções D e E do relatório)
-- Certidões em dia = convênios/NFs liberadas (ex.: FGTS do ISAS vs. NF 56 do Trauma).
-- Evidência de qualidade (laudos de água, atas, POPs) reduz glosa e risco de auditoria na hemodiálise.
-- Manutenção preventiva (osmose, autoclave, gerador) evita parada de serviço e compra emergencial.
-- Parecer da CCIH antes de saneantes evita compra desnecessária e não conformidade.
-- Atas mensais de comissões e indicadores são os documentos que mais faltam em autoavaliação.
+## CORE por seção (números lidos; título resumido; evidências não lidas)
+- **Seção 1:** 1.1.1.3 estratégia; 1.1.1.6 melhorias da estratégia; 1.1.2.1/2.2/2.3 diretrizes de qualidade-riscos, segurança do paciente e modelo assistencial; 1.1.3.2/3.4/3.5 riscos à liderança e barreiras; 1.1.8.3 ensino/pesquisa; 1.1.9.2/9.5 monitorar e avaliar processos; 1.1.13.1 notificação e análise de eventos; 1.1.14.1/14.3 auditoria interna e uso dos achados; 1.1.17.2/17.4 controle de infecção (recursos e retroalimentação); 1.1.18.4 comunicação entre áreas; 1.2.1.1 equidade; 1.3.1.8 sustentabilidade ambiental; 1.4.1.1 dimensionamento de pessoal; 1.4.1.3 competências; 1.4.1.8 saúde ocupacional; 1.4.1.12/1.4.1.31 liderança; 1.4.1.17 riscos psicossociais; 1.4.1.24 desempenho; 1.4.1.27 integração.
+- **Seção 2 (além da 2.13):** 2.1.4.7, 2.1.5.1, 2.1.5.7, 2.2.1, 2.2.6, 2.3.10, 2.3.14, 2.4.5, 2.4.9, 2.5.8, 2.5.11, 2.5.17, 2.6.2, 2.6.4, 2.7.2, 2.8.2, 2.9.2, 2.9.5, 2.10.7 (anestesia), 2.10.9 (Cirurgia Segura, terceiro momento), 2.11.x (parto), 2.12.4 (riscos em todas as etapas), 2.14.4, 2.24.x (telemedicina), 2.25.5/25.7/25.13 e níveis 2 e 3. Itens de especialidades que o hospital não tem não se aplicam.
+- **Seção 3:** 3.1.3, 3.1.9, 3.1.14 (resultado crítico); 3.3.1, 3.3.4; 3.4.1, 3.4.9; 3.8.x só se houver agência transfusional; 3.9.10, 3.9.12, 3.10.2, 3.10.5, 3.11.2, 3.11.5, 3.11.7.
+- **Seção 4:** 4.1.1, 4.1.4, 4.1.10 (equipamentos); 4.2.4, 4.2.9 (infraestrutura); 4.3.1, 4.3.3 (limpeza); 4.4.3, 4.4.6, 4.4.12 (CME e água); 4.5.1, 4.5.4 (enxoval); 4.6.1, 4.6.3, 4.6.6 (suprimentos); 4.7.6, 4.7.10 (farmácia); 4.8.1 (água na nutrição); 4.10.1, 4.10.3, 4.10.5, 4.10.8 (TI/prontuário); 4.11.5, 4.11.8 (PGRSS), 4.11.11, 4.12.1, 4.12.4, 4.13.4.
 
-## Contexto e fontes
-- Ticket ONA nº 65272 (28 e 29/10/2026): ONA ofereceu gratuitamente (A) Nível Fundamento, com autoavaliação e Declaração de Conquista, sem visita in loco; e (B) Manual OPSS 2026/2029 digital, mediante CPF cadastrado no portal ONA. Contato: Gilvane Lolato (ONA).
-- Doc no Drive: "BASE DE CONSULTA DE PROCESSOS HOSPITALARES — ONA NÍVEL FUNDAMENTO E MANUAL OPSS 2026 (HAT E ISAS)", ID 1_W_9eLchdBmh735OB001R0M1qWMVITmc98BVBc-hQy8.
-- Manual OPSS 2026-2029 no Drive (ID 1lXfgD713VWW9GTkF6L6Vzk3uqlbgFEHg, 116 MB) e Manual para OPSS 2026 Público Geral (ID 1QRrh9A-6ijboVr-GUUKlkdSLAjWUdZT4).
-- Pasta oficial "Projeto melhoria continua": 1bXXHOzyWuaOENencEGxZGRpwg0_wkGL8. Planilha de cobrança mensal por setor: 1H8bX_lYhnWO-RHSGf7HNKQd_WsLUv05uhSoLD6410Fo.
+## Ligação com dinheiro e risco (conectar às seções D, E e F do relatório)
+- Glosa e faturamento: prontuário completo e comprovável (2.13.7, 4.10.3, 4.10.8, 2.5.11).
+- Parada de serviço: água da hemodiálise (2.13.11), manutenção preventiva (4.1, 4.2), contingência de sistemas (4.10.1, 4.11.11). Foco atual: osmose reversa, gerador, oxigênio.
+- Desperdício: estoque e rastreabilidade (4.6.3, 4.6.6, 4.7.6), reprocessamento documentado (2.13.10).
+- Passivo e risco jurídico: TCLE (2.13.5), notificação de eventos (1.1.13.1), sigilo e LGPD (4.10.x), documentação em geral.
+- Contratos e fornecedores: qualificação e avaliação (4.6.1, 1.1.15).
 
-## Limites deste skill
-- Foi construído a partir da Base de Consulta (resumo do Nível Fundamento). O texto integral do Manual OPSS NÃO foi lido: o PDF de 116 MB retornou vazio pelo conector do Drive e o arquivo anexado em 30/10 tinha só uma página em branco (1,2 KB). Não cite item numerado do manual sem tê-lo lido.
-- Não confunda conformidade ONA com conformidade legal: as RDCs e normas citadas valem independentemente da acreditação.
-- Dados de pacientes não entram nos relatórios (LGPD).
+## Checklist de menor custo (primeiros 30 dias)
+TCLE assinado em todos os pacientes; matriz de riscos da diálise; laudos de água em dia com pontos de coleta e plano para não conformidade; registro diário de pH/bacteriológico da solução; teste de ácido peracético com treinamento; controle de recebimento na farmácia; cronograma de auditoria interna com plano de ação; relatório periódico de riscos à diretoria.
+
+## Contexto institucional
+- ISAS (Hospital Geral Antônio Targino): CNPJ matriz 08.806.213/0001-17, filial 08.806.213/0002-06, CNES 2362848. HAT: CNPJ 08.834.137/0001-53 (em recuperação judicial).
+- Ticket ONA nº 65272: ONA ofereceu gratuitamente o Nível Fundamento e o Manual OPSS digital (contato Gilvane Lolato).
+- Base de Consulta interna (ID 1_W_9eLchdBmh735OB001R0M1qWMVITmc98BVBc-hQy8) descreve eixos do Nível Fundamento; é fonte secundária.
+
+## Pendências para completar este skill
+1. Conferir a tabela de obrigatoriedade das Seções 2, 3 e 4 para Serviços Hospitalares e Nefrologia.
+2. Ler as orientações e evidências dos 148 CORE (e das Seções 1 e 4 em seguida).
+3. Confirmar a referência regulatória de hemodiálise (RDC 11/2014) e normas de água.
+Nunca inclua dados identificáveis de pacientes nos relatórios (LGPD).
