@@ -68,6 +68,21 @@ TCLE assinado em todos os pacientes; matriz de riscos da diálise; laudos de ág
 - Ticket ONA nº 65272: ONA ofereceu gratuitamente o Nível Fundamento e o Manual OPSS digital (contato Gilvane Lolato).
 - Base de Consulta interna (ID 1_W_9eLchdBmh735OB001R0M1qWMVITmc98BVBc-hQy8) descreve eixos do Nível Fundamento; é fonte secundária.
 
+## Mapeamento declarado pelo Guilherme em 30/10/2026 (leitura integral do PDF por ele; NÃO verificado por mim)
+Rótulo obrigatório ao citar: [D] declarado pelo usuário. Números de página dessa leitura (ex.: Seção 1 "p. 1 a 135") divergem da leitura do portal (Padrões e Requisitos começam na p. 37); não citar páginas, só números de requisito.
+- Seção 1: 1.1 Liderança (19 grupos, 1.1.1 a 1.1.19), 1.2 Impacto Social, 1.3 Impacto Ambiental, 1.4 Gestão de Pessoas. Dez diretrizes documentadas 1.1.2.1 a 1.1.2.10 (CORE: 1.1.2.1 qualidade/riscos, 1.1.2.2 segurança do paciente/disclosure/segunda vítima, 1.1.2.3 modelo assistencial). 1.1.8 protocolos (clínicos x gerenciados: 1.1.8.1). 1.1.9.3 SLAs intersetoriais. 1.1.15.1 a 1.1.15.4 fornecedores e contratos. 1.1.16.1 viabilidade econômico-financeira e ESG para equipamentos/expansão. 1.1.16.2 revisão de contas x contratos, validação documental e feedback periódico entre Faturamento, Auditoria, Assistência e Contratos (base para prevenção de glosa).
+- Seção 2: 27 subseções. 2.1 Jornada em 6 fases (2.1.1 a 2.1.6). 2.1.5.1 protocolos baseados em evidência (CORE). 2.1.5.4 Plano Terapêutico Individualizado x 2.1.5.5 Plano de Cuidado Interdisciplinar Único. 2.1.5.6 deterioração clínica (CORE segundo o Guilherme). 2.1.5.11 e 2.1.6.2 alta segura e pós-alta. Perfis: 2.2 ambulatório, 2.6 emergência, 2.7 leitos/NIR, 2.8 internação, 2.9 UTI, 2.10 cirúrgico, 2.13 nefrologia, 2.24 telessaúde.
+- Seção 3: 3.1 a 3.11. Segundo o Guilherme, CORE incluem 3.1.2 (urgência e resultado crítico), 3.1.8 (aceitação/rejeição de amostras), 3.11.1 (SADT em rounds e alta segura); 3.10.7 SLAs apoio-assistência.
+- Seção 4: 4.1 a 4.13 (equipamentos, infraestrutura incl. O2/gerador/água, limpeza, CME, enxoval, suprimentos/OPME, farmácia, nutrição, segurança, TI/LGPD com backup testado).
+- Contexto [D]: ISAS (CNES 2362848) 100% SUS filantrópico com CEBAS; HAT LTDA (CNPJ 08.834.137/0001-53) convênios/privados em recuperação judicial. Manter HAT e ISAS separados em toda análise. BNDES: R$ 15 mi de capital de giro + R$ 20 mi para equipamentos (prioridade ressonância) [D].
+
+### Divergências a resolver antes de tratar como fato
+1. CORE da Seção 3: leitura do portal listou 3.1.3, 3.1.9, 3.1.14 (e 3.9.10, 3.9.12, 3.10.2, 3.10.5, 3.11.2, 3.11.5, 3.11.7); a declaração do Guilherme cita 3.1.2, 3.1.8, 3.11.1, 3.10.7. Não coincidem. Conferir no PDF qual está certa.
+2. CORE 2.1.5.6 (deterioração clínica) e 2.1.5.1: a leitura do portal listou 2.1.5.1 e 2.1.5.7 e 2.8.2; 2.1.5.6 não apareceu.
+3. 2.13.11: a descrição "supervisionada pela CCIH, laudos no loop e na sala de reprocessamento" não confere com o portal (o manual não usa a sigla CCIH). Tratar os pontos de coleta como a conferir.
+4. Skill "ona-lv-fundamento-2026" citada pelo Guilherme não existe neste ambiente; vale só este skill ONA do repositório.
+5. Os três documentos mestres no Drive (Base de Consulta, Diário de Bordo, Matriz Mestre) não são editáveis por este ambiente: o conector só cria arquivos e altera metadados.
+
 ## Pendências para completar este skill
 1. Conferir a tabela de obrigatoriedade das Seções 2, 3 e 4 para Serviços Hospitalares e Nefrologia.
 2. Ler as orientações e evidências dos 148 CORE (e das Seções 1 e 4 em seguida).
